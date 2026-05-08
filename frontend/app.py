@@ -1,5 +1,6 @@
 import json
 import time
+import hashlib
 from _pyrepl import reader
 from io import BytesIO
 from uuid import uuid4
@@ -54,6 +55,20 @@ AVAILABLE_MODES = list(MODE_TO_TASK_TYPE.keys())
 mode = st.sidebar.selectbox("选择功能", AVAILABLE_MODES)
 st.caption(f"当前模式：{MODE_DESCRIPTIONS[mode]}")
 
+# -----------------------------
+# 第一阶段启用 RAG 的模式
+# 先只支持：内容分析、工作流优化
+# -----------------------------
+RAG_ENABLED_MODES = {
+    "内容分析",
+    "工作流分析"
+}
+
+DEFAULT_FILE_MODE_PROMPTS = {
+    "内容分析": "请基于上传文档完成内容分析，提炼主题、关键信息和结论。",
+    "工作流分析": "请基于上传文档进行工作流优化，分步骤总结、分析并提出建议。"
+}
+
 
 # -----------------------------
 # 支持文件上传分析的模式
@@ -99,6 +114,12 @@ def create_mode_sessions(mode_names: list[str]) -> dict:
 # -----------------------------
 if "mode_sessions" not in st.session_state or not st.session_state.mode_sessions:
     st.session_state.mode_sessions = create_mode_sessions(AVAILABLE_MODES)
+
+# -----------------------------
+# 用于记录当前模式下，当前 session 的文档是否已经索引过，避免每次发请求都重新索引。
+# -----------------------------
+if "rag_index_state" not in st.session_state:
+    st.session_state.rag_index_state = {}
 
 # 当前模式对应的会话状态
 current_session = st.session_state.mode_sessions[mode]
@@ -403,6 +424,33 @@ def render_workflow_step_copy_actions(workflow_blocks: dict[str, str], widget_ke
                 )
 
 
+def build_text_fingerprint(text: str) -> str:
+    """
+    为文档生成一个简单指纹，用于判断是否需要重新索引。
+    """
+    return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+
+def index_uploaded_document(session_id: str, file_name: str, document_text: str) -> tuple[bool, str]:
+    """
+    调用后端 /index_document 接口，为当前会话建立临时文档索引。
+    """
+    response = requests.post(
+        "http://127.0.0.1:8000/index_document",
+        json={
+            "session_id": session_id,
+            "file_name": file_name,
+            "document_text": document_text
+        },
+        timeout=60
+    )
+
+    if response.status_code != 200:
+        return False, f"文档索引失败: {response.text}"
+
+    result = response.json()
+    return True, f"文档索引完成，共切分 {result['chunk_count']} 个文本块。"
+
 # -----------------------------
 # 展示当前模式的历史消息
 # assistant 消息支持 markdown，便于工作流分段展示
@@ -470,6 +518,27 @@ if mode in UPLOAD_ENABLED_MODES:
         elif uploaded_file_text:
             st.caption(f"已读取文件：{uploaded_file.name}（约 {len(uploaded_file_text)} 字）")
 
+            use_rag = False
+            rag_top_k = 3
+
+            if mode in RAG_ENABLED_MODES:
+                use_rag = st.checkbox(
+                    "启用文档检索增强 (RAG) ",
+                    value=True,
+                    key=f"use_rag_{mode}"
+                )
+
+                if use_rag:
+                    rag_top_k = st.slider(
+                        "检索片段数量",
+                        min_value=1,
+                        max_value=5,
+                        value=3,
+                        key=f"rag_top_k_{mode}"
+                    )
+
+                st.caption("启用后，系统会先从上传文档中检索最相关片段，再交给模型处理。")
+
             preview_limit = 1200
             preview_text = uploaded_file_text[:preview_limit]
             if len(uploaded_file_text) > preview_limit:
@@ -511,7 +580,14 @@ if prompt:
 # 如果没有手动输入，则判断是否点击了“使用上传文件开始处理”
 elif use_uploaded_file and uploaded_file is not None and uploaded_file_text:
     submit_display_text = f"【上传文件】{uploaded_file.name}"
-    submit_raw_text = uploaded_file_text
+
+    # 如果启用了 RAG，则把“默认任务指令”作为 query
+    # 真正的文档内容通过后端索引来提供
+    if mode in RAG_ENABLED_MODES and use_rag:
+        submit_raw_text = DEFAULT_FILE_MODE_PROMPTS[mode]
+    else:
+        # 不启用 RAG 时，继续沿用你当前“直接把全文作为输入”的做法
+        submit_raw_text = uploaded_file_text
 
 if submit_raw_text:
     # 1. 先展示并保存用户输入（仅写入当前模式）
@@ -524,6 +600,36 @@ if submit_raw_text:
         "raw_content": submit_raw_text
     })
 
+    # 如果当前上传文件启用了 RAG，则先确保文档已经索引
+    if uploaded_file is not None and uploaded_file_text and mode in RAG_ENABLED_MODES and use_rag:
+        text_fingerprint = build_text_fingerprint(uploaded_file_text)
+        current_index_state = st.session_state.rag_index_state.get(mode)
+
+        need_reindex = (
+                not current_index_state
+                or current_index_state.get("session_id") != current_session_id
+                or current_index_state.get("text_fingerprint") != text_fingerprint
+        )
+
+        if need_reindex:
+            success, message = index_uploaded_document(
+                session_id=current_session_id,
+                file_name=uploaded_file.name,
+                document_text=uploaded_file_text
+            )
+
+            if not success:
+                st.error(message)
+                st.stop()
+
+            st.success(message)
+
+            st.session_state.rag_index_state[mode] = {
+                "session_id": current_session_id,
+                "file_name": uploaded_file.name,
+                "text_fingerprint": text_fingerprint
+            }
+
     # 2. 根据模式决定调用哪个接口
     is_workflow = mode == "工作流优化"
     url = "http://127.0.0.1:8000/workflow_stream" if is_workflow else "http://127.0.0.1:8000/chat_stream"
@@ -535,7 +641,9 @@ if submit_raw_text:
         "input_text": submit_raw_text,
         "persona": mode,
         "history": build_history_for_api(current_messages[:-1]),
-        "user_options": {}
+        "user_options": {},
+        "use_rag": use_rag,
+        "rag_top_k": rag_top_k
     }
 
     # 4. 发送流式请求
