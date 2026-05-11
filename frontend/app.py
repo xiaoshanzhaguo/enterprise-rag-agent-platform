@@ -450,6 +450,25 @@ def index_uploaded_document(session_id: str, file_name: str, document_text: str)
     result = response.json()
     return True, f"文档索引完成，共切分 {result['chunk_count']} 个文本块。"
 
+
+def clear_indexed_document(session_id: str) -> None:
+    """
+    调用后端清理接口，删除某个 session 对应的临时文档索引。
+
+    说明：
+    - 该函数不阻断主流程
+    - 即使清理失败，也不影响前端继续新建会话
+    """
+    try:
+        requests.delete(
+            f"http://127.0.0.1:8000/clear_document/{session_id}",
+            timeout=10
+        )
+    except Exception:
+        # 第一阶段先做静默失败，避免清理动作影响主流程
+        pass
+
+
 # -----------------------------
 # 展示当前模式的历史消息
 # assistant 消息支持 markdown，便于工作流分段展示
@@ -481,14 +500,33 @@ for idx, message in enumerate(current_messages):
 # 会话控制按钮
 # -----------------------------
 if st.sidebar.button("新建当前模式聊天"):
+    # 先取旧的 session_id, 用于清理后端 RAG 内存索引
+    old_session_id = st.session_state.mode_sessions[mode]["session_id"]
+    clear_indexed_document(old_session_id)
+
+    # 再重置当前模式会话
     st.session_state.mode_sessions[mode] = {
         "session_id": str(uuid4()),
         "messages": []
     }
+
+    # 同步清理前端记录的索引状态
+    st.session_state.rag_index_state.pop(mode, None)
+
     st.rerun()
 
 if st.sidebar.button("清空全部聊天"):
+    # 先清理所有模式当前 session 对应的后端 RAG 索引
+    for mode_name, session_info in st.session_state.mode_sessions.items():
+        old_session_id = session_info["session_id"]
+        clear_indexed_document(old_session_id)
+
+    # 再重置所有模式会话
     st.session_state.mode_sessions = create_mode_sessions(AVAILABLE_MODES)
+
+    # 清空前端索引状态缓存
+    st.session_state.rag_index_state = {}
+
     st.rerun()
 
 
