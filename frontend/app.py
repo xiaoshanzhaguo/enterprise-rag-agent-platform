@@ -277,15 +277,13 @@ def build_markdown_content(mode_name: str, result_text: str) -> str:
     将结果包装成更完整的 Markdown 文本，便于导出保存。
     """
     export_time = time.strftime("%Y-%m-%d %H:%M:%S")
-    return f"""# AI 内容分析与创作助手导出结果
-
-        - 模式：{mode_name}
-        - 导出时间：{export_time}
-        
-        ---
-        
-        {result_text}
-    """
+    return (
+        "# AI 内容分析与创作助手导出结果\n\n"
+        f"- 模式：{mode_name}\n"
+        f"- 导出时间：{export_time}\n\n"
+        "---\n\n"
+        f"{result_text.strip()}\n"
+    )
 
 
 # -----------------------------
@@ -390,9 +388,9 @@ def render_result_actions(result_text: str, mode_name: str, widget_key_suffix: s
     with col2:
         st.download_button(
             label="导出 Markdown",
-            data=markdown_content, # 下载的内容本体
+            data=markdown_content.encode("utf-8-sig"), # 下载的内容本体，带 BOM 便于 Windows 编辑器识别中文
             file_name=file_name,
-            mime="text/markdown", # 告诉浏览器这是 Markdown 文本文件
+            mime="text/markdown; charset=utf-8", # 告诉浏览器这是 UTF-8 Markdown 文本文件
             key=f"download_md_{widget_key_suffix}", # 确保这个按钮在 Streamlit 里是唯一的
             on_click="ignore", # 点击后忽略默认点击行为带来的额外处理，只保留当前组件本身想做的事情
             use_container_width=True, # 按钮宽度撑满这一列
