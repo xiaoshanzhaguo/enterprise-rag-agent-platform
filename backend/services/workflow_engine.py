@@ -1,4 +1,5 @@
 import json
+import re
 
 from fastapi.responses import StreamingResponse
 
@@ -6,6 +7,47 @@ from backend.prompt.prompt_builder import build_system_prompt
 from backend.schema.chat_schema import ChatRequest, StreamEvent
 from backend.utils.stream_helper import to_sse
 from backend.rag.service import build_rag_context
+
+
+STEP_OUTPUT_RULES = """
+    输出要求：
+    1. 只输出当前步骤的正文内容。
+    2. 不要输出“当前步骤：...”“步骤：...”“summary / analysis / suggestion”等步骤标签。
+    3. 不要输出 Markdown 一级/二级/三级标题，前端会统一渲染步骤标题。
+""".strip()
+
+
+# 在解析 workflow 输出时，把“步骤标签行”识别出来，方便做清洗、分段或格式化
+STEP_LABEL_PATTERN = re.compile(
+    # 识别一整行是不是“步骤标题行”，并且兼容 Markdown 前缀、可选加粗、中文英文步骤名、中文英文冒号、大小写差异
+    r"^\s*(?:[#>*\-\s]*)?(?:\*\*)?(?:当前)?(?:步骤|环节|任务)\s*[:：]\s*"
+    r"(?:总结|内容总结|问题分析|分析|优化建议|建议|summary|analysis|suggestion)"
+    r"(?:\*\*)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def clean_workflow_step_text(text: str) -> str:
+    """
+    清理模型偶尔输出的步骤标签，避免和前端统一标题重复。
+    """
+    # 把这段文本按行拆成列表，方便后面一行一行处理
+    lines = text.strip().splitlines()
+
+    # 只要列表还不空，并且第一行是空行，就一直删掉第一行。即：先把开头多余的空行删掉
+    while lines and not lines[0].strip():
+        lines.pop(0)
+
+    # 如果第一行是模型多输出的“步骤标题”，那就删掉它
+    if lines and STEP_LABEL_PATTERN.match(lines[0]):
+        lines.pop(0)
+
+    # 防止删掉步骤标签后，正文前面还残留一个空行
+    while lines and not lines[0].strip():
+        lines.pop(0)
+
+    # 返回一段“去掉步骤标签、去掉开头空行”的干净正文文本
+    return "\n".join(lines).strip()
 
 
 def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
@@ -48,7 +90,16 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
             steps = [
                 {
                     "name": "summary",
-                    "prompt": f"请总结以下内容的核心观点与重点信息：\n{request.input_text}"
+                    "prompt": f"""
+                        请仅总结以下内容体现出的项目目前状态。
+
+                        {STEP_OUTPUT_RULES}
+                        4. 只写当前已经完成、已经具备、正在面向的状态。
+                        5. 不分析问题，不列出不足，不给优化建议。
+
+                        内容如下：
+                        {request.input_text}
+                    """.strip()
                 },
                 {
                     "name": "analysis",
@@ -59,6 +110,8 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                         1. 只分析输入中已明确出现的问题，不补充新问题。
                         2. 不给建议，不给方案，不补充新背景。
                         3. 输出简洁、结构化、逐条列出。
+                        4. 不要输出“当前步骤：问题分析”等步骤标签或标题。
+                        5. 不要重复总结项目当前状态。
         
                         内容如下：
                         {request.input_text}
@@ -75,6 +128,8 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                         3. 不补充新技术、新框架、新工具、新平台、新指标。
                         4. 不要给通用行业方案，只给和输入内容直接相关的建议。
                         5. 输出简洁、按重要性排序。
+                        6. 不要输出“当前步骤：优化建议”等步骤标签或标题。
+                        7. 不要点名引入输入中没有出现的新技术、协议或类型系统；建议应落在整理现有逻辑、统一字段、补充必要校验和文档上。
         
                         内容如下：
                         {request.input_text}
@@ -157,6 +212,8 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                             content=delta
                         )
                     )
+
+                step_text = clean_workflow_step_text(step_text)
 
                 # 保存当前步骤的完整结果
                 final_result[step_name] = step_text
