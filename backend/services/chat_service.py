@@ -1,5 +1,6 @@
 from fastapi.responses import StreamingResponse
 
+from backend.config import settings
 from backend.rag.service import build_rag_context
 from backend.prompt.prompt_builder import build_system_prompt
 from backend.schema.chat_schema import ChatRequest, StreamEvent
@@ -78,7 +79,7 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
 
             # 调用模型接口，开启流式输出
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model=settings.llm_model,
                 messages=messages,
                 stream=True
             )

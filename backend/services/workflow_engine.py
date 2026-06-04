@@ -3,6 +3,7 @@ import re
 
 from fastapi.responses import StreamingResponse
 
+from backend.config import settings
 from backend.prompt.prompt_builder import build_system_prompt
 from backend.schema.chat_schema import ChatRequest, StreamEvent
 from backend.utils.stream_helper import to_sse
@@ -188,7 +189,7 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
 
                 # 调用模型接口，开启当前步骤的流式输出
                 response = client.chat.completions.create(
-                    model="deepseek-chat",
+                    model=settings.llm_model,
                     messages=messages,
                     stream=True
                 )

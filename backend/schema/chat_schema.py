@@ -1,8 +1,26 @@
+"""
+Schema 数据模型模块。
+
+职责：
+1. 定义前后端交互时使用的核心数据结构，包括请求体、流式事件、文档索引请求/响应、RAG 预览请求/响应与状态响应
+2. 通过 Pydantic 模型约束字段类型和默认值，保证接口输入输出结构清晰、可校验、可维护
+3. 统一管理聊天、工作流、RAG 第一阶段相关的数据协议，作为 API 层、Service 层和前端之间的“数据契约”
+
+说明：
+- 当前模块属于 schema / 协议层，不直接处理业务逻辑
+- 主要作用是让前后端字段保持一致，避免接口联调时出现结构混乱
+- 适合当前项目“流式输出 + 多模式内容处理 + 第一阶段 RAG”的工程结构
+"""
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, TypeAlias, List, Dict, Any
 
+# 消息角色类型：限定只能是 system / user / assistant
 MessageRole: TypeAlias = Literal["system", "user", "assistant"]
+
+# 任务类型：限定当前项目支持的任务模式
 TaskType: TypeAlias = Literal["chat", "summary", "rewrite", "translate", "workflow"]
+
+# 流式事件类型：限定 SSE 输出中允许出现的事件名称
 StreamEventType: TypeAlias = Literal[
     "workflow_start",   # 整个工作流开始
     "step_start",       # 某个步骤开始
@@ -31,7 +49,8 @@ class ChatRequest(BaseModel):
     persona: str = "default"   # 助手人设或内容风格标识
     history: List[MessageItem] = Field(default_factory=list)  # 历史消息列表
     user_options: Dict[str, Any] = Field(default_factory=dict)  # 扩展参数，如语气、长度、语言等
-    # -------- RAG 第一阶段新增字段 --------
+
+    # RAG 第一阶段新增字段
     use_rag: bool = False # 是否启用检索增强
     rag_top_k: int = Field(default=3, ge=1, le=5) # 检索返回的片段数量
 
@@ -55,17 +74,57 @@ class StreamEvent(BaseModel):
 class IndexDocumentRequest(BaseModel):
     """
     文档索引请求模型。
+
     用于接收前端上传并提取后的完整文本，交给后端切块并建立临时索引。
     """
-    session_id: str
-    document_text: str
-    file_name: Optional[str] = None
+    session_id: str  # 当前会话 ID
+    document_text: str  # 完整文档文本
+    file_name: Optional[str] = None  # 文件名，可选
 
 
 class IndexDocumentResponse(BaseModel):
     """
     文档索引响应模型。
     """
-    session_id: str
-    file_name: Optional[str] = None
-    chunk_count: int
+    session_id: str  # 当前会话 ID
+    file_name: Optional[str] = None  # 文件名
+    chunk_count: int  # 文档切分后的文本块数量
+
+
+class RagPreviewRequest(BaseModel):
+    """
+    RAG 检索预览请求。
+    """
+    session_id: str  # 当前会话 ID
+    query: str  # 当前查询问题
+    top_k: int = Field(default=3, ge=1, le=5)  # 检索预览的片段数量
+
+
+class RagPreviewChunk(BaseModel):
+    """
+    前端可视化展示用的检索片段摘要。
+    """
+    chunk_id: int | None = None  # 文本块编号
+    score: int = 0  # 检索分数
+    text_preview: str  # 文本预览内容
+    text_length: int  # 原始文本总长度
+
+
+class RagPreviewResponse(BaseModel):
+    """
+    RAG 检索预览响应。
+    """
+    session_id: str  # 当前会话 ID
+    query: str  # 当前查询问题
+    chunks: List[RagPreviewChunk]  # 检索片段摘要列表
+
+
+class RagStatusResponse(BaseModel):
+    """
+    RAG 内存 store 状态响应。
+    """
+    session_id: str  # 当前会话 ID
+    has_document: bool  # 当前会话是否已有索引文档
+    file_name: Optional[str] = None  # 当前文档文件名
+    chunk_count: int = 0  # 当前文档块数量
+    expires_in_seconds: int = 0  # 距离过期还剩多少秒
