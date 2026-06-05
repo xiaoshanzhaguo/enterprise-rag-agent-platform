@@ -14,9 +14,20 @@
 - 当前实现支持“多模式 + 会话隔离 + 文件上传分析 + 第一阶段 RAG + 本地历史恢复”的完整交互链路
 """
 # 导入时间模块，使得后面流式输出时用 time.sleep(0.01) 让文本增长更自然
+import sys
 import time
+from pathlib import Path
 # 导入 uuid4()，生成新的唯一会话 ID，每次新建聊天或清空当前模式聊天时都会生成新的 session_id
 from uuid import uuid4
+
+
+# 计算项目根目录路径
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# 如果项目根目录还不在 Python 模块搜索路径中，则插入到最前面，
+# 这样当前文件运行时才能正常导入 backend / frontend 下的模块
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 
 # 导入 Streamlit 主模块，后面所有页面组件都通过 st.xxx() 调用
 import streamlit as st
