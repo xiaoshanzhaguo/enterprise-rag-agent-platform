@@ -49,6 +49,8 @@ class Settings:
     rag_store_max_sessions: int = _get_int_env("RAG_STORE_MAX_SESSIONS", 50)
     # RAG 相关文本预览的最大字符数。
     rag_preview_text_limit: int = _get_int_env("RAG_PREVIEW_TEXT_LIMIT", 220)
+    # 默认 SQLite 数据库地址。相对路径会基于项目根目录解析。
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
 
 
 # 真正创建一个 Settings 实例对象。后面整个项目就可以统一用：settings.llm_model 来读取配置，而不用到处写os.getenv(...)。
