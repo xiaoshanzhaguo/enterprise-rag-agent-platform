@@ -1,15 +1,45 @@
+"""
+工作流服务模块（Workflow Service）。
+
+职责：
+1. 实现多步骤 AI 工作流处理流程
+2. 将复杂任务拆分为多个独立步骤执行
+3. 支持每个步骤单独流式输出
+4. 支持 RAG 检索增强
+5. 统一转换为 SSE 事件流返回前端
+6. 保存用户输入和工作流最终结果
+
+说明：
+- 当前模块属于 Service 层
+- 基于 chat_service 扩展而来
+- 一个工作流包含多个步骤
+- 每个步骤都会单独调用一次模型
+
+工作流流程：用户输入 -> summary -> analysis -> suggestion -> 汇总结果 -> 返回前端
+"""
+# 导入 JSON 工具，用于将工作流结果字典转换为 JSON 字符串
 import json
+# 导入正则表达式模块，用于识别、匹配模型输出中的步骤标签
 import re
 
+# 导入 FastAPI 流式响应对象，用于返回 SSE 事件流
 from fastapi.responses import StreamingResponse
 
+# 导入项目配置对象，用于读取模型名称等运行配置
 from backend.config import settings
+# 导入数据库持久化函数，用于确保会话存在并保存聊天信息
+from backend.db.repository import ensure_chat_session, save_chat_message
+# 导入系统提示词构造函数，根据当前模式生成 system prompt
 from backend.prompt.prompt_builder import build_system_prompt
+# 导入请求模型和流式事件模型，用于约束请求结构和 SSE 事件结构
 from backend.schema.chat_schema import ChatRequest, StreamEvent
+# 导入 SSE 格式化工具，将 StreamEvent 转换为 text/event-stream 格式
 from backend.utils.stream_helper import to_sse
+# 导入 RAG 上下文构造函数，用于为当前请求生成检索增强参考内容
 from backend.rag.service import build_rag_context
 
 
+# 给模型增加约束
 STEP_OUTPUT_RULES = """
     输出要求：
     1. 只输出当前步骤的正文内容。
@@ -30,7 +60,16 @@ STEP_LABEL_PATTERN = re.compile(
 
 def clean_workflow_step_text(text: str) -> str:
     """
-    清理模型偶尔输出的步骤标签，避免和前端统一标题重复。
+    清理模型输出中的步骤标题，避免和前端统一标题重复。
+
+    功能：
+    1. 删除开头空行
+    2. 删除模型多输出的步骤标签
+    3. 删除标题后的空行
+    4. 返回干净正文
+
+    :param text: 模型生成的步骤内容
+    :return: 清洗后的正文内容
     """
     # 把这段文本按行拆成列表，方便后面一行一行处理
     lines = text.strip().splitlines()
@@ -53,10 +92,20 @@ def clean_workflow_step_text(text: str) -> str:
 
 def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
     """
-    工作流流式服务。
+    执行多步骤工作流并返回 SSE 流式响应。
 
-    将多步骤内容分析流程封装为 SSE 事件流返回给前端，
-    支持工作流开始、步骤开始、增量输出、步骤完成、最终完成和错误事件。
+    功能：
+    1. 保存用户输入
+    2. 构造工作流步骤
+    3. 按顺序执行各步骤
+    4. 每个步骤单独调用模型
+    5. 支持 RAG 检索增强
+    6. 实时推送步骤执行结果
+    7. 保存最终工作流结果
+
+    :param request: 当前工作流请求对象
+    :param client: OpenAI/DeepSeek 客户端
+    :return: StreamingResponse, 返回标准 SSE 工作事件流
     """
 
     def generate():
@@ -74,7 +123,20 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
         final_result = {}
 
         try:
-            # 根据当前助手人设或内容风格生成系统提示词
+            ensure_chat_session(
+                session_id=request.session_id,
+                mode=request.persona,
+                title=request.input_text[:80]
+            )
+            save_chat_message(
+                session_id=request.session_id,
+                role="user",
+                content=request.input_text,
+                raw_content=request.input_text,
+                mode=request.persona
+            )
+
+            # 根据模式生成 Prompt
             system_prompt = build_system_prompt(request.persona)
 
             # 通知前端：整个工作流开始
@@ -230,13 +292,25 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                     )
                 )
 
+            # 将工作流结果字典转换为 JSON 字符串，并保留中文字符原样显示
+            final_content = json.dumps(final_result, ensure_ascii=False)
+
+            # 保存整个工作流结果
+            save_chat_message(
+                session_id=request.session_id,
+                role="assistant",
+                content=final_content,
+                raw_content=final_content,
+                mode=request.persona
+            )
+
             # 所有步骤执行完成后，发送最终事件
             yield to_sse(
                 StreamEvent(
                     event_type="final",
                     session_id=request.session_id,
                     task_type=request.task_type,
-                    content=json.dumps(final_result, ensure_ascii=False),
+                    content=final_content,
                     is_final=True
                 )
             )

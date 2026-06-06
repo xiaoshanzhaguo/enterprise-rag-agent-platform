@@ -16,6 +16,7 @@ RAG 服务层模块。
 from typing import Any
 
 from backend.config import settings
+from backend.db.repository import save_rag_query_with_hits
 from backend.rag.retriever import retrieve_top_chunks
 from backend.rag.store import get_document_chunks
 
@@ -69,6 +70,14 @@ def build_rag_context(session_id: str | None, query: str, top_k: int = 3) -> str
         session_id=session_id,
         query=query,
         top_k=top_k
+    )
+
+    # 持久化记录本次 RAG 查询及其命中的文本块，便于后续追踪检索效果和调试
+    save_rag_query_with_hits(
+        session_id=session_id,
+        query_text=query,
+        top_k=top_k,
+        matched_chunks=matched_chunks
     )
 
     # 再把检索结果转换成 prompt 可直接使用的上下文字符串

@@ -15,6 +15,7 @@ import time
 from typing import Any
 
 from backend.config import settings
+from backend.db.repository import save_document_with_chunks
 
 
 # 全局内存级 RAG 存储：
@@ -94,6 +95,12 @@ def save_document_chunks(session_id: str, file_name: str | None, chunks: list[st
 
     created_at = _now()
     ttl_seconds = max(settings.rag_store_ttl_seconds, 60) # 过期时间至少保留 60 秒
+    # 将当前文档及其切分后的文本块持久化到数据库，并获取带数据库主键的 chunk 元数据
+    saved_chunks = save_document_with_chunks(
+        session_id=session_id,
+        file_name=file_name,
+        chunks=chunks
+    )
 
     # 覆盖写入当前 session 的文档记录
     RAG_STORE[session_id] = {
@@ -101,8 +108,9 @@ def save_document_chunks(session_id: str, file_name: str | None, chunks: list[st
         "created_at": created_at,
         "last_accessed_at": created_at,
         "expires_at": created_at + ttl_seconds,
-        # 把纯字符串列表加工成更结构化的块列表
-        "chunks": [
+        # 优先使用数据库保存后返回的 chunk 元数据；如果保存失败或无返回，则退回到内存临时 chunk 结构
+        # saved_chunks的作用：保留数据库里的真实 chunk ID
+        "chunks": saved_chunks or [
             {
                 "chunk_id": index + 1,
                 "text": chunk
