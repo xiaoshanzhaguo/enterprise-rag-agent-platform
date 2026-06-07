@@ -26,8 +26,8 @@ CREATE_TABLE_SQL = [
         id TEXT PRIMARY KEY,
         mode TEXT NOT NULL,
         title TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     )
     """,
     # 保存聊天记录
@@ -39,7 +39,7 @@ CREATE_TABLE_SQL = [
         content TEXT NOT NULL,
         raw_content TEXT,
         message_order INTEGER NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
     """,
@@ -51,7 +51,7 @@ CREATE_TABLE_SQL = [
         file_name TEXT,
         content_hash TEXT,
         source_type TEXT NOT NULL DEFAULT 'upload',
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
     """,
@@ -63,7 +63,7 @@ CREATE_TABLE_SQL = [
         chunk_index INTEGER NOT NULL,
         chunk_text TEXT NOT NULL,
         text_length INTEGER NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
     )
     """,
@@ -74,7 +74,7 @@ CREATE_TABLE_SQL = [
         session_id TEXT NOT NULL,
         query_text TEXT NOT NULL,
         top_k INTEGER NOT NULL DEFAULT 3,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
     """,
@@ -86,7 +86,7 @@ CREATE_TABLE_SQL = [
         document_chunk_id INTEGER NOT NULL,
         hit_rank INTEGER NOT NULL,
         score REAL NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (rag_query_id) REFERENCES rag_queries(id) ON DELETE CASCADE,
         FOREIGN KEY (document_chunk_id) REFERENCES document_chunks(id) ON DELETE CASCADE
     )
@@ -100,8 +100,8 @@ CREATE_TABLE_SQL = [
         input_text TEXT NOT NULL,
         expected_output TEXT,
         metadata_json TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     )
     """,
     # 保存测试结果
@@ -113,7 +113,7 @@ CREATE_TABLE_SQL = [
         output_text TEXT NOT NULL,
         score REAL,
         metrics_json TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (eval_case_id) REFERENCES eval_cases(id) ON DELETE CASCADE
     )
     """,

@@ -22,11 +22,21 @@
 # 哈希算法模块，给上传文档生成唯一指纹
 import hashlib
 import json
+from datetime import datetime
 from typing import Any
 
 # 导入数据库连接工具，获取SQLite连接
 from backend.db.connection import get_connection
 from backend.utils.workflow_formatter import WORKFLOW_STEP_TITLE_MAP, format_workflow_blocks
+
+
+def _current_timestamp() -> str:
+    """
+    生成数据库使用的本地时间字符串。
+
+    :return: 当前本地时间，格式为 YYYY-MM-DD HH:MM:SS
+    """
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _message_row_to_dict(row) -> dict[str, Any]:
@@ -93,21 +103,22 @@ def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: st
         return
 
     session_mode = mode or "unknown"
+    now = _current_timestamp()
     # 获取数据库连接，代码执行结束后自动关闭连接
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO chat_sessions (id, mode, title)
-            VALUES (?, ?, ?)
+            INSERT INTO chat_sessions (id, mode, title, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 mode = CASE
                     WHEN chat_sessions.mode = 'unknown' THEN excluded.mode
                     ELSE chat_sessions.mode
                 END,
                 title = COALESCE(chat_sessions.title, excluded.title),
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = excluded.updated_at
             """,
-            (session_id, session_mode, title),
+            (session_id, session_mode, title, now, now),
         )
         connection.commit()
 
@@ -238,6 +249,7 @@ def save_chat_message(
         return None
 
     ensure_chat_session(session_id=session_id, mode=mode)
+    now = _current_timestamp()
 
     with get_connection() as connection:
         # 获得下一条消息序号
@@ -250,14 +262,14 @@ def save_chat_message(
         # 数据库执行完这条 SQL 后，给 Python 返回一个操作结果对象
         cursor = connection.execute(
             """
-            INSERT INTO chat_messages (session_id, role, content, raw_content, message_order)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (session_id, role, content, raw_content, message_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (session_id, role, content, raw_content, next_order),
+            (session_id, role, content, raw_content, next_order, now),
         )
         connection.execute(
-            "UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (session_id,),
+            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+            (now, session_id),
         )
         connection.commit()
 
@@ -292,16 +304,17 @@ def save_document_with_chunks(
         return []
 
     ensure_chat_session(session_id=session_id, mode=mode)
+    now = _current_timestamp()
     # 生成文档指纹
     content_hash = hashlib.sha256("\n\n".join(chunks).encode("utf-8")).hexdigest()
 
     with get_connection() as connection:
         document_cursor = connection.execute(
             """
-            INSERT INTO documents (session_id, file_name, content_hash, source_type)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO documents (session_id, file_name, content_hash, source_type, created_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (session_id, file_name, content_hash, source_type),
+            (session_id, file_name, content_hash, source_type, now),
         )
         document_id = int(document_cursor.lastrowid)
 
@@ -309,10 +322,10 @@ def save_document_with_chunks(
         for index, chunk_text in enumerate(chunks, start=1):
             chunk_cursor = connection.execute(
                 """
-                INSERT INTO document_chunks (document_id, chunk_index, chunk_text, text_length)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO document_chunks (document_id, chunk_index, chunk_text, text_length, created_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (document_id, index, chunk_text, len(chunk_text)),
+                (document_id, index, chunk_text, len(chunk_text), now),
             )
             saved_chunks.append(
                 {
@@ -324,8 +337,8 @@ def save_document_with_chunks(
             )
 
         connection.execute(
-            "UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (session_id,),
+            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+            (now, session_id),
         )
         connection.commit()
         return saved_chunks
@@ -363,14 +376,15 @@ def save_rag_query_with_hits(
         return None
 
     ensure_chat_session(session_id=session_id, mode=mode)
+    now = _current_timestamp()
 
     with get_connection() as connection:
         query_cursor = connection.execute(
             """
-            INSERT INTO rag_queries (session_id, query_text, top_k)
-            VALUES (?, ?, ?)
+            INSERT INTO rag_queries (session_id, query_text, top_k, created_at)
+            VALUES (?, ?, ?, ?)
             """,
-            (session_id, query_text, top_k),
+            (session_id, query_text, top_k, now),
         )
         rag_query_id = int(query_cursor.lastrowid)
 
@@ -381,15 +395,15 @@ def save_rag_query_with_hits(
 
             connection.execute(
                 """
-                INSERT INTO rag_hits (rag_query_id, document_chunk_id, hit_rank, score)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO rag_hits (rag_query_id, document_chunk_id, hit_rank, score, created_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (rag_query_id, db_chunk_id, hit_rank, float(chunk.get("score", 0))),
+                (rag_query_id, db_chunk_id, hit_rank, float(chunk.get("score", 0)), now),
             )
 
         connection.execute(
-            "UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (session_id,),
+            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+            (now, session_id),
         )
         connection.commit()
         return rag_query_id

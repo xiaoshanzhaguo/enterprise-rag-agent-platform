@@ -16,7 +16,7 @@
 - 适合当前项目“多模式会话隔离 + SQLite 历史持久化 + 旧 JSON 兜底”的前端状态管理场景
 """
 
-# 读取旧版 chat_history.json 时，把 JSON 字符串解析成 Python 字典
+# 读取旧版 chat_history_backup.json 时，把 JSON 字符串解析成 Python 字典
 import json
 # 拼接和定位本地历史文件路径
 from pathlib import Path
@@ -25,7 +25,7 @@ from uuid import uuid4
 
 
 # 旧版本地历史文件路径。当前主流程已迁移到数据库，这里只作为兼容读取兜底
-HISTORY_FILE = Path(__file__).resolve().parents[1] / "data" / "chat_history.json"
+HISTORY_FILE = Path(__file__).resolve().parents[1] / "data" / "chat_history_backup.json"
 
 # 发送给后端的最大历史消息条数，避免上下文过长
 MAX_HISTORY_LENGTH = 6
@@ -113,7 +113,7 @@ def load_mode_sessions(mode_names: list[str]) -> dict:
     从旧版本地 JSON 文件恢复各模式会话历史。
 
     函数说明：
-    - 优先尝试读取 data/chat_history.json
+    - 优先尝试读取 data/chat_history_backup.json
     - 如果文件不存在、读取失败、JSON 损坏或结构异常，则返回默认空会话
     - 当前项目主流程已迁移到后端 SQLite，因此该函数主要作为历史兼容兜底
 
