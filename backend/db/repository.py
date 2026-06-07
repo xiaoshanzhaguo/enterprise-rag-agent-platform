@@ -2,10 +2,13 @@
 数据库持久化模块（Repository Layer）。
 
 职责：
-1. 管理聊天会话(chat_sessions)的数据写入
-2. 管理聊天消息(chat_messages)的数据写入
-3. 管理上传文档(documents)及文档切块(document_chunks)的数据写入
-4. 管理 RAG 查询记录(rag_queries)及命中结果(rag_hits)的数据写入
+1. 管理聊天会话(chat_sessions)的数据读写
+2. 管理聊天消息(chat_messages)的数据读写
+3. 管理上传文档(documents)及文本块(document_chunks)的数据写入
+4. 管理 RAG 查询记录(rag_queries)及命中记录(rag_hits)的数据写入
+5. 提供历史会话恢复能力
+6. 提供会话删除能力
+7. 将数据库记录转换为前端可直接使用的数据结构
 
 说明：
 - 当前模块属于 Repository 层
@@ -15,16 +18,58 @@
 
 数据流：ChatRequest -> ChatService -> Repository -> SQLite
 """
-# 延迟解析类型注解。让这种写法更稳定：list[dict[str, Any]]
-from __future__ import annotations
 
 # 哈希算法模块，给上传文档生成唯一指纹
 import hashlib
-# 导入 Any 类型，用于表示任意类型的数据
+import json
 from typing import Any
 
 # 导入数据库连接工具，获取SQLite连接
 from backend.db.connection import get_connection
+from backend.utils.workflow_formatter import WORKFLOW_STEP_TITLE_MAP, format_workflow_blocks
+
+
+def _message_row_to_dict(row) -> dict[str, Any]:
+    """
+    将数据库消息记录转换为前端消息结构。
+
+    功能：
+    1. 提取 role 和 content
+    2. 保留 raw_content
+    3. 自动识别工作流结果
+    4. 将工作流 JSON 转换为可展示格式
+
+    :param row: chat_messages 表中的一条数据库记录
+    :return: 前端消息字典
+    """
+    message = {
+        "role": row["role"],
+        "content": row["content"],
+    }
+
+    if row["raw_content"]:
+        message["raw_content"] = row["raw_content"]
+
+    if row["role"] == "assistant":
+        try:
+            parsed_content = json.loads(row["content"])
+        except (TypeError, json.JSONDecodeError):
+            parsed_content = None
+
+        # 判断当前内容是否为工作流结果（包含 summary/analysis/suggestion 任意步骤）
+        if isinstance(parsed_content, dict) and any(
+            step_name in parsed_content
+            for step_name in WORKFLOW_STEP_TITLE_MAP
+        ):
+            workflow_blocks = {
+                key: value
+                for key, value in parsed_content.items()
+                if key in WORKFLOW_STEP_TITLE_MAP and isinstance(value, str)
+            }
+            message["workflow_blocks"] = workflow_blocks
+            message["content"] = format_workflow_blocks(workflow_blocks)
+
+    return message
 
 
 def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: str | None = None) -> None:
@@ -64,6 +109,105 @@ def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: st
             """,
             (session_id, session_mode, title),
         )
+        connection.commit()
+
+
+def get_session_messages(session_id: str | None) -> list[dict[str, Any]]:
+    """
+    获取指定会话的全部消息。
+
+    功能：
+    1. 查询当前会话消息
+    2. 按消息顺序排序
+    3. 转换为前端消息结构
+
+    :param session_id: 会话ID
+    :return: 消息列表
+    """
+    if not session_id:
+        return []
+
+    with get_connection() as connection:
+        # 获取查询结果中的所有记录
+        rows = connection.execute(
+            """
+            SELECT role, content, raw_content
+            FROM chat_messages
+            WHERE session_id = ?
+            ORDER BY message_order ASC, id ASC
+            """,
+            (session_id,),
+        ).fetchall()
+
+    # 将所有记录转成前端格式
+    return [_message_row_to_dict(row) for row in rows]
+
+
+def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]]:
+    """
+    加载各模式最近一次聊天会话。
+
+    功能：
+    1. 查找每个模式最新会话
+    2. 加载历史消息
+    3. 转换为前端会话结构
+
+    :param mode_names: 模式名称列表
+    :return: 前端会话数据
+    """
+    mode_sessions: dict[str, dict[str, Any]] = {}
+
+    with get_connection() as connection:
+        for mode_name in mode_names:
+            session = connection.execute(
+                """
+                SELECT id
+                FROM chat_sessions
+                WHERE mode = ?
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT 1
+                """,
+                (mode_name,),
+            ).fetchone()
+
+            if not session:
+                continue
+
+            rows = connection.execute(
+                """
+                SELECT role, content, raw_content
+                FROM chat_messages
+                WHERE session_id = ?
+                ORDER BY message_order ASC, id ASC
+                """,
+                (session["id"],),
+            ).fetchall()
+
+            mode_sessions[mode_name] = {
+                "session_id": session["id"],
+                "messages": [_message_row_to_dict(row) for row in rows],
+            }
+
+    return mode_sessions
+
+
+def delete_chat_session(session_id: str | None) -> None:
+    """
+    删除指定聊天会话。
+
+    功能：
+    1. 删除 chat_sessions 记录
+    2. 自动触发外键级联删除
+    3. 删除消息、文档、RAG记录
+
+    :param session_id: 会话ID
+    :return: None
+    """
+    if not session_id:
+        return
+
+    with get_connection() as connection:
+        connection.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
         connection.commit()
 
 

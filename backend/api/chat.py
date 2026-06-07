@@ -2,16 +2,48 @@
 API 路由模块。
 
 职责：
-1. 注册前端可调用的后端接口，包括聊天流式接口、工作流流式接口、文档索引接口、RAG 预览接口、RAG 状态接口与文档清理接口
-2. 作为前端与业务服务层之间的入口，负责接收请求、做基础校验，并将请求分发到对应的 service 或 rag 模块
-3. 统一组织与 RAG 第一阶段相关的接口能力，便于前端进行文档上传、索引、检索预览、状态查询和清理操作
+1. 注册前端可调用的后端接口
+2. 提供聊天流式响应接口
+3. 提供工作流流式响应接口
+4. 提供 RAG 文档索引、检索预览、状态查询与清理接口
+5. 提供聊天历史恢复接口
+6. 提供聊天会话创建与删除接口
+7. 统一作为前端与业务服务层之间的请求入口
 
 说明：
-- 当前模块属于接口层，不直接负责模型生成逻辑，也不直接负责 RAG 检索算法实现
-- 聊天与工作流的具体处理逻辑在 service 层
-- 文档切块、存储、检索预览与状态查询等能力由 rag 模块提供
-- 适合当前项目“前后端分离 + 流式响应 + 第一阶段 RAG” 的工程结构
+- 当前模块属于 API（接口层）
+- 不负责具体业务逻辑实现
+- 不负责模型调用细节
+- 不负责数据库操作实现
+- 聊天与工作流逻辑由 Service 层负责
+- 数据持久化由 Repository 层负责
+- 文档切块、存储、检索与状态管理由 RAG 模块负责
+- 前端所有业务请求均通过本模块进入系统
+
+当前已提供接口：
+
+聊天相关：
+- POST /chat_stream
+- POST /workflow_stream
+
+聊天历史相关：
+- POST /chat_history
+- POST /chat_session
+- DELETE /chat_session/{session_id}
+
+RAG 相关：
+- POST /index_document
+- POST /rag_preview
+- GET /rag_status/{session_id}
+- DELETE /clear_document/{session_id}
+
+适用场景：
+- 前后端分离架构
+- SSE 流式响应
+- RAG 第一阶段（内存检索）
+- SQLite 持久化聊天历史
 """
+
 from fastapi import APIRouter, HTTPException
 
 from backend.llm.client import get_client
@@ -20,8 +52,13 @@ from backend.rag.store import save_document_chunks
 from backend.rag.store import clear_document_chunks
 from backend.rag.store import get_document_status
 from backend.rag.service import build_rag_preview
+from backend.db.repository import delete_chat_session
+from backend.db.repository import ensure_chat_session
+from backend.db.repository import load_latest_mode_sessions
 from backend.schema.chat_schema import (
     ChatRequest,
+    ChatHistoryRequest,
+    ChatSessionCreateRequest,
     IndexDocumentRequest,
     IndexDocumentResponse,
     RagPreviewRequest,
@@ -33,6 +70,55 @@ from backend.services.workflow_engine import run_workflow_stream
 
 # 路由注册器：集中管理当前模块下的所有接口
 router = APIRouter()
+
+
+@router.post("/chat_history")
+def chat_history(request: ChatHistoryRequest):
+    """
+    返回每个前端模式最近一次数据库会话及其消息，用于刷新后恢复聊天历史。
+
+    :param request: 聊天历史请求对象。包含：mode_names：需要恢复的模式列表
+    :return: 每个模式最近一次会话及对应消息列表
+    """
+    # 加载各模式最近一次数据库会话及其消息
+    return {
+        "mode_sessions": load_latest_mode_sessions(request.mode_names)
+    }
+
+
+@router.post("/chat_session")
+def create_chat_session(request: ChatSessionCreateRequest):
+    """
+    创建一个空聊天会话，主要用于前端新建或清空当前模式聊天后的状态同步。
+
+    :param request: 会话创建请求对象。包含：session_id、mode、title
+    :return: 新创建会话的信息
+    """
+    # 创建或更新当前会话记录
+    ensure_chat_session(
+        session_id=request.session_id,
+        mode=request.mode,
+        title=request.title
+    )
+    return {
+        "session_id": request.session_id,
+        "mode": request.mode
+    }
+
+
+@router.delete("/chat_session/{session_id}")
+def clear_chat_session(session_id: str):
+    """
+    删除一个聊天会话及其消息、文档、RAG 查询等级联数据。
+
+    :param session_id: 需要删除的会话ID
+    :return: 删除结果提示信息
+    """
+    # 删除数据库中的会话及所有级联关联数据
+    delete_chat_session(session_id)
+    # 同时清理当前会话在内存 RAG store 中的文档索引
+    clear_document_chunks(session_id)
+    return {"message": f"session {session_id} 的聊天数据已清理"}
 
 
 @router.post("/chat_stream")

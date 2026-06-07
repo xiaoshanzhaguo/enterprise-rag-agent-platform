@@ -18,6 +18,7 @@
 
 调用链路：FastAPI Router -> chat_with_ai() -> 构造 Prompt -> 构造 RAG 上下文 -> 调用 LLM -> 生成 SSE 事件流 -> StreamingResponse
 """
+
 # FastAPI 流式响应对象，用于返回 SSE 事件流
 from fastapi.responses import StreamingResponse
 
@@ -63,15 +64,17 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
         full_text = ""
 
         try:
+            # 优先使用前端传入的展示文本；如果没有传 display_text，则默认使用实际输入文本
+            display_text = request.user_options.get("display_text", request.input_text)
             ensure_chat_session(
                 session_id=request.session_id,
                 mode=request.persona,
-                title=request.input_text[:80] # 最多取前80个字符作为标题
+                title=display_text[:80] # 最多取前80个字符作为标题
             )
             save_chat_message(
                 session_id=request.session_id,
                 role="user",
-                content=request.input_text,
+                content=display_text,
                 raw_content=request.input_text,
                 mode=request.persona
             )

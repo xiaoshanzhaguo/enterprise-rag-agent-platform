@@ -17,6 +17,7 @@
 
 工作流流程：用户输入 -> summary -> analysis -> suggestion -> 汇总结果 -> 返回前端
 """
+
 # 导入 JSON 工具，用于将工作流结果字典转换为 JSON 字符串
 import json
 # 导入正则表达式模块，用于识别、匹配模型输出中的步骤标签
@@ -123,15 +124,17 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
         final_result = {}
 
         try:
+            # 优先使用前端传入的展示文本；如果没有传 display_text，则默认使用实际输入文本
+            display_text = request.user_options.get("display_text", request.input_text)
             ensure_chat_session(
                 session_id=request.session_id,
                 mode=request.persona,
-                title=request.input_text[:80]
+                title=display_text[:80]
             )
             save_chat_message(
                 session_id=request.session_id,
                 role="user",
-                content=request.input_text,
+                content=display_text,
                 raw_content=request.input_text,
                 mode=request.persona
             )

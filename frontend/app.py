@@ -3,16 +3,18 @@
 
 职责：
 1. 负责初始化 Streamlit 页面，并组织整个 AI 内容分析与创作助手的前端交互流程
-2. 管理多模式会话状态，包括不同模式下的 session_id、历史消息、本地历史恢复与保存
+2. 管理多模式会话状态，包括不同模式下的 session_id、历史消息、数据库历史恢复与旧 JSON 历史兜底
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
-4. 调用后端聊天接口、工作流接口和 RAG 相关接口，并解析流式 SSE 响应
+4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
 5. 渲染历史消息、当前结果、RAG 预览、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
+6. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和内存 RAG 索引
 
 说明：
 - 当前模块属于前端入口层，负责把页面状态管理、用户输入处理、后端请求发送和结果展示串起来
-- 页面基于 Streamlit 构建，后端依赖 FastAPI 提供聊天流式接口、工作流接口和第一阶段 RAG 接口
-- 当前实现支持“多模式 + 会话隔离 + 文件上传分析 + 第一阶段 RAG + 本地历史恢复”的完整交互链路
+- 页面基于 Streamlit 构建，后端依赖 FastAPI 提供聊天流式接口、工作流接口、RAG 接口和 SQLite 会话持久化接口
+- 当前实现支持“多模式 + 会话隔离 + 文件上传分析 + 第一阶段 RAG + SQLite 历史持久化 + 旧 JSON 历史兜底”的完整交互链路
 """
+
 # 导入时间模块，使得后面流式输出时用 time.sleep(0.01) 让文本增长更自然
 import sys
 import time
@@ -34,11 +36,14 @@ import streamlit as st
 
 # 导入“前端请求封装层”里的函数
 from frontend.api_client import (
+    clear_chat_session, # 删除后端数据库中的聊天会话
     clear_indexed_document, # 通知后端删除某个会话的文档索引
+    create_chat_session, # 在后端数据库中创建空聊天会话
     index_uploaded_document, # 通知后端给文档建立索引
     iter_sse_events, # 逐条解析后端返回的 SSE 事件流
     get_rag_preview, # 获取本次 query 命中的 RAG 片段摘要
     get_rag_status, # 获取当前会话的 RAG 状态
+    load_chat_history, # 从后端数据库恢复聊天历史
     post_stream_request # 统一发送流式请求到后端
 )
 
@@ -46,7 +51,7 @@ from frontend.api_client import (
 from frontend.file_parser import (
     build_non_rag_input_text, # 不启用 RAG 时，把“文件全文 + 用户要求”拼成后端输入
     build_text_fingerprint, # 给文档文本生成指纹，用于判断是否需要重新索引
-    build_user_display_text, # 给文档文本生成指纹，用于判断是否需要重新索引
+    build_user_display_text, # 构造前端聊天区展示文本，避免直接展示完整文件内容
     extract_text_from_uploaded_file # 从 txt / md / pdf 中提取文本
 )
 
@@ -61,9 +66,8 @@ from frontend.renderers import (
 # 导入状态管理函数
 from frontend.state_manager import (
     build_history_for_api, # 把前端历史消息转换成后端可接受的 history
-    ensure_mode_sessions, # 把前端历史消息转换成后端可接受的 history
-    load_mode_sessions, # 从本地文件恢复历史
-    save_mode_sessions # 保存当前会话历史到本地
+    ensure_mode_sessions, # 确保所有模式都有对应的会话状态
+    load_mode_sessions # 从旧 JSON 文件恢复历史，作为数据库不可用时的兼容兜底
 )
 
 
@@ -149,8 +153,10 @@ UPLOAD_ENABLED_MODES = {
 # 如果不存在，或被清空为 {}，则重新初始化
 # -----------------------------
 if "mode_sessions" not in st.session_state or not st.session_state.mode_sessions:
-    # 页面初始化时优先从本地历史文件恢复会话，而不是每次刷新都创建空会话
-    st.session_state.mode_sessions = load_mode_sessions(AVAILABLE_MODES)
+    # 页面初始化时优先从后端 SQLite 数据库恢复历史会话；
+    # 如果后端不可用、请求失败或数据库暂无历史，则回退读取旧版本地 JSON 历史。
+    db_mode_sessions = load_chat_history(AVAILABLE_MODES)
+    st.session_state.mode_sessions = db_mode_sessions or load_mode_sessions(AVAILABLE_MODES)
 
 # 确保所有当前支持的模式都有自己的会话容器
 st.session_state.mode_sessions = ensure_mode_sessions(
@@ -247,41 +253,49 @@ for idx, message in enumerate(current_messages):
 # 会话控制按钮
 # -----------------------------
 if st.sidebar.button("新建当前模式聊天"):
-    # 先取旧的 session_id, 用于清理后端 RAG 内存索引
+    # 取出旧会话 ID，用于同步清理旧会话相关资源
     old_session_id = st.session_state.mode_sessions[mode]["session_id"]
+
+    # 清理旧会话在内存 RAG store 中的临时文档索引
     clear_indexed_document(old_session_id)
+
+    # 删除旧会话在 SQLite 中的聊天记录、文档记录和 RAG 关联记录
+    clear_chat_session(old_session_id)
+
+    # 生成新的会话 ID，并提前通知后端创建空会话记录
+    new_session_id = str(uuid4())
+    create_chat_session(new_session_id, mode)
 
     # 重置当前模式会话：重新生成 session_id，并清空消息
     st.session_state.mode_sessions[mode] = {
-        "session_id": str(uuid4()),
+        "session_id": new_session_id,
         "messages": []
     }
 
     # 同步清理当前模式的前端索引状态缓存
     st.session_state.rag_index_state.pop(mode, None)
 
-    # 更新本地历史文件
-    save_mode_sessions(st.session_state.mode_sessions)
-
     # 强制页面重新执行，让新会话立即生效
     st.rerun()
 
 if st.sidebar.button("清空当前模式聊天"):
-    # 只清理当前模式旧 session_id 对应的后端 RAG 索引，避免误删其他模式历史
+    # 清理当前模式旧 session 对应的内存索引和数据库会话数据，只影响当前模式，不影响其他模式的历史
     old_session_id = st.session_state.mode_sessions[mode]["session_id"]
     clear_indexed_document(old_session_id)
+    clear_chat_session(old_session_id)
+
+    # 创建一个新的空 session，作为当前模式后续对话的会话容器
+    new_session_id = str(uuid4())
+    create_chat_session(new_session_id, mode)
 
     # 只重置当前模式会话
     st.session_state.mode_sessions[mode] = {
-        "session_id": str(uuid4()),
+        "session_id": new_session_id,
         "messages": []
     }
 
     # 只清空当前模式的前端索引状态缓存
     st.session_state.rag_index_state.pop(mode, None)
-
-    # 更新本地历史文件
-    save_mode_sessions(st.session_state.mode_sessions)
 
     st.rerun()
 
@@ -429,9 +443,6 @@ if chat_submission:
         "raw_content": submit_raw_text  # 后端处理用
     })
 
-    # 用户消息写入后，立即保存本地历史
-    save_mode_sessions(st.session_state.mode_sessions)
-
     # -----------------------------
     # 第六步: 根据模式决定调用哪个接口
     # -----------------------------
@@ -450,7 +461,12 @@ if chat_submission:
         "persona": mode,
         # current_messages[:-1] 表示不把刚刚追加的当前用户输入再算进 history。因为当前这条消息已经单独放进 input_text 里了，不应该重复出现在历史中
         "history": build_history_for_api(current_messages[:-1]),
-        "user_options": {},
+        "user_options": {
+            # display_text 是前端聊天区展示文本；
+            # 上传文件场景下，它只展示用户问题和附件名，避免把完整文档全文保存成可见聊天记录。
+            # 后端会优先用 display_text 保存 message.content，同时用 input_text 保存 raw_content。
+            "display_text": submit_display_text
+        },
         "use_rag": use_rag,
         "rag_top_k": rag_top_k
     }
@@ -579,6 +595,3 @@ if chat_submission:
 
                 # 将 assistant 消息追加到当前模式的历史消息列表里
                 current_messages.append(assistant_message)
-                
-                # assistant 回复完成后再次保存本地历史
-                save_mode_sessions(st.session_state.mode_sessions)
