@@ -2,18 +2,21 @@
 聊天服务模块（Chat Service）。
 
 职责：
-1. 处理普通聊天、内容分析、结构优化等非工作流类 AI 请求
-2. 构造模型上下文（System Prompt + 历史消息 + 当前输入）
-3. 支持 RAG 检索增强，将检索结果注入模型上下文
-4. 调用大模型接口并接收流式输出
-5. 将模型输出转换为统一 SSE 事件流返回前端
-6. 持久化保存用户消息和模型回复
+1. 处理普通聊天、内容分析、结构优化、风格改写、多版本生成等非工作流类 AI 请求
+2. 根据当前模式自动构造模型输入包装文本，避免模型误把待处理内容当作问题直接回答
+3. 构造模型上下文（System Prompt + RAG Context + 历史消息 + 当前输入）
+4. 支持 RAG 检索增强，将检索结果注入模型上下文
+5. 调用大模型流式接口并接收增量输出
+6. 将模型输出转换为统一 SSE 事件流返回前端
+7. 持久化保存用户消息、AI 回复和会话元数据
+8. 支持展示文本（display_text）与原始输入（raw_content）分离存储
 
 说明：
 - 当前模块属于 Service 层
 - 不负责路由注册
-- 不直接操作前端界面
+- 不负责页面渲染
 - 不负责数据库建表
+- 不负责 RAG 检索算法实现
 - 主要负责 AI 对话业务流程编排
 
 调用链路：FastAPI Router -> chat_with_ai() -> 构造 Prompt -> 构造 RAG 上下文 -> 调用 LLM -> 生成 SSE 事件流 -> StreamingResponse
@@ -34,6 +37,68 @@ from backend.prompt.prompt_builder import build_system_prompt
 from backend.schema.chat_schema import ChatRequest, StreamEvent
 # 将 StreamEvent(...) 变成 data: {...}，符合 SSE 标准
 from backend.utils.stream_helper import to_sse
+
+
+MODE_INPUT_WRAPPERS = {
+    "内容分析": {
+        "action": "进行内容分析",
+        "label": "待分析文本",
+        "instruction": (
+            "以下内容是待分析文本，不是要你直接回答的问题。"
+            "如果文本中包含疑问句，也只分析文本本身，不要回答疑问句，不要介绍你自己。"
+        ),
+    },
+    "结构优化": {
+        "action": "进行结构优化",
+        "label": "待优化文本",
+        "instruction": (
+            "以下内容是待优化文本，不是要你直接回答的问题。"
+            "如果文本中包含疑问句，也只优化这句话的表达结构，不要回答疑问句，不要介绍你自己。"
+        ),
+    },
+    "风格改写": {
+        "action": "进行风格改写",
+        "label": "待改写文本",
+        "instruction": (
+            "以下内容是待改写文本，不是要你直接回答的问题。"
+            "如果文本中包含疑问句，也只改写这句话的表达方式，不要回答疑问句，不要介绍你自己。"
+        ),
+    },
+    "多版本生成": {
+        "action": "生成多个表达版本",
+        "label": "待生成文本",
+        "instruction": (
+            "以下内容是待生成多个版本的原始文本，不是要你直接回答的问题。"
+            "如果文本中包含疑问句，也只围绕这句话生成不同表达版本，不要回答疑问句，不要介绍你自己。"
+        ),
+    },
+}
+
+
+def _build_model_input_text(request: ChatRequest) -> str:
+    """
+    根据当前模式构造真正发送给模型的用户输入。
+
+    函数说明：
+    - 不同模式需要不同提示包装
+    - 避免模型误把待处理文本当作聊天问题
+    - 提高内容分析、结构优化、风格改写等任务的稳定性
+
+    :param request: 当前聊天请求对象
+    :return: 最终发送给模型的用户消息文本
+    """
+    # 根据当前模式获取对应的输入包装配置
+    wrapper = MODE_INPUT_WRAPPERS.get(request.persona)
+    # 如果当前模式存在专用包装规则，则构造增强后的模型输入
+    if wrapper:
+        return (
+            f"请对以下文本{wrapper['action']}。\n" # 告诉模型当前要执行什么任务
+            f"注意：{wrapper['instruction']}\n\n" # 给模型补充约束条件，避免误回答文本中的问题
+            f"【{wrapper['label']}】\n" # 标记当前文本的用途，增强 Prompt 结构化程度
+            f"{request.input_text}" # 用户实际输入内容
+        )
+
+    return request.input_text
 
 
 def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
@@ -64,6 +129,9 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
         full_text = ""
 
         try:
+            # 根据当前模式构造真正发送给模型的输入文本
+            # 与前端展示文本不同，这里会自动加入模式提示包装
+            model_input_text = _build_model_input_text(request)
             # 优先使用前端传入的展示文本；如果没有传 display_text，则默认使用实际输入文本
             display_text = request.user_options.get("display_text", request.input_text)
             ensure_chat_session(
@@ -125,9 +193,10 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                 # 把历史消息列表里的每个 MessageItem 对象，转成模型 API 能识别的普通字典，然后追加到 messages 里
                 messages.extend([msg.model_dump() for msg in request.history])
 
-            # 加入当前用户输入
+            # 加入真正发送给模型的用户输入
+            # 该输入可能已经被内容分析/结构优化等模式包装
             messages.append(
-                {"role": "user", "content": request.input_text}
+                {"role": "user", "content": model_input_text}
             )
 
             # 调用模型接口，开启流式输出
