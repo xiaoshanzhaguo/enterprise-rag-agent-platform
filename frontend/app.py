@@ -40,7 +40,6 @@ from backend.utils.workflow_formatter import format_workflow_blocks
 from frontend.api_client import (
     clear_chat_session, # 删除后端数据库中的聊天会话
     clear_indexed_document, # 通知后端删除某个会话的文档索引
-    create_chat_session, # 在后端数据库中创建空聊天会话
     index_uploaded_document, # 通知后端给文档建立索引
     iter_sse_events, # 逐条解析后端返回的 SSE 事件流
     get_rag_preview, # 获取本次 query 命中的 RAG 片段摘要
@@ -263,9 +262,8 @@ if st.sidebar.button("新建当前模式聊天"):
     # 删除旧会话在 SQLite 中的聊天记录、文档记录和 RAG 关联记录
     clear_chat_session(old_session_id)
 
-    # 生成新的会话 ID，并提前通知后端创建空会话记录
+    # 生成新的会话 ID，只更新前端状态；数据库等用户真正发送内容时再创建记录
     new_session_id = str(uuid4())
-    create_chat_session(new_session_id, mode)
 
     # 重置当前模式会话：重新生成 session_id，并清空消息
     st.session_state.mode_sessions[mode] = {
@@ -285,9 +283,8 @@ if st.sidebar.button("清空当前模式聊天"):
     clear_indexed_document(old_session_id)
     clear_chat_session(old_session_id)
 
-    # 创建一个新的空 session，作为当前模式后续对话的会话容器
+    # 生成新的会话 ID，只更新前端状态；数据库等用户真正发送内容时再创建记录
     new_session_id = str(uuid4())
-    create_chat_session(new_session_id, mode)
 
     # 只重置当前模式会话
     st.session_state.mode_sessions[mode] = {
