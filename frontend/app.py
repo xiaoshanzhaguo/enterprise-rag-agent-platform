@@ -34,6 +34,8 @@ if str(PROJECT_ROOT) not in sys.path:
 # 导入 Streamlit 主模块，后面所有页面组件都通过 st.xxx() 调用
 import streamlit as st
 
+from backend.utils.workflow_formatter import format_workflow_blocks
+
 # 导入“前端请求封装层”里的函数
 from frontend.api_client import (
     clear_chat_session, # 删除后端数据库中的聊天会话
@@ -57,7 +59,6 @@ from frontend.file_parser import (
 
 # 导入展示层函数
 from frontend.renderers import (
-    format_workflow_blocks, # 把 workflow 三步结果格式化成 Markdown
     render_rag_preview, # 渲染 RAG 命中片段预览
     render_result_actions, # 渲染复制 / 导出按钮
     render_workflow_step_copy_actions # 渲染 workflow 分步复制按钮
