@@ -128,13 +128,13 @@ class RagPreviewResponse(BaseModel):
 
 class RagStatusResponse(BaseModel):
     """
-    RAG 内存 store 状态响应。
+    RAG 数据库文档状态响应。
     """
     session_id: str  # 当前会话 ID
     has_document: bool  # 当前会话是否已有索引文档
     file_name: Optional[str] = None  # 当前文档文件名
     chunk_count: int = 0  # 当前文档块数量
-    expires_in_seconds: int = 0  # 距离过期还剩多少秒
+    expires_in_seconds: int = 0  # 数据库持久化后默认不过期，保留该字段兼容前端展示
 
 
 class ChatHistoryRequest(BaseModel):

@@ -10,7 +10,7 @@ RAG 服务层模块。
 
 说明：
 - 当前实现为第一阶段轻量版 RAG
-- 采用“单会话 + 临时索引 + 检索结果组装”的设计
+- 采用“单会话 + 数据库持久化 chunks + 检索结果组装”的设计
 - 适合本地开发、项目演示和求职场景下的工程化展示
 """
 from typing import Any
@@ -33,7 +33,7 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
     if not session_id:
         return []
 
-    # 先从内存 store 中取出当前会话已索引的文本块
+    # 先从数据库中取出当前会话已索引的文本块
     chunks = get_document_chunks(session_id)
     if not chunks:
         return []

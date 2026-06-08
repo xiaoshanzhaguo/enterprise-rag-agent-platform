@@ -5,9 +5,9 @@ API 路由模块。
 1. 注册前端可调用的后端接口
 2. 提供聊天流式响应接口
 3. 提供工作流流式响应接口
-4. 提供 RAG 文档索引、检索预览、状态查询与清理接口
+4. 提供文档上传、文本切块、RAG 索引构建、检索预览、状态查询与清理接口
 5. 提供聊天历史恢复接口
-6. 提供聊天会话创建与删除接口
+6. 提供聊天会话创建、恢复与删除接口
 7. 统一作为前端与业务服务层之间的请求入口
 
 说明：
@@ -16,8 +16,8 @@ API 路由模块。
 - 不负责模型调用细节
 - 不负责数据库操作实现
 - 聊天与工作流逻辑由 Service 层负责
-- 数据持久化由 Repository 层负责
-- 文档切块、存储、检索与状态管理由 RAG 模块负责
+- 聊天记录、文档索引与检索记录持久化由 Repository 层负责
+- 文档切块、检索与状态管理由 RAG 模块负责
 - 前端所有业务请求均通过本模块进入系统
 
 当前已提供接口：
@@ -37,11 +37,10 @@ RAG 相关：
 - GET /rag_status/{session_id}
 - DELETE /clear_document/{session_id}
 
-适用场景：
-- 前后端分离架构
-- SSE 流式响应
-- RAG 第一阶段（内存检索）
-- SQLite 持久化聊天历史
+数据存储：
+- 聊天记录持久化存储于 SQLite
+- 文档索引持久化存储于 SQLite
+- RAG 检索记录持久化存储于 SQLite
 """
 
 from fastapi import APIRouter, HTTPException
@@ -116,7 +115,7 @@ def clear_chat_session(session_id: str):
     """
     # 删除数据库中的会话及所有级联关联数据
     delete_chat_session(session_id)
-    # 同时清理当前会话在内存 RAG store 中的文档索引
+    # 同时清理当前会话在数据库 RAG store 中的文档索引
     clear_document_chunks(session_id)
     return {"message": f"session {session_id} 的聊天数据已清理"}
 
@@ -151,7 +150,7 @@ def index_document(request: IndexDocumentRequest):
     作用：
     1. 接收前端上传并提取后的完整文本
     2. 做文本切块
-    3. 存入当前 session 对应的内存存储
+    3. 存入当前 session 对应的数据库文档表和文本块表
     """
     cleaned_text = request.document_text.strip()  # 去掉首尾空白，避免无效输入
     # 如果清理后发现文档内容是空的，就抛出一个 400 错误。阻止无效文档进入 RAG 索引流程。
@@ -163,7 +162,7 @@ def index_document(request: IndexDocumentRequest):
     if not chunks:
         raise HTTPException(status_code=400, detail="文档切块后为空，请检查输入内容。")
 
-    # 把切好的块保存到当前会话对应的 RAG store 里。这样后面同一会话里就能基于这份文档做检索。
+    # 把切好的块保存到当前会话对应的数据库 RAG store。这样后面同一会话里就能基于这份文档做检索。
     save_document_chunks(
         session_id=request.session_id,
         file_name=request.file_name,
@@ -201,7 +200,7 @@ def rag_preview(request: RagPreviewRequest):
 @router.get("/rag_status/{session_id}", response_model=RagStatusResponse)
 def rag_status(session_id: str):
     """
-    返回当前 session 的内存 RAG store 生命周期状态。
+    返回当前 session 的数据库 RAG 文档状态。
     """
     # 查询当前会话的文档状态，并转换为响应模型
     return RagStatusResponse(**get_document_status(session_id))
@@ -213,8 +212,8 @@ def clear_document(session_id: str):
     清理某个 session 对应的临时 RAG 文档索引
 
     作用：
-    1. 当前端新建会话或清空聊天时，主动释放 session 的文本块
-    2. 避免第一阶段 RAG 的内存存储无限累积
+    1. 当前端新建会话或清空聊天时，主动删除 session 的持久化文档和文本块
+    2. 避免当前会话继续检索旧文档
     """
-    clear_document_chunks(session_id) # 从 RAG store 中删除该会话对应的文档记录
+    clear_document_chunks(session_id) # 从数据库 RAG store 中删除该会话对应的文档记录
     return {"message": f"session {session_id} 的文档索引已清理"}

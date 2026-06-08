@@ -60,6 +60,7 @@ CREATE_TABLE_SQL = [
     CREATE TABLE IF NOT EXISTS document_chunks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_id INTEGER NOT NULL,
+        file_name TEXT,
         chunk_index INTEGER NOT NULL,
         chunk_text TEXT NOT NULL,
         text_length INTEGER NOT NULL,

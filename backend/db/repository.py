@@ -287,11 +287,14 @@ def save_document_with_chunks(
     """
     保存上传文档及其切分后的文本块。
 
-    功能：
-    1. 保存文档信息
-    2. 生成文档内容哈希值
-    3. 保存文本块(document_chunks)
-    4. 返回文本块元数据
+    函数说明：
+    1. 如果 session_id 或 chunks 为空，直接返回空列表。
+    2. 确保当前聊天会话存在。
+    3. 生成文档内容哈希值，便于后续识别文档内容。
+    4. 删除当前 session 旧的 RAG 文档，保持“一个会话当前索引一份文档”的交互语义。
+    5. 将文档基础信息写入 documents 表。
+    6. 将每个文本块写入 document_chunks 表。
+    7. 返回带数据库主键和展示信息的 chunk 元数据。
 
     :param session_id: 当前会话ID
     :param file_name: 文件名
@@ -300,15 +303,23 @@ def save_document_with_chunks(
     :param source_type: 文档来源类型
     :return: 文本块元数据列表
     """
+    # 如果没有会话 ID 或没有切分结果，就没有可保存的数据
     if not session_id or not chunks:
         return []
 
+    # 确保当前会话存在，避免 documents.session_id 外键关联失败
     ensure_chat_session(session_id=session_id, mode=mode)
+    # 生成当前本地时间，统一用于文档和 chunk 的 created_at
     now = _current_timestamp()
     # 生成文档指纹
     content_hash = hashlib.sha256("\n\n".join(chunks).encode("utf-8")).hexdigest()
 
+    # 打开数据库连接，保存文档和文本块
     with get_connection() as connection:
+        # 当前前端交互语义是“一个会话当前索引一份文档”，新上传文档会替换旧文档
+        connection.execute("DELETE FROM documents WHERE session_id = ?", (session_id,))
+
+        # 先保存文档主记录，后续 chunk 通过 document_id 关联到这条文档
         document_cursor = connection.execute(
             """
             INSERT INTO documents (session_id, file_name, content_hash, source_type, created_at)
@@ -316,32 +327,193 @@ def save_document_with_chunks(
             """,
             (session_id, file_name, content_hash, source_type, now),
         )
+        # 取出刚插入的 documents.id，作为 document_chunks.document_id
         document_id = int(document_cursor.lastrowid)
 
+        # 收集写入数据库后的 chunk 元数据，返回给 RAG 检索层使用
         saved_chunks = []
+        # 从 1 开始给 chunk 编号，便于前端展示和检索排序
         for index, chunk_text in enumerate(chunks, start=1):
+            # 保存单个文本块到 document_chunks 表
             chunk_cursor = connection.execute(
                 """
-                INSERT INTO document_chunks (document_id, chunk_index, chunk_text, text_length, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO document_chunks (document_id, file_name, chunk_index, chunk_text, text_length, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (document_id, index, chunk_text, len(chunk_text), now),
+                (document_id, file_name, index, chunk_text, len(chunk_text), now),
             )
+            # 将数据库 chunk 主键和检索所需字段加入返回列表
             saved_chunks.append(
                 {
                     "chunk_id": index,
                     "db_chunk_id": int(chunk_cursor.lastrowid),
                     "document_id": document_id,
+                    "file_name": file_name,
                     "text": chunk_text,
+                    "text_length": len(chunk_text),
+                    "created_at": now,
                 }
             )
 
+        # 更新会话时间，表示当前 session 的 RAG 文档发生变化
         connection.execute(
             "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
             (now, session_id),
         )
+        # 提交事务，让文档、chunks 和会话更新时间一起生效
         connection.commit()
+        # 返回保存后的 chunk 元数据
         return saved_chunks
+
+
+def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
+    """
+    从数据库读取当前会话已持久化的 RAG 文本块。
+
+    函数说明：
+    1. 如果 session_id 为空，直接返回空列表。
+    2. 根据 session_id 查询 documents 表，定位当前会话的文档。
+    3. 关联 document_chunks 表，读取文档切分后的所有文本块。
+    4. 将数据库字段转换为 RAG 检索层需要的 chunk 字典结构。
+
+    :param session_id: 当前会话ID
+    :return: 文本块列表
+    """
+    # 如果没有会话 ID，就无法定位文档，直接返回空列表
+    if not session_id:
+        return []
+
+    # 打开数据库连接，查询结束后自动关闭
+    with get_connection() as connection:
+        # 关联 documents 和 document_chunks，读取当前 session 对应的全部 chunk
+        rows = connection.execute(
+            """
+            SELECT
+                document_chunks.id AS db_chunk_id,
+                document_chunks.document_id AS document_id,
+                COALESCE(document_chunks.file_name, documents.file_name) AS file_name,
+                document_chunks.chunk_index AS chunk_id,
+                document_chunks.chunk_text AS text,
+                document_chunks.text_length AS text_length,
+                document_chunks.created_at AS created_at
+            FROM document_chunks
+            INNER JOIN documents ON documents.id = document_chunks.document_id
+            WHERE documents.session_id = ?
+            ORDER BY documents.created_at DESC, document_chunks.chunk_index ASC
+            """,
+            (session_id,),
+        ).fetchall()
+
+    # 将 sqlite3.Row 转成普通字典，统一提供给 RAG 检索层使用
+    return [
+        {
+            "db_chunk_id": row["db_chunk_id"],
+            "document_id": row["document_id"],
+            "file_name": row["file_name"],
+            "chunk_id": row["chunk_id"],
+            "text": row["text"],
+            "text_length": row["text_length"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def get_document_status(session_id: str | None) -> dict[str, Any]:
+    """
+    从数据库读取当前会话的 RAG 文档状态。
+
+    函数说明：
+    1. 如果 session_id 为空，返回无文档状态。
+    2. 查询当前会话最近一次上传的文档。
+    3. 统计该文档对应的 chunk 数量。
+    4. 返回前端 /rag_status 接口需要的状态结构。
+
+    :param session_id: 当前会话ID
+    :return: RAG 文档状态
+    """
+    # 如果没有会话 ID，就返回一个空状态，避免接口报错
+    if not session_id:
+        return {
+            "session_id": session_id or "",
+            "has_document": False,
+            "file_name": None,
+            "chunk_count": 0,
+            "expires_in_seconds": 0,
+        }
+
+    # 打开数据库连接，查询当前 session 的文档状态
+    with get_connection() as connection:
+        # 当前交互只展示最近一次上传的文档状态
+        document = connection.execute(
+            """
+            SELECT id, file_name
+            FROM documents
+            WHERE session_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (session_id,),
+        ).fetchone()
+
+        # 如果当前会话没有文档记录，就返回无文档状态
+        if not document:
+            return {
+                "session_id": session_id,
+                "has_document": False,
+                "file_name": None,
+                "chunk_count": 0,
+                "expires_in_seconds": 0,
+            }
+
+        # 统计当前文档下的文本块数量，用于前端展示
+        chunk_count = connection.execute(
+            """
+            SELECT COUNT(*) AS chunk_count
+            FROM document_chunks
+            WHERE document_id = ?
+            """,
+            (document["id"],),
+        ).fetchone()["chunk_count"]
+
+    # 返回和 RagStatusResponse 对齐的状态字段
+    return {
+        "session_id": session_id,
+        "has_document": chunk_count > 0,
+        "file_name": document["file_name"],
+        "chunk_count": int(chunk_count),
+        "expires_in_seconds": 0,
+    }
+
+
+def delete_session_documents(session_id: str | None) -> None:
+    """
+    删除当前会话持久化的 RAG 文档和文本块。
+
+    函数说明：
+    1. 如果 session_id 为空，直接返回。
+    2. 删除 documents 表中属于当前会话的文档。
+    3. 依赖外键 ON DELETE CASCADE 自动删除 document_chunks。
+    4. 更新 chat_sessions.updated_at，记录当前会话发生过文档清理动作。
+
+    :param session_id: 当前会话ID
+    :return: None
+    """
+    # 如果没有会话 ID，就没有需要清理的文档
+    if not session_id:
+        return
+
+    # 打开数据库连接，删除完成后提交事务
+    with get_connection() as connection:
+        # 删除当前会话下的文档；document_chunks 会通过外键级联删除
+        connection.execute("DELETE FROM documents WHERE session_id = ?", (session_id,))
+        # 更新会话时间，表示当前会话的 RAG 文档状态发生变化
+        connection.execute(
+            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+            (_current_timestamp(), session_id),
+        )
+        # 提交事务，让删除和更新时间正式生效
+        connection.commit()
 
 
 def save_rag_query_with_hits(
