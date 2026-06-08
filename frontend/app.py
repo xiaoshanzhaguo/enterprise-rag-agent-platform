@@ -217,12 +217,6 @@ if mode in RAG_ENABLED_MODES:
         key=rag_checkbox_key
     )
 
-    # 只要数据库里有文档，就展示当前可检索文档状态；是否使用它由 RAG 勾选框决定
-    if has_persisted_rag_document:
-        st.caption("当前会话已有可检索文档，可以不重新上传文件直接继续提问。")
-        file_name = rag_status_info.get("file_name") or "未命名文件"
-        st.caption(f"当前会话已保存文档：{file_name}")
-
     # 只有真的勾选了 RAG，才继续展示下面的检索数量滑块
     if use_rag:
         # 渲染一个滑块，让用户选择检索片段数量
@@ -233,10 +227,6 @@ if mode in RAG_ENABLED_MODES:
             value=3,
             key=f"rag_top_k_{mode}"
         )
-
-        if not has_persisted_rag_document:
-            # 如果当前 session 没有数据库文档，提示用户需要上传文件后才能使用 RAG
-            st.caption("当前会话暂无可检索文档，请上传文件后使用 RAG。")
 
 
 # -----------------------------
@@ -266,6 +256,28 @@ for idx, message in enumerate(current_messages):
                     workflow_blocks=message["workflow_blocks"],
                     widget_key_suffix=f"history_steps_{idx}"
                 )
+
+
+# -----------------------------
+# RAG 文档状态提示
+# 放在历史消息之后，避免提示停留在页面顶部导致用户看不到
+# -----------------------------
+if mode in RAG_ENABLED_MODES:
+    # 当前数据库已保存文档时，在最新消息下方展示更醒目的状态提示
+    if has_persisted_rag_document:
+        # 从 /rag_status 返回结果中读取当前会话已保存的文档名
+        file_name = rag_status_info.get("file_name") or "未命名文件"
+
+        # 如果 RAG 已开启，用成功提示强调后续问题会基于该文档检索
+        if use_rag:
+            st.success(f"RAG 已开启，当前会话将基于已保存文档进行检索：{file_name}")
+        else:
+            # 如果数据库有文档但用户手动关闭 RAG，则提示文档仍在，但本次不会用于检索
+            st.info(f"当前会话已保存文档：{file_name}。勾选 RAG 后可以继续基于该文档提问。")
+
+    # 当前没有数据库文档但用户手动开启了 RAG 时，用 warning 提醒需要上传文件
+    elif use_rag:
+        st.warning("当前会话暂无可检索文档。请上传文件后使用 RAG，或关闭 RAG 后直接提问。")
 
 
 # -----------------------------
