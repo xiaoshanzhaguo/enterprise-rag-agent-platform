@@ -7,7 +7,7 @@
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
 5. 渲染历史消息、当前结果、RAG 预览、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
-6. 在左侧边栏提供对话设置入口，并按当前模式展示可用的 RAG 设置
+6. 在左侧边栏展示项目名称、模式选择和对话设置，并按当前模式展示可用的 RAG 设置
 7. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和数据库 RAG 文档
 
 说明：
@@ -83,8 +83,63 @@ st.set_page_config(
     menu_items={} # 隐藏默认菜单项
 )
 
-# 页面顶部渲染大标题
-st.title("AI 内容分析与创作助手")
+# 注入少量页面样式，用于整理侧边栏项目名和主区当前模式展示，整体保持工具型界面的克制感
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 3.25rem;
+    }
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+        display: none;
+    }
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        padding-top: 0 !important;
+    }
+    section[data-testid="stSidebar"] hr {
+        margin: 0 0 30px 0;
+    }
+    .sidebar-brand {
+        margin: 20px 0 30px 0;
+        color: rgb(38, 39, 48);
+        font-size: 1.28rem;
+        font-weight: 760;
+        line-height: 1.35;
+    }
+    .mode-header {
+        margin: 0 0 0.9rem 0;
+        padding: 0 0 0.72rem 0;
+        border-bottom: 1px solid rgba(49, 51, 63, 0.12);
+    }
+    .mode-kicker {
+        margin-bottom: 0.22rem;
+        color: rgba(49, 51, 63, 0.62);
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .mode-title {
+        color: rgb(38, 39, 48);
+        font-size: 1.28rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+    .mode-description {
+        margin-top: 0.24rem;
+        color: rgba(49, 51, 63, 0.68);
+        font-size: 0.9rem;
+        line-height: 1.45;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# 左侧边栏顶部只展示项目名称，让侧边栏的应用身份更简洁清晰
+st.sidebar.markdown(
+    '<div class="sidebar-brand">AI 内容分析与创作助手</div>',
+    unsafe_allow_html=True
+)
+st.sidebar.divider()
 
 
 # -----------------------------
@@ -115,8 +170,17 @@ AVAILABLE_MODES = list(MODE_TO_TASK_TYPE.keys())
 # 在侧边栏中让用户选择当前模式
 mode = st.sidebar.selectbox("选择功能", AVAILABLE_MODES)
 
-# 显示当前模式说明
-st.caption(f"当前模式：{MODE_DESCRIPTIONS[mode]}")
+# 在主内容区顶部展示当前模式。字号比普通说明更大，但不使用页面级大标题，避免抢占对话区域注意力
+st.markdown(
+    f"""
+    <div class="mode-header">
+        <div class="mode-kicker">当前模式</div>
+        <div class="mode-title">{mode}</div>
+        <div class="mode-description">{MODE_DESCRIPTIONS[mode]}</div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # -----------------------------
 # 第一阶段启用 RAG 的模式
