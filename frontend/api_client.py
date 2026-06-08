@@ -105,7 +105,7 @@ def clear_chat_session(session_id: str) -> None:
     函数说明：
     - 调用后端 DELETE /chat_session/{session_id} 接口
     - 删除数据库中的会话、消息、文档、RAG 查询等关联数据
-    - 后端会同时清理当前 session 对应的内存 RAG 索引
+    - 后端会同时清理当前 session 对应的数据库 RAG 文档
     - 即使清理失败，也不阻断前端继续创建新会话
 
     :param session_id: 需要删除的会话ID
@@ -153,7 +153,7 @@ def index_uploaded_document(session_id: str, file_name: str, document_text: str)
 
 def clear_indexed_document(session_id: str) -> None:
     """
-    调用后端清理接口，删除某个 session 对应的临时 RAG 文档索引。
+    调用后端清理接口，删除某个 session 对应的数据库 RAG 文档索引。
 
     说明：
     - 该函数不阻断主流程
@@ -232,7 +232,7 @@ def get_rag_preview(session_id: str, query: str, top_k: int) -> list[dict]:
 
 def get_rag_status(session_id: str) -> dict:
     """
-    获取当前 session 的 RAG store 状态。
+    获取当前 session 的数据库 RAG 文档状态。
 
     函数说明：
     - 调用后端 /rag_status/{session_id} 接口

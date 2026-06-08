@@ -7,7 +7,7 @@
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
 5. 渲染历史消息、当前结果、RAG 预览、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
-6. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和内存 RAG 索引
+6. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和数据库 RAG 文档
 
 说明：
 - 当前模块属于前端入口层，负责把页面状态管理、用户输入处理、后端请求发送和结果展示串起来
@@ -165,8 +165,9 @@ st.session_state.mode_sessions = ensure_mode_sessions(
 )
 
 # -----------------------------
-# 初始化前端索引状态缓存
-# 用于记录当前模式下，当前 session 的文档是否已经索引过，避免每次发请求都重新索引
+# 初始化前端文件指纹缓存
+# 用于记录当前页面运行期间上传文件的指纹，避免同一 session 重复索引同一份文件
+# 当前 RAG 文档状态以数据库 /rag_status 返回结果为准
 # -----------------------------
 if "rag_index_state" not in st.session_state:
     st.session_state.rag_index_state = {}
@@ -182,20 +183,27 @@ current_messages = current_session["messages"]
 # 说明：
 # - 控件要放在历史消息前面，否则 Streamlit 重跑后会被历史输出挤到页面下方
 # - 即使当前没附加文件，也先给默认值，保证后续 payload 安全
-# - use_rag: 默认不启用
+# - use_rag: 当前 session 有数据库文档时默认启用，否则默认关闭
 # - rag_top_k: 默认检索3个片段
 # -----------------------------
 use_rag = False
 rag_top_k = 3
+rag_status_info = {}
+has_persisted_rag_document = False
 
 
 # 只有当前模式支持 RAG 时，才展示 RAG 控件
 if mode in RAG_ENABLED_MODES:
-    # 渲染一个复选框，默认勾选，key 按模式区分，避免不同模式冲突
+    # 先查询当前 session 是否已经有数据库持久化的 RAG 文档
+    rag_status_info = get_rag_status(current_session_id)
+    # 根据后端状态判断当前 session 是否有可检索文档
+    has_persisted_rag_document = bool(rag_status_info.get("has_document"))
+
+    # 渲染一个复选框，当前 session 有文档时默认勾选，否则默认不勾选
     use_rag = st.checkbox(
         "启用文档检索增强（RAG）",
-        value=True,
-        key=f"use_rag_{mode}"
+        value=has_persisted_rag_document,
+        key=f"use_rag_{mode}_{current_session_id}"
     )
 
     # 只有真的勾选了 RAG，才继续展示下面的检索数量滑块
@@ -209,15 +217,18 @@ if mode in RAG_ENABLED_MODES:
             key=f"rag_top_k_{mode}"
         )
 
-        # 给用户一个小提示，解释 RAG 的处理逻辑
-        st.caption("在附加文档时，系统会先检索相关片段，再交给模型处理。")
+        # 如果当前 session 有数据库文档，提示用户可以直接基于历史文档继续提问
+        if has_persisted_rag_document:
+            st.caption("当前会话已有可检索文档，可以不重新上传文件直接继续提问。")
+        else:
+            # 如果当前 session 没有数据库文档，提示用户需要上传文件后才能使用 RAG
+            st.caption("当前会话暂无可检索文档，请上传文件后使用 RAG。")
 
-        # 取出当前模式对应的索引记录
-        current_index_state = st.session_state.rag_index_state.get(mode)
-        # 如果当前模式当前会话已经索引过一份文档，就显示提示。这有助于用户知道现在检索增强依赖的是哪份文件
-        if current_index_state and current_index_state.get("session_id") == current_session_id:
-            file_name = current_index_state.get("file_name", "未命名文件")
-            st.caption(f"当前会话已索引文档：{file_name}")
+        # 当前可检索文档以数据库状态为准，前端 rag_index_state 只负责避免重复索引同一上传文件
+        if has_persisted_rag_document:
+            # 从 /rag_status 返回结果中读取当前会话已保存的文档名
+            file_name = rag_status_info.get("file_name") or "未命名文件"
+            st.caption(f"当前会话已保存文档：{file_name}")
 
 
 # -----------------------------
@@ -256,7 +267,7 @@ if st.sidebar.button("新建当前模式聊天"):
     # 取出旧会话 ID，用于同步清理旧会话相关资源
     old_session_id = st.session_state.mode_sessions[mode]["session_id"]
 
-    # 清理旧会话在内存 RAG store 中的临时文档索引
+    # 清理旧会话在数据库 RAG store 中的文档索引
     clear_indexed_document(old_session_id)
 
     # 删除旧会话在 SQLite 中的聊天记录、文档记录和 RAG 关联记录
@@ -278,7 +289,7 @@ if st.sidebar.button("新建当前模式聊天"):
     st.rerun()
 
 if st.sidebar.button("清空当前模式聊天"):
-    # 清理当前模式旧 session 对应的内存索引和数据库会话数据，只影响当前模式，不影响其他模式的历史
+    # 清理当前模式旧 session 对应的数据库 RAG 文档和数据库会话数据，只影响当前模式，不影响其他模式的历史
     old_session_id = st.session_state.mode_sessions[mode]["session_id"]
     clear_indexed_document(old_session_id)
     clear_chat_session(old_session_id)
@@ -373,6 +384,11 @@ if chat_submission:
         submit_display_text = user_text
         submit_raw_text = user_text
 
+    # 如果用户开启了 RAG，但既没有上传新文件，数据库里也没有历史文档，则停止本次提交
+    if use_rag and mode in RAG_ENABLED_MODES and not uploaded_file_text and not has_persisted_rag_document:
+        st.warning("当前会话没有可检索文档。请先上传文件，或关闭 RAG 后直接提问。")
+        st.stop()
+
     # -----------------------------
     # 第四步：如果当前附加了文件并启用 RAG, 则判断是否需要重新索引
     # -----------------------------
@@ -414,6 +430,10 @@ if chat_submission:
                 "file_name": uploaded_file_name,
                 "text_fingerprint": text_fingerprint
             }
+            # 索引成功后更新本次运行中的数据库文档状态
+            has_persisted_rag_document = True
+            # 索引成功后更新本次运行中的状态信息，便于后续预览展示
+            rag_status_info = get_rag_status(current_session_id)
 
     # 如果启用了 RAG，则获取并展示本次 query 命中的片段预览
     if use_rag and mode in RAG_ENABLED_MODES:
@@ -424,7 +444,7 @@ if chat_submission:
             top_k=rag_top_k
         )
         # 调用后端 /rag_status/{session_id}，获取当前会话索引状态
-        rag_status_info = get_rag_status(current_session_id)
+        rag_status_info = rag_status_info or get_rag_status(current_session_id)
         # 将检索片段和状态信息渲染到前端
         render_rag_preview(rag_preview_chunks, rag_status_info)
 
