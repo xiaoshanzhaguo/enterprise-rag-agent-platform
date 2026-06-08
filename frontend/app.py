@@ -190,6 +190,8 @@ use_rag = False
 rag_top_k = 3
 rag_status_info = {}
 has_persisted_rag_document = False
+rag_checkbox_key = f"use_rag_{mode}_{current_session_id}"
+rag_default_applied_key = f"{rag_checkbox_key}_default_applied"
 
 
 # 只有当前模式支持 RAG 时，才展示 RAG 控件
@@ -199,12 +201,27 @@ if mode in RAG_ENABLED_MODES:
     # 根据后端状态判断当前 session 是否有可检索文档
     has_persisted_rag_document = bool(rag_status_info.get("has_document"))
 
-    # 渲染一个复选框，当前 session 有文档时默认勾选，否则默认不勾选
+    # 如果数据库已经有文档，并且还没有给当前 session 应用过默认值，则自动开启一次 RAG
+    if has_persisted_rag_document and not st.session_state.get(rag_default_applied_key):
+        st.session_state[rag_checkbox_key] = True
+        st.session_state[rag_default_applied_key] = True
+
+    # 如果数据库没有文档，并且当前 session 的 RAG 勾选状态还没初始化，则默认关闭 RAG
+    if not has_persisted_rag_document and rag_checkbox_key not in st.session_state:
+        st.session_state[rag_checkbox_key] = False
+
+    # 渲染一个复选框，当前 session 有文档时默认勾选，否则默认不勾选；用户后续手动修改会被 Streamlit 保留
     use_rag = st.checkbox(
         "启用文档检索增强（RAG）",
         value=has_persisted_rag_document,
-        key=f"use_rag_{mode}_{current_session_id}"
+        key=rag_checkbox_key
     )
+
+    # 只要数据库里有文档，就展示当前可检索文档状态；是否使用它由 RAG 勾选框决定
+    if has_persisted_rag_document:
+        st.caption("当前会话已有可检索文档，可以不重新上传文件直接继续提问。")
+        file_name = rag_status_info.get("file_name") or "未命名文件"
+        st.caption(f"当前会话已保存文档：{file_name}")
 
     # 只有真的勾选了 RAG，才继续展示下面的检索数量滑块
     if use_rag:
@@ -217,18 +234,9 @@ if mode in RAG_ENABLED_MODES:
             key=f"rag_top_k_{mode}"
         )
 
-        # 如果当前 session 有数据库文档，提示用户可以直接基于历史文档继续提问
-        if has_persisted_rag_document:
-            st.caption("当前会话已有可检索文档，可以不重新上传文件直接继续提问。")
-        else:
+        if not has_persisted_rag_document:
             # 如果当前 session 没有数据库文档，提示用户需要上传文件后才能使用 RAG
             st.caption("当前会话暂无可检索文档，请上传文件后使用 RAG。")
-
-        # 当前可检索文档以数据库状态为准，前端 rag_index_state 只负责避免重复索引同一上传文件
-        if has_persisted_rag_document:
-            # 从 /rag_status 返回结果中读取当前会话已保存的文档名
-            file_name = rag_status_info.get("file_name") or "未命名文件"
-            st.caption(f"当前会话已保存文档：{file_name}")
 
 
 # -----------------------------
