@@ -7,7 +7,8 @@
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
 5. 渲染历史消息、当前结果、RAG 预览、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
-6. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和数据库 RAG 文档
+6. 在左侧边栏提供对话设置入口，并按当前模式展示可用的 RAG 设置
+7. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和数据库 RAG 文档
 
 说明：
 - 当前模块属于前端入口层，负责把页面状态管理、用户输入处理、后端请求发送和结果展示串起来
@@ -179,12 +180,16 @@ current_messages = current_session["messages"]
 
 
 # -----------------------------
-# RAG 控件区
+# RAG 状态准备
 # 说明：
-# - 控件要放在历史消息前面，否则 Streamlit 重跑后会被历史输出挤到页面下方
-# - 即使当前没附加文件，也先给默认值，保证后续 payload 安全
+# - 这里先只准备状态，不渲染控件
+# - RAG 控件会放到左侧边栏的“对话设置”区域里
 # - use_rag: 当前 session 有数据库文档时默认启用，否则默认关闭
 # - rag_top_k: 默认检索3个片段
+# - rag_status_info: 后端 /rag_status 返回的当前 session 文档状态，后面用于展示文件名和判断是否有可检索文档
+# - has_persisted_rag_document: 当前 session 是否已经在数据库中保存过 RAG 文档和 chunk
+# - rag_checkbox_key: 当前模式 + 当前 session 的 RAG 开关组件 key，用于让不同模式、不同会话的勾选状态互不影响
+# - rag_default_applied_key: 标记当前 session 是否已经自动应用过一次 RAG 默认开启逻辑，避免每次页面重跑都覆盖用户手动选择
 # -----------------------------
 use_rag = False
 rag_top_k = 3
@@ -194,7 +199,7 @@ rag_checkbox_key = f"use_rag_{mode}_{current_session_id}"
 rag_default_applied_key = f"{rag_checkbox_key}_default_applied"
 
 
-# 只有当前模式支持 RAG 时，才展示 RAG 控件
+# 只有当前模式支持 RAG 时，才查询数据库文档状态
 if mode in RAG_ENABLED_MODES:
     # 先查询当前 session 是否已经有数据库持久化的 RAG 文档
     rag_status_info = get_rag_status(current_session_id)
@@ -210,23 +215,33 @@ if mode in RAG_ENABLED_MODES:
     if not has_persisted_rag_document and rag_checkbox_key not in st.session_state:
         st.session_state[rag_checkbox_key] = False
 
-    # 渲染一个复选框，当前 session 有文档时默认勾选，否则默认不勾选；用户后续手动修改会被 Streamlit 保留
-    use_rag = st.checkbox(
-        "启用文档检索增强（RAG）",
-        value=has_persisted_rag_document,
-        key=rag_checkbox_key
-    )
 
-    # 只有真的勾选了 RAG，才继续展示下面的检索数量滑块
-    if use_rag:
-        # 渲染一个滑块，让用户选择检索片段数量
-        rag_top_k = st.slider(
-            "检索片段数量",
-            min_value=1,
-            max_value=5,
-            value=3,
-            key=f"rag_top_k_{mode}"
+# -----------------------------
+# 侧边栏对话设置
+# -----------------------------
+with st.sidebar.expander("对话设置", expanded=True):
+    # 只有支持 RAG 的模式才展示 RAG 开关
+    if mode in RAG_ENABLED_MODES:
+        # 渲染 RAG 开关；默认值由当前 session 是否已有数据库文档决定
+        use_rag = st.checkbox(
+            "启用文档检索增强（RAG）",
+            value=has_persisted_rag_document,
+            key=rag_checkbox_key
         )
+
+        # 只有启用 RAG 后，才展示检索片段数量设置
+        if use_rag:
+            # 渲染滑块，让用户控制本次最多检索多少个文档片段
+            rag_top_k = st.slider(
+                "检索片段数量",
+                min_value=1,
+                max_value=5,
+                value=3,
+                key=f"rag_top_k_{mode}"
+            )
+    else:
+        # 不支持 RAG 的模式不展示开关，避免用户误以为该模式可以检索文档
+        st.info("当前模式暂不支持文档检索增强（RAG）。")
 
 
 # -----------------------------
@@ -256,28 +271,6 @@ for idx, message in enumerate(current_messages):
                     workflow_blocks=message["workflow_blocks"],
                     widget_key_suffix=f"history_steps_{idx}"
                 )
-
-
-# -----------------------------
-# RAG 文档状态提示
-# 放在历史消息之后，避免提示停留在页面顶部导致用户看不到
-# -----------------------------
-if mode in RAG_ENABLED_MODES:
-    # 当前数据库已保存文档时，在最新消息下方展示更醒目的状态提示
-    if has_persisted_rag_document:
-        # 从 /rag_status 返回结果中读取当前会话已保存的文档名
-        file_name = rag_status_info.get("file_name") or "未命名文件"
-
-        # 如果 RAG 已开启，用成功提示强调后续问题会基于该文档检索
-        if use_rag:
-            st.success(f"RAG 已开启，当前会话将基于已保存文档进行检索：{file_name}")
-        else:
-            # 如果数据库有文档但用户手动关闭 RAG，则提示文档仍在，但本次不会用于检索
-            st.info(f"当前会话已保存文档：{file_name}。勾选 RAG 后可以继续基于该文档提问。")
-
-    # 当前没有数据库文档但用户手动开启了 RAG 时，用 warning 提醒需要上传文件
-    elif use_rag:
-        st.warning("当前会话暂无可检索文档。请上传文件后使用 RAG，或关闭 RAG 后直接提问。")
 
 
 # -----------------------------
@@ -327,6 +320,27 @@ if st.sidebar.button("清空当前模式聊天"):
     st.session_state.rag_index_state.pop(mode, None)
 
     st.rerun()
+
+# -----------------------------
+# RAG 文档状态提示
+# 放在侧边栏设置之后，保证提示读取的是最新 RAG 开关状态
+# -----------------------------
+if mode in RAG_ENABLED_MODES:
+    # 当前数据库已保存文档时，在对话输入前展示更醒目的状态提示
+    if has_persisted_rag_document:
+        # 从 /rag_status 返回结果中读取当前会话已保存的文档名
+        file_name = rag_status_info.get("file_name") or "未命名文件"
+
+        # 如果 RAG 已开启，用成功提示强调后续问题会基于该文档检索
+        if use_rag:
+            st.success(f"RAG 已开启，当前会话将基于已保存文档进行检索：{file_name}")
+        else:
+            # 如果数据库有文档但用户手动关闭 RAG，则提示文档仍在，但本次不会用于检索
+            st.info(f"当前会话已保存文档：{file_name}。在左侧对话设置中开启 RAG 后，可以继续基于该文档提问。")
+
+    # 当前没有数据库文档但用户手动开启了 RAG 时，用 warning 提醒需要上传文件
+    elif use_rag:
+        st.warning("当前会话暂无可检索文档。请上传文件后使用 RAG，或关闭 RAG 后直接提问。")
 
 # -----------------------------
 # 统一输入入口
