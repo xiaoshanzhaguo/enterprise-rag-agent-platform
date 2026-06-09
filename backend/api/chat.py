@@ -40,7 +40,7 @@ RAG 相关：
 数据存储：
 - 聊天记录持久化存储于 SQLite
 - 文档索引持久化存储于 SQLite
-- RAG 检索记录持久化存储于 SQLite
+- RAG 检索记录持久化存储于 SQLite，检索预览会返回引用来源和命中原文片段
 """
 
 from fastapi import APIRouter, HTTPException
@@ -180,7 +180,7 @@ def index_document(request: IndexDocumentRequest):
 @router.post("/rag_preview", response_model=RagPreviewResponse)
 def rag_preview(request: RagPreviewRequest):
     """
-    返回当前 query 命中的 RAG 片段摘要，便于前端展示检索依据。
+    返回当前 query 命中的 RAG 引用来源和原文片段，便于前端展示检索依据。
     """
     # 调用 RAG 服务层，构造适合前端展示的检索片段预览数据
     chunks = build_rag_preview(

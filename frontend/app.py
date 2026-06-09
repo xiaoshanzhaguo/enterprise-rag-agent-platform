@@ -6,7 +6,7 @@
 2. 管理多模式会话状态，包括不同模式下的 session_id、历史消息、数据库历史恢复与旧 JSON 历史兜底
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
-5. 渲染历史消息、当前结果、RAG 预览、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
+5. 渲染历史消息、当前结果、RAG 引用来源、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
 6. 在左侧边栏展示项目名称、模式选择和对话设置，并按当前模式展示可用的 RAG 设置
 7. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和数据库 RAG 文档
 
@@ -533,7 +533,10 @@ if chat_submission:
             # 索引成功后更新本次运行中的状态信息，便于后续预览展示
             rag_status_info = get_rag_status(current_session_id)
 
-    # 如果启用了 RAG，则获取并展示本次 query 命中的片段预览
+    # 默认没有 RAG 命中片段；只有启用 RAG 时才会调用后端获取
+    rag_preview_chunks = []
+
+    # 如果启用了 RAG，则先获取本次 query 命中的片段，稍后放到模型答案下方展示
     if use_rag and mode in RAG_ENABLED_MODES:
         # 调用后端 /rag_preview 接口，获取本次 query 命中的片段摘要
         rag_preview_chunks = get_rag_preview(
@@ -543,8 +546,6 @@ if chat_submission:
         )
         # 调用后端 /rag_status/{session_id}，获取当前会话索引状态
         rag_status_info = rag_status_info or get_rag_status(current_session_id)
-        # 将检索片段和状态信息渲染到前端
-        render_rag_preview(rag_preview_chunks, rag_status_info)
 
     # -----------------------------
     # 第五步: 展示并写入用户消息
@@ -682,6 +683,14 @@ if chat_submission:
 
             # 当前轮结果生成后，渲染操作区并写入历史
             if final_display_text.strip():
+                # 如果本轮启用了 RAG，则在模型答案下方展示引用来源和命中的原文片段
+                if use_rag and mode in RAG_ENABLED_MODES:
+                    render_rag_preview(
+                        chunks=rag_preview_chunks,
+                        status=rag_status_info,
+                        expanded=True
+                    )
+
                 render_result_actions(
                     result_text=final_display_text,
                     mode_name=mode,

@@ -5,7 +5,7 @@
 1. 实现多步骤 AI 工作流处理流程
 2. 将复杂任务拆分为多个独立步骤执行
 3. 支持每个步骤单独流式输出
-4. 支持 RAG 检索增强
+4. 支持带引用来源的 RAG 检索增强
 5. 统一转换为 SSE 事件流返回前端
 6. 保存用户输入和工作流最终结果
 
@@ -235,12 +235,12 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                 messages = [{"role": "system", "content": system_prompt}]
 
                 # 如果启用了 RAG，则加入和当前步骤相关的参考内容
-                if rag_context:
+                if request.use_rag and rag_context:
                     messages.append({
                         "role": "system",
                         "content": (
-                            "以下是与当前步骤相关的参考内容，请优先基于这些内容输出。"
-                            "如果参考内容不足，不要编造文档中没有的信息。\n\n"
+                            "以下是与当前步骤相关的知识库检索结果。"
+                            "请严格遵守其中的回答要求和引用格式，不要编造知识库中没有的依据。\n\n"
                             f"{rag_context}"
                         )
                     })

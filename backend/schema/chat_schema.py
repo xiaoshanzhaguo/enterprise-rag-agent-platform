@@ -2,7 +2,7 @@
 Schema 数据模型模块。
 
 职责：
-1. 定义前后端交互时使用的核心数据结构，包括聊天请求、流式事件、文档索引、RAG 预览、RAG 状态、聊天历史恢复与会话创建等接口模型
+1. 定义前后端交互时使用的核心数据结构，包括聊天请求、流式事件、文档索引、RAG 引用预览、RAG 状态、聊天历史恢复与会话创建等接口模型
 2. 通过 Pydantic 模型约束字段类型、默认值和取值范围，保证接口输入输出结构清晰、可校验、可维护
 3. 统一管理聊天、工作流、RAG 第一阶段、SQLite 历史持久化相关的数据协议
 4. 作为 API 层、Service 层、Repository 层和前端之间的“数据契约”
@@ -13,7 +13,7 @@ Schema 数据模型模块。
 - ChatRequest 用于聊天和工作流请求
 - StreamEvent 用于 SSE 流式响应协议
 - IndexDocumentRequest / IndexDocumentResponse 用于文档索引接口
-- RagPreviewRequest / RagPreviewResponse / RagStatusResponse 用于 RAG 检索预览与状态查询
+- RagPreviewRequest / RagPreviewResponse / RagStatusResponse 用于 RAG 检索引用预览与状态查询
 - ChatHistoryRequest / ChatSessionCreateRequest 用于聊天历史恢复和会话管理
 - 适合当前项目“流式输出 + 多模式内容处理 + 第一阶段 RAG + SQLite 历史持久化”的工程结构
 """
@@ -111,8 +111,11 @@ class RagPreviewChunk(BaseModel):
     """
     前端可视化展示用的检索片段摘要。
     """
+    file_name: Optional[str] = None  # 命中文本块所属文件名
     chunk_id: int | None = None  # 文本块编号
     score: int = 0  # 检索分数
+    source: Optional[str] = None  # 引用来源标识，例如：员工手册.md#chunk-4
+    text: str = ""  # 命中的原文片段
     text_preview: str  # 文本预览内容
     text_length: int  # 原始文本总长度
 

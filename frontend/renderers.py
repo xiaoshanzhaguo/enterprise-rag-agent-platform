@@ -2,14 +2,14 @@
 前端结果展示与操作模块。
 
 职责：
-1. 负责将普通结果、工作流结果和 RAG 检索结果格式化为适合前端展示的内容
+1. 负责将普通结果、工作流结果和 RAG 引用检索结果格式化为适合前端展示的内容
 2. 提供结果复制、Markdown 导出、workflow 分步复制等用户操作能力
 3. 封装前端结果区域的展示逻辑，避免页面主代码过于臃肿
 
 说明：
 - 当前模块属于前端展示层，不直接负责业务处理与模型调用
 - 主要服务于 Streamlit 页面中的结果渲染、操作按钮和辅助可视化展示
-- 适合当前项目“多模式内容处理 + workflow 结果展示 + RAG 检索预览”的交互场景
+- 适合当前项目“多模式内容处理 + workflow 结果展示 + RAG 引用来源展示”的交互场景
 """
 # 导入 json 模块。后面在 render_copy_button() 里，会用 json.dumps(text) 把 Python 字符串安全地转成 JS 里可用的字符串。
 import json
@@ -216,16 +216,62 @@ def render_workflow_step_copy_actions(workflow_blocks: dict[str, str], widget_ke
                 )
 
 
-def render_rag_preview(chunks: list[dict], status: dict | None = None) -> None:
+def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> list[dict]:
     """
-    展示本次 RAG 检索命中的片段，帮助用户判断回答依据。
+    将后端返回的 RAG chunk 转换为前端展示用字段。
+
+    函数说明：
+    1. 统一读取 file_name、chunk_id、score、source 等展示字段。
+    2. source 优先使用后端返回值；没有时用 file_name + chunk_id 兜底生成。
+    3. display_text 优先展示完整原文；没有完整原文时退回 text_preview。
+
+    :param chunks: 后端返回的 RAG 命中片段列表
+    :param fallback_file_name: 当前文档兜底文件名
+    :return: 前端渲染引用来源和原文片段时使用的字段列表
+    """
+    # 存放整理后的片段展示数据，避免后续渲染时重复解析同一批字段
+    preview_items = []
+
+    # 遍历每个命中的检索片段，并把字段整理成统一结构
+    for chunk in chunks:
+        # 优先使用 chunk 自带文件名；如果没有，则使用当前会话文档名兜底
+        chunk_file_name = chunk.get("file_name") or fallback_file_name
+        # 文本块编号用于拼接引用来源
+        chunk_id = chunk.get("chunk_id", "-")
+        # 检索分数用于展示当前片段和 query 的相关程度
+        score = chunk.get("score", 0)
+        # source 优先使用后端标准来源；没有时按同样格式在前端兜底生成
+        source = chunk.get("source") or f"{chunk_file_name}#chunk-{chunk_id}"
+        # 完整原文片段用于引用核对
+        text = chunk.get("text", "").strip()
+        # 预览文本作为完整原文缺失时的兜底
+        text_preview = chunk.get("text_preview", "").strip()
+        # 原文长度用于帮助用户判断片段规模
+        text_length = chunk.get("text_length", 0)
+
+        # 将整理后的字段加入列表，后续两个展示区域都复用这一份数据
+        preview_items.append({
+            "source": source,
+            "score": score,
+            "text_length": text_length,
+            "display_text": text or text_preview or "（无原文内容）"
+        })
+
+    return preview_items
+
+
+def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded: bool = True) -> None:
+    """
+    展示本次 RAG 检索命中的引用来源和原文片段。
 
     :param chunks: RAG 命中的片段摘要列表
     :param status: 当前 session 的 RAG 状态信息
+    :param expanded: 是否默认展开引用面板
     :return: None
     """
-    # 如果没有命中任何片段，则不渲染预览区
+    # 如果没有命中任何片段，则明确提示知识库没有依据，避免用户误以为模型已经参考了文档
     if not chunks:
+        st.warning("知识库中没有找到依据。")
         return
 
     # 如果 status 为 None，则退回为空字典。这样后面 .get(...) 不会报错
@@ -235,24 +281,35 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None) -> None:
     # 取出当前索引距离过期还剩多少秒
     expires_in_seconds = status.get("expires_in_seconds")
 
-    # 构造顶部摘要说明
+    # 构造顶部摘要说明，先说明本次回答参考了哪个文档和多少个片段
     caption_parts = [f"文档：{file_name}", f"命中片段：{len(chunks)}"]
     # 如果过期时间有效且大于 0，就追加一条：索引大约多少分钟后过期
     if isinstance(expires_in_seconds, int) and expires_in_seconds > 0:
         caption_parts.append(f"索引约 {expires_in_seconds // 60} 分钟后过期")
 
-    # 用折叠面板展示本次命中的 RAG 片段
-    with st.expander("本次 RAG 检索片段", expanded=False):
+    # 统一整理引用来源、检索分数和原文展示文本，避免下面两个展示区域重复解析 chunk 字段
+    preview_items = _build_rag_preview_items(chunks, file_name)
+
+    # 用折叠面板展示本次命中的 RAG 引用和原文片段
+    with st.expander("引用来源与命中原文片段", expanded=expanded):
         # 把顶部说明用 · 拼成一行灰色小字说明
         st.caption(" · ".join(caption_parts))
 
-        # 遍历每个命中的检索片段，并从 1 开始编号
-        for index, chunk in enumerate(chunks, start=1):
-            chunk_id = chunk.get("chunk_id", "-")
-            score = chunk.get("score", 0)
-            text_preview = chunk.get("text_preview", "").strip()
-            text_length = chunk.get("text_length", 0)
+        # 先集中展示引用来源，帮助用户快速判断模型答案引用了哪些文档片段
+        st.markdown("**引用来源**")
+        for index, item in enumerate(preview_items, start=1):
+            st.markdown(f"{index}. [来源: {item['source']}] · score={item['score']}")
 
-            # 渲染片段标题说明行
-            st.markdown(f"**片段 {index}** · chunk_id={chunk_id} · score={score} · {text_length} 字")
-            st.markdown(text_preview or "（无预览内容）")
+        st.markdown("---")
+
+        # 遍历每个命中的检索片段，并从 1 开始编号
+        for index, item in enumerate(preview_items, start=1):
+            # 渲染片段标题说明行，字段与模型引用格式保持一致
+            st.markdown(
+                f"**原文片段 {index}** · "
+                f"[来源: {item['source']}] · "
+                f"score={item['score']} · "
+                f"{item['text_length']} 字"
+            )
+            # 展示命中的原文片段，方便用户核对模型答案是否有依据
+            st.markdown(item["display_text"])

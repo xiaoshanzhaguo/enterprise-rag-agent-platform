@@ -4,7 +4,7 @@
 职责：
 1. 统一封装 Streamlit 前端对 FastAPI 后端接口的调用
 2. 提供聊天历史恢复、空会话创建、会话删除等会话管理请求能力
-3. 提供文档索引、文档清理、RAG 预览查询和 RAG 状态查询能力
+3. 提供文档索引、文档清理、RAG 引用预览查询和 RAG 状态查询能力
 4. 提供聊天 / 工作流流式请求发送能力
 5. 提供 SSE 事件流解析能力，将后端返回的 data: {...} 事件转换为前端可直接消费的事件字典
 
@@ -196,17 +196,17 @@ def post_stream_request(payload: dict, is_workflow: bool):
 
 def get_rag_preview(session_id: str, query: str, top_k: int) -> list[dict]:
     """
-    获取当前 query 的 RAG 命中片段摘要。
+    获取当前 query 的 RAG 命中引用和原文片段。
 
     函数说明：
     - 调用后端 /rag_preview 接口
-    - 获取当前问题命中的文本块预览
-    - 用于前端展示“本次回答参考了哪些片段”
+    - 获取当前问题命中的文件名、chunk_id、score、引用来源和原文片段
+    - 用于前端展示“本次回答引用了哪些来源”
 
     :param session_id: 当前会话ID
     :param query: 当前用户问题或检索 query
     :param top_k: 需要返回的命中片段数量
-    :return: RAG 命中片段摘要列表；请求失败时返回空列表
+    :return: RAG 命中引用片段列表；请求失败时返回空列表
     """
     try:
         response = requests.post(
