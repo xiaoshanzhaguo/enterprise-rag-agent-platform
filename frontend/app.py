@@ -191,6 +191,52 @@ RAG_ENABLED_MODES = {
     "工作流优化"
 }
 
+# RAG 无命中时后端返回的固定提示。前端用它判断是否需要隐藏复制 / 导出等结果操作按钮
+NO_RAG_EVIDENCE_MESSAGE = "知识库中没有找到依据。"
+
+
+def is_no_rag_evidence_result(result_text: str) -> bool:
+    """
+    判断当前 assistant 结果是否只是 RAG 无依据提示。
+
+    函数说明：
+    1. RAG 无依据提示不是可交付内容。
+    2. 如果继续展示“复制当前结果 / 导出 Markdown”，用户容易误以为这是一个正式结果。
+    3. 因此命中该提示时隐藏结果操作按钮。
+
+    :param result_text: assistant 最终展示文本
+    :return: True 表示当前结果只是知识库无依据提示
+    """
+    # 去掉首尾空白，避免换行影响判断
+    normalized_text = result_text.strip()
+    # 普通模式会直接返回固定无依据提示
+    if normalized_text == NO_RAG_EVIDENCE_MESSAGE:
+        return True
+
+    # workflow 模式会把无依据提示放进分步骤 Markdown 中，需要逐行过滤标题和无依据提示
+    meaningful_lines = []
+    # workflow 的三个固定展示标题关键词。用关键词判断，比完整匹配 emoji 标题更稳
+    workflow_title_keywords = {"内容总结", "问题分析", "优化建议"}
+
+    # 逐行检查是否还存在真正的回答内容
+    for line in normalized_text.splitlines():
+        # 去掉当前行首尾空白
+        stripped_line = line.strip()
+        # 空行不算有效内容
+        if not stripped_line:
+            continue
+        # workflow 标题行不算有效内容
+        if stripped_line.startswith("###") and any(keyword in stripped_line for keyword in workflow_title_keywords):
+            continue
+        # 无依据提示本身不算有效内容
+        if stripped_line == NO_RAG_EVIDENCE_MESSAGE:
+            continue
+
+        meaningful_lines.append(stripped_line)
+
+    return not meaningful_lines
+
+
 # 当用户只上传文件、未输入 query 时的默认提示词
 DEFAULT_FILE_MODE_PROMPTS = {
     "内容分析": "请基于上传文档完成内容分析，提炼主题、关键信息和结论。",
@@ -314,6 +360,7 @@ with st.sidebar.expander("对话设置", expanded=True):
 # 并为 assistant 消息补充：
 # - 复制当前结果
 # - 导出 Markdown
+# 但如果 assistant 只是“知识库中没有找到依据”，则隐藏操作按钮
 # -----------------------------
 for idx, message in enumerate(current_messages):
     # 每条消息都按它的 role 渲染成聊天气泡，并把内容以 Markdown 方式展示
@@ -322,15 +369,19 @@ for idx, message in enumerate(current_messages):
 
         # 只有 assistant 消息才需要渲染结果操作按钮。因为用户消息通常不需要导出，assistant 消息才是生成结果
         if message["role"] == "assistant":
-            # 为历史 assistant 消息渲染整体结果操作区：复制整段结果 + 导出 Markdown
-            render_result_actions(
-                result_text=message["content"],
-                mode_name=mode,
-                widget_key_suffix=f"history_{idx}"
-            )
+            # 判断当前历史结果是否只是 RAG 无依据提示；如果是，则不展示复制 / 导出按钮
+            can_show_result_actions = not is_no_rag_evidence_result(message["content"])
 
-            # 如果是 workflow 历史消息，并且保留了分步结构，则支持分步复制
-            if mode == "工作流优化" and message.get("workflow_blocks"):
+            if can_show_result_actions:
+                # 为历史 assistant 消息渲染整体结果操作区：复制整段结果 + 导出 Markdown
+                render_result_actions(
+                    result_text=message["content"],
+                    mode_name=mode,
+                    widget_key_suffix=f"history_{idx}"
+                )
+
+            # 如果是 workflow 历史消息，并且保留了分步结构，则支持分步复制；无依据结果不展示分步复制
+            if can_show_result_actions and mode == "工作流优化" and message.get("workflow_blocks"):
                 render_workflow_step_copy_actions(
                     workflow_blocks=message["workflow_blocks"],
                     widget_key_suffix=f"history_steps_{idx}"
@@ -683,6 +734,9 @@ if chat_submission:
 
             # 当前轮结果生成后，渲染操作区并写入历史
             if final_display_text.strip():
+                # 当前结果如果只是 RAG 无依据提示，则不展示复制 / 导出等结果操作
+                can_show_result_actions = not is_no_rag_evidence_result(final_display_text)
+
                 # 如果本轮启用了 RAG，则在模型答案下方展示引用来源和命中的原文片段
                 if use_rag and mode in RAG_ENABLED_MODES:
                     render_rag_preview(
@@ -691,13 +745,14 @@ if chat_submission:
                         expanded=True
                     )
 
-                render_result_actions(
-                    result_text=final_display_text,
-                    mode_name=mode,
-                    widget_key_suffix="latest_result"
-                )
+                if can_show_result_actions:
+                    render_result_actions(
+                        result_text=final_display_text,
+                        mode_name=mode,
+                        widget_key_suffix="latest_result"
+                    )
 
-                if is_workflow and workflow_blocks:
+                if can_show_result_actions and is_workflow and workflow_blocks:
                     # 插入一个很小的竖向空白间距。unsafe_allow_html=True表示：允许 Streamlit 按 HTML 来渲染这段字符串
                     st.markdown("<div style='height: 0.25rem;'></div>", unsafe_allow_html=True)
 
