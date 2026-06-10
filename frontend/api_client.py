@@ -138,7 +138,7 @@ def index_uploaded_document(session_id: str, file_name: str, document_text: str)
             "file_name": file_name,
             "document_text": document_text
         },
-        timeout=60 # 请求最多等待 60 秒
+        timeout=300 # 请求最多等待 300 秒。本地 embedding 首次加载或下载模型时可能较慢。
     )
 
     # 如果后端返回非 200 状态码，则视为索引失败。response.text 为后端返回的原始文本内容，例如错误信息。

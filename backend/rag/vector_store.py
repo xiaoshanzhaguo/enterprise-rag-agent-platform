@@ -223,6 +223,11 @@ def retrieve_similar_chunks(session_id: str | None, query: str, top_k: int = 3) 
     for text, metadata, distance in zip(documents, metadatas, distances):
         # Chroma 距离越小越相似，这里转成越大越好的相似度分数，便于前端展示
         score = round(1 / (1 + float(distance)), 4)
+
+        # 如果相似度低于阈值，则说明只是“最接近”而不是“有依据”，不返回给 RAG 回答和前端引用展示
+        if score < settings.rag_vector_score_threshold:
+            continue
+
         # 将 metadata 和正文合并成统一 chunk 结构
         matched_chunks.append(
             {

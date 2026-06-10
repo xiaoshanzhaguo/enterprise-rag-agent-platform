@@ -3,7 +3,7 @@
 
 职责：
 1. 处理普通聊天、内容分析、结构优化、风格改写、多版本生成等非工作流类 AI 请求
-2. 根据当前模式自动构造模型输入包装文本，避免模型误把待处理内容当作问题直接回答
+2. 根据当前模式和 RAG 状态构造模型输入包装文本，避免模型误把任务意图理解错
 3. 构造模型上下文（System Prompt + RAG Context + 历史消息 + 当前输入）
 4. 支持 RAG 检索增强，将带引用来源的检索结果注入模型上下文
 5. 调用大模型流式接口并接收增量输出
@@ -87,6 +87,16 @@ def _build_model_input_text(request: ChatRequest) -> str:
     :param request: 当前聊天请求对象
     :return: 最终发送给模型的用户消息文本
     """
+    # RAG 模式下，用户输入是检索问题，应优先基于知识库回答，而不是执行内容分析/改写等模式包装
+    if request.use_rag:
+        return (
+            "请基于上方【检索结果】回答用户问题。\n"
+            "注意：不要把下面的问题当作待分析文本、待优化文本或待改写文本。\n"
+            "如果检索结果中没有依据，请只回答“知识库中没有找到依据”。\n\n"
+            "【用户问题】\n"
+            f"{request.input_text}"
+        )
+
     # 根据当前模式获取对应的输入包装配置
     wrapper = MODE_INPUT_WRAPPERS.get(request.persona)
     # 如果当前模式存在专用包装规则，则构造增强后的模型输入
@@ -147,8 +157,9 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                 mode=request.persona
             )
 
-            # 根据模式生成 Prompt
-            system_prompt = build_system_prompt(request.persona)
+            # 根据模式生成 Prompt。
+            # RAG 模式下优先做“基于知识库回答/处理”，避免内容分析等模式的固定格式压过检索问答意图。
+            system_prompt = build_system_prompt("default" if request.use_rag else request.persona)
 
             # 通知前端：当前任务已开始。发送 SSE 事件
             # 后端不是等全部回答生成完再返回，而是每生成一小段，就包装成 SSE 格式，立刻交给前端
@@ -183,6 +194,7 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                     "role": "system",
                     "content": (
                         "以下是与当前任务相关的知识库检索结果。"
+                        "当前请求已启用 RAG，当前模式名只用于前端入口归类，不要套用内容分析、结构优化或改写的固定输出格式。"
                         "请严格遵守其中的回答要求和引用格式，不要编造知识库中没有的依据。\n\n"
                         f"{rag_context}"
                     )

@@ -69,11 +69,15 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
 
     # 如果配置为向量模式，则直接通过 ChromaDB 按语义相似度检索
     if settings.rag_retrieval_mode == "vector":
-        return retrieve_similar_chunks(
+        vector_chunks = retrieve_similar_chunks(
             session_id=session_id,
             query=query,
             top_k=top_k
         )
+        # 如果向量检索没有可靠命中，则回退到严格关键词检索。
+        # 这样“远程办公需要怎样申请”这类明确词面命中不会被向量阈值误过滤。
+        if vector_chunks:
+            return vector_chunks
 
     # 先从数据库中取出当前会话已索引的文本块
     chunks = get_document_chunks(session_id)

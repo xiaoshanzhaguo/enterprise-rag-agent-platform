@@ -558,18 +558,28 @@ if chat_submission:
         )
 
         if need_reindex:
-            # 调用后端 /index_document 接口，让后端为当前会话建立文档索引
-            success, message = index_uploaded_document(
-                session_id=current_session_id,
-                file_name=uploaded_file_name,
-                document_text=uploaded_file_text
-            )
+            # 本地 embedding 首次加载模型或生成向量可能需要较久，用状态提示避免页面长时间空白
+            with st.status("正在为附件生成向量索引，请稍候...", expanded=True) as index_status:
+                # 提示用户当前阶段是在处理文档索引，而不是前端卡死
+                st.write("正在切分文档并写入 SQLite。")
+                # 提示用户向量模式下会继续生成 embedding 并写入 ChromaDB
+                st.write("如果当前使用本地 BGE-M3，首次运行可能需要加载或下载模型。")
+                # 调用后端 /index_document 接口，让后端为当前会话建立文档索引
+                success, message = index_uploaded_document(
+                    session_id=current_session_id,
+                    file_name=uploaded_file_name,
+                    document_text=uploaded_file_text
+                )
 
             # 如果索引失败，显示错误并停止
             if not success:
+                # 将状态标记为失败，便于用户确认不是界面静默卡住
+                index_status.update(label="文档向量索引失败", state="error")
                 st.error(message)
                 st.stop()
 
+            # 将状态标记为完成，明确告诉用户索引阶段已经结束
+            index_status.update(label=message, state="complete")
             # 索引成功则显示提示
             st.success(message)
 
@@ -589,12 +599,14 @@ if chat_submission:
 
     # 如果启用了 RAG，则先获取本次 query 命中的片段，稍后放到模型答案下方展示
     if use_rag and mode in RAG_ENABLED_MODES:
-        # 调用后端 /rag_preview 接口，获取本次 query 命中的片段摘要
-        rag_preview_chunks = get_rag_preview(
-            session_id=current_session_id,
-            query=submit_raw_text,
-            top_k=rag_top_k
-        )
+        # 本地向量检索需要先为 query 生成 embedding，用 spinner 避免检索阶段出现空白等待
+        with st.spinner("正在检索知识库并匹配引用片段..."):
+            # 调用后端 /rag_preview 接口，获取本次 query 命中的片段摘要
+            rag_preview_chunks = get_rag_preview(
+                session_id=current_session_id,
+                query=submit_raw_text,
+                top_k=rag_top_k
+            )
         # 调用后端 /rag_status/{session_id}，获取当前会话索引状态
         rag_status_info = rag_status_info or get_rag_status(current_session_id)
 
@@ -639,8 +651,9 @@ if chat_submission:
         "rag_top_k": rag_top_k
     }
 
-    # 发送流式请求
-    response = post_stream_request(payload, is_workflow)
+    # 发送流式请求。这里可能会等待后端建立 SSE 连接，因此给出明确提示，避免页面像是没有响应。
+    with st.spinner("正在连接后端并生成回答..."):
+        response = post_stream_request(payload, is_workflow)
 
     # 请求失败直接报错
     if response.status_code != 200:
@@ -737,8 +750,8 @@ if chat_submission:
                 # 当前结果如果只是 RAG 无依据提示，则不展示复制 / 导出等结果操作
                 can_show_result_actions = not is_no_rag_evidence_result(final_display_text)
 
-                # 如果本轮启用了 RAG，则在模型答案下方展示引用来源和命中的原文片段
-                if use_rag and mode in RAG_ENABLED_MODES:
+                # 如果本轮启用了 RAG 且结果不是无依据提示，则展示引用来源和命中的原文片段
+                if use_rag and mode in RAG_ENABLED_MODES and can_show_result_actions:
                     render_rag_preview(
                         chunks=rag_preview_chunks,
                         status=rag_status_info,

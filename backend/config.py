@@ -22,6 +22,7 @@ load_dotenv()
 def _get_int_env(name: str, default: int) -> int:
     """
     读取”整数类型“的环境变量
+
     :param name: 环境变量名
     :param default: 默认值
     :return: 一个整数
@@ -32,6 +33,55 @@ def _get_int_env(name: str, default: int) -> int:
     except ValueError:
         # 如果整数转换失败，就不要报错，直接退回默认值。
         return default
+
+
+def _get_float_env(name: str, default: float) -> float:
+    """
+    读取”小数类型“的环境变量。
+
+    :param name: 环境变量名
+    :param default: 默认值
+    :return: 一个小数
+    """
+    try:
+        # 从环境变量里取值，并转成小数；如果环境变量不存在，就用默认值。
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        # 如果小数转换失败，就不要报错，直接退回默认值。
+        return default
+
+
+def _get_str_env(name: str, default: str) -> str:
+    """
+    读取”字符串类型“的环境变量。
+
+    :param name: 环境变量名
+    :param default: 默认值
+    :return: 一个字符串
+    """
+    # 从环境变量里读取原始字符串
+    value = os.getenv(name)
+    # 如果环境变量不存在或只写了空值，就使用默认值
+    if value is None or not value.strip():
+        return default
+    # 返回去掉前后空格后的配置值
+    return value.strip()
+
+
+def _get_optional_str_env(name: str) -> str | None:
+    """
+    读取”可选字符串类型“的环境变量。
+
+    :param name: 环境变量名
+    :return: 有效字符串或 None
+    """
+    # 从环境变量里读取原始字符串
+    value = os.getenv(name)
+    # 如果环境变量不存在或只写了空值，就返回 None
+    if value is None or not value.strip():
+        return None
+    # 返回去掉前后空格后的配置值
+    return value.strip()
 
 
 # 把下面这个 Settings 类变成 dataclass。frozen=True 表示这个配置对象创建后，不允许再随意修改。
@@ -50,14 +100,22 @@ class Settings:
     rag_store_max_sessions: int = _get_int_env("RAG_STORE_MAX_SESSIONS", 50)
     # RAG 相关文本预览的最大字符数。
     rag_preview_text_limit: int = _get_int_env("RAG_PREVIEW_TEXT_LIMIT", 220)
+    # 向量检索最低相似度阈值。低于该分数的结果会被视为没有可靠依据。
+    rag_vector_score_threshold: float = _get_float_env("RAG_VECTOR_SCORE_THRESHOLD", 0.6)
     # 默认 SQLite 数据库地址。相对路径会基于项目根目录解析。
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
+    # Embedding 提供方。local 表示本地开源模型，openai 表示 OpenAI 兼容云端接口。
+    embedding_provider: str = _get_str_env("EMBEDDING_PROVIDER", "local").lower()
     # Embedding 模型名称。用于把文档 chunk 和用户 query 转成向量。
-    embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    embedding_model: str = _get_str_env("EMBEDDING_MODEL", "BAAI/bge-m3")
+    # 云端 Embedding 服务地址。为空时复用 BASE_URL。
+    embedding_base_url: str | None = _get_optional_str_env("EMBEDDING_BASE_URL")
+    # 云端 Embedding 服务 Key。为空时复用 DEEPSEEK_API_KEY。
+    embedding_api_key: str | None = _get_optional_str_env("EMBEDDING_API_KEY")
     # ChromaDB 持久化目录。相对路径会基于项目根目录解析。
-    vector_store_dir: str = os.getenv("VECTOR_STORE_DIR", "./data/chroma")
+    vector_store_dir: str = _get_str_env("VECTOR_STORE_DIR", "./data/chroma")
     # RAG 检索模式。keyword 表示关键词检索，vector 表示 ChromaDB 向量检索。
-    rag_retrieval_mode: str = os.getenv("RAG_RETRIEVAL_MODE", "keyword").strip().lower()
+    rag_retrieval_mode: str = _get_str_env("RAG_RETRIEVAL_MODE", "keyword").lower()
 
 
 # 真正创建一个 Settings 实例对象。后面整个项目就可以统一用：settings.llm_model 来读取配置，而不用到处写os.getenv(...)。

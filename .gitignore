@@ -10,6 +10,7 @@ __pycache__/
 # Local app data
 data/chat_history_backup.json
 data/*.db
+data/chroma/
 
 # IDE
 .vscode/
