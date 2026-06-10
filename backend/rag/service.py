@@ -6,12 +6,14 @@ RAG 服务层模块。
 2. 将检索结果转换为两种输出形式：
    - 给大模型使用的带引用来源上下文字符串
    - 给前端展示的引用来源和原文片段数据
-3. 解耦存储层、检索层与业务层，提升 RAG 链路的可维护性
+3. 根据配置在关键词检索和 ChromaDB 向量检索之间切换
+4. 解耦存储层、检索层与业务层，提升 RAG 链路的可维护性
 
 说明：
 - 当前实现为第一阶段轻量版 RAG
-- 采用“单会话 + 数据库持久化 chunks + 检索结果组装”的设计
+- 采用“单会话 + 数据库持久化 chunks + 可选向量库检索 + 检索结果组装”的设计
 - 检索上下文会携带 file_name、chunk_id、score，并要求模型按来源引用回答
+- 当 RAG_RETRIEVAL_MODE=vector 时，检索会走 ChromaDB 语义相似度
 - 适合本地开发、项目演示和求职场景下的工程化展示
 """
 from typing import Any
@@ -20,6 +22,7 @@ from backend.config import settings
 from backend.db.repository import save_rag_query_with_hits
 from backend.rag.retriever import retrieve_top_chunks
 from backend.rag.store import get_document_chunks
+from backend.rag.vector_store import retrieve_similar_chunks
 
 
 NO_RAG_EVIDENCE_MESSAGE = "知识库中没有找到依据"
@@ -48,6 +51,13 @@ def build_source_label(chunk: dict[str, Any]) -> str:
 def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
     """
     根据 session_id 和 query 获取最相关的 RAG 文本块。
+
+    函数说明：
+    1. 没有 session_id 时直接返回空列表。
+    2. RAG_RETRIEVAL_MODE=vector 时，使用 ChromaDB 向量检索。
+    3. RAG_RETRIEVAL_MODE=keyword 时，使用当前轻量关键词检索。
+    4. 返回统一 chunk 字典结构，供 prompt 和前端引用预览复用。
+
     :param session_id: 当前会话 ID，可以是字符串，也可以是 None
     :param query: 当前用户问题
     :param top_k: 最多返回几个最相关的块，默认 3
@@ -56,6 +66,14 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
     # 如果当前没有 session_id，则无法定位到对应会话的文档
     if not session_id:
         return []
+
+    # 如果配置为向量模式，则直接通过 ChromaDB 按语义相似度检索
+    if settings.rag_retrieval_mode == "vector":
+        return retrieve_similar_chunks(
+            session_id=session_id,
+            query=query,
+            top_k=top_k
+        )
 
     # 先从数据库中取出当前会话已索引的文本块
     chunks = get_document_chunks(session_id)

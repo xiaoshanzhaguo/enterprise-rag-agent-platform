@@ -11,7 +11,7 @@
 - 这样可以避免同一份 workflow 展示格式在多个文件里重复维护。
 """
 
-# 延迟解析类型注解。让这种写法更稳定：list[dict[str, Any]]
+# 未来版本兼容特性
 from __future__ import annotations
 
 

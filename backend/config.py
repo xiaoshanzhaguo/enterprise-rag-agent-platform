@@ -4,6 +4,7 @@
 - API Key
 - Base URL
 - RAG 相关参数
+- Embedding 与向量库相关参数
 最终封装为全局 settings 对象，供其他模块直接使用。
 """
 import os
@@ -51,6 +52,12 @@ class Settings:
     rag_preview_text_limit: int = _get_int_env("RAG_PREVIEW_TEXT_LIMIT", 220)
     # 默认 SQLite 数据库地址。相对路径会基于项目根目录解析。
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
+    # Embedding 模型名称。用于把文档 chunk 和用户 query 转成向量。
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    # ChromaDB 持久化目录。相对路径会基于项目根目录解析。
+    vector_store_dir: str = os.getenv("VECTOR_STORE_DIR", "./data/chroma")
+    # RAG 检索模式。keyword 表示关键词检索，vector 表示 ChromaDB 向量检索。
+    rag_retrieval_mode: str = os.getenv("RAG_RETRIEVAL_MODE", "keyword").strip().lower()
 
 
 # 真正创建一个 Settings 实例对象。后面整个项目就可以统一用：settings.llm_model 来读取配置，而不用到处写os.getenv(...)。
