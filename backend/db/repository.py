@@ -598,7 +598,7 @@ def save_rag_query_with_hits(
     :param query_text: 用户本次 RAG 查询文本
     :param top_k: 本次 RAG 检索返回的片段数量
     :param matched_chunks: 本次 RAG 检索命中的文本块列表。每个元素通常包含 db_chunk_id、score、chunk_id、text 等字段。其中 db_chunk_id 用于关联 document_chunks 表中的真实数据库记录。
-    :param retrieval_mode: 本次实际使用的检索方式，例如 vector 或 keyword
+    :param retrieval_mode: 本次实际使用的检索方式，例如 vector、keyword 或 no_hit
     :param mode: 当前会话模式。例如：内容分析、结构优化、工作流优化等。如果为空，则使用“unknown”
     :return: 保存成功时，返回本次 rag_queries 表中新插入记录的主键 ID；如果 session_id 或 query_text 为空，则返回None
     """

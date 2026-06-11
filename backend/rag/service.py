@@ -27,6 +27,7 @@ from backend.rag.vector_store import retrieve_similar_chunks
 
 
 NO_RAG_EVIDENCE_MESSAGE = "知识库中没有找到依据"
+NO_HIT_RETRIEVAL_MODE = "no_hit"
 
 
 def build_source_label(chunk: dict[str, Any]) -> str:
@@ -86,7 +87,7 @@ def resolve_retrieval_mode(matched_chunks: list[dict[str, Any]]) -> str:
 
     函数说明：
     1. 如果命中结果里已经携带 retrieval_mode，则优先使用该值。
-    2. 如果没有命中结果，则退回当前配置的 RAG_RETRIEVAL_MODE。
+    2. 如果没有命中结果，则返回 no_hit，避免把无依据查询误记为 vector 或 keyword 命中。
     3. 该值用于 /rag_preview 展示和 rag_queries 日志记录。
 
     :param matched_chunks: 本次检索命中的 chunk 列表
@@ -98,8 +99,8 @@ def resolve_retrieval_mode(matched_chunks: list[dict[str, Any]]) -> str:
         if retrieval_mode:
             return str(retrieval_mode)
 
-    # 没有命中结果时，使用当前配置的检索方式作为兜底说明
-    return settings.rag_retrieval_mode
+    # 没有命中结果时，明确标记为 no_hit，表示最终没有可靠依据
+    return NO_HIT_RETRIEVAL_MODE
 
 
 def retrieve_keyword_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
@@ -146,9 +147,32 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
     :param top_k: 最多返回几个最相关的块，默认 3
     :return: 一个列表。列表里的每个元素是一个 chunk 字典。
     """
+    # 复用带检索方式的检索函数，只返回 chunk 列表，兼容旧调用方
+    matched_chunks, _retrieval_mode = retrieve_rag_chunks_with_mode(
+        session_id=session_id,
+        query=query,
+        top_k=top_k
+    )
+    return matched_chunks
+
+
+def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, top_k: int = 3) -> tuple[list[dict[str, Any]], str]:
+    """
+    根据 session_id 和 query 获取 RAG 文本块，并返回本次实际检索结果状态。
+
+    函数说明：
+    1. vector 命中时返回 chunk 列表和 vector。
+    2. vector 未命中但 keyword fallback 命中时返回 chunk 列表和 keyword。
+    3. 最终没有可靠命中时返回空列表和 no_hit。
+
+    :param session_id: 当前会话 ID，可以是字符串，也可以是 None
+    :param query: 当前用户问题
+    :param top_k: 最多返回几个最相关的块，默认 3
+    :return: 二元组，第一项是命中 chunk 列表，第二项是实际检索状态
+    """
     # 如果当前没有 session_id，则无法定位到对应会话的文档
     if not session_id:
-        return []
+        return [], NO_HIT_RETRIEVAL_MODE
 
     # 如果配置为向量模式，则直接通过 ChromaDB 按语义相似度检索
     if settings.rag_retrieval_mode == "vector":
@@ -159,26 +183,32 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
         )
         # 如果向量检索命中可靠结果，直接返回向量结果
         if vector_chunks:
-            return attach_retrieval_metadata(vector_chunks, "vector")
+            return attach_retrieval_metadata(vector_chunks, "vector"), "vector"
 
         # 如果关闭了关键词兜底，则向量无可靠命中时直接返回空列表
         if not settings.rag_keyword_fallback_enabled:
-            return []
+            return [], NO_HIT_RETRIEVAL_MODE
 
         # 如果向量检索没有可靠命中，并且允许 fallback，则回退到严格关键词检索。
         # 这样“远程办公需要怎样申请”这类明确词面命中不会被向量阈值误过滤。
-        return retrieve_keyword_chunks(
+        keyword_chunks = retrieve_keyword_chunks(
             session_id=session_id,
             query=query,
             top_k=top_k
         )
+        if keyword_chunks:
+            return keyword_chunks, "keyword"
+        return [], NO_HIT_RETRIEVAL_MODE
 
     # keyword 模式下直接使用关键词检索
-    return retrieve_keyword_chunks(
+    keyword_chunks = retrieve_keyword_chunks(
         session_id=session_id,
         query=query,
         top_k=top_k
     )
+    if keyword_chunks:
+        return keyword_chunks, "keyword"
+    return [], NO_HIT_RETRIEVAL_MODE
 
 
 def build_rag_context_from_chunks(matched_chunks: list[dict[str, Any]]) -> str:
@@ -232,13 +262,11 @@ def build_rag_context(session_id: str | None, query: str, top_k: int = 3) -> str
     根据 session_id 和 query 构造可直接拼接进 prompt 的检索上下文。
     """
     # 先检索最相关的文本块
-    matched_chunks = retrieve_rag_chunks(
+    matched_chunks, retrieval_mode = retrieve_rag_chunks_with_mode(
         session_id=session_id,
         query=query,
         top_k=top_k
     )
-    # 根据命中结果识别本次实际检索方式。vector 命中就是 vector；vector 未命中后 fallback 命中就是 keyword。
-    retrieval_mode = resolve_retrieval_mode(matched_chunks)
 
     # 持久化记录本次 RAG 查询及其命中的文本块，便于后续追踪检索效果和调试
     save_rag_query_with_hits(
@@ -258,7 +286,7 @@ def build_rag_preview(session_id: str | None, query: str, top_k: int = 3) -> lis
     构造给前端展示的检索片段摘要。
     """
     # 先检索最相关的文本块
-    matched_chunks = retrieve_rag_chunks(
+    matched_chunks, _retrieval_mode = retrieve_rag_chunks_with_mode(
         session_id=session_id,
         query=query,
         top_k=top_k

@@ -115,7 +115,7 @@ class RagPreviewChunk(BaseModel):
     file_name: Optional[str] = None  # 命中文本块所属文件名
     chunk_id: int | None = None  # 文本块编号
     score: float = 0.0  # 检索分数；关键词模式为整数，向量模式为相似度小数
-    retrieval_mode: str = "unknown"  # 当前命中片段实际使用的检索方式，例如 vector 或 keyword
+    retrieval_mode: str = "unknown"  # 当前命中片段实际使用的检索方式，例如 vector、keyword 或 no_hit
     source: Optional[str] = None  # 引用来源标识，例如：员工手册.md#chunk-4
     text: str = ""  # 命中的原文片段
     text_preview: str  # 文本预览内容
@@ -128,7 +128,7 @@ class RagPreviewResponse(BaseModel):
     """
     session_id: str  # 当前会话 ID
     query: str  # 当前查询问题
-    retrieval_mode: str = "unknown"  # 本次预览实际使用的检索方式
+    retrieval_mode: str = "unknown"  # 本次预览实际使用的检索方式，例如 vector、keyword 或 no_hit
     chunks: List[RagPreviewChunk]  # 检索片段摘要列表
 
 

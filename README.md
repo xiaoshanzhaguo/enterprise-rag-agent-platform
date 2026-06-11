@@ -64,7 +64,7 @@
 - `file_name`：来源文件名
 - `chunk_id`：命中文本块编号
 - `text_preview`：命中内容预览
-- `retrieval_mode`：实际检索方式，支持 `vector` / `keyword`
+- `retrieval_mode`：实际检索方式，支持 `vector` / `keyword` / `no_hit`
 
 同时，后端会将历史检索记录写入 `rag_queries` 和 `rag_hits`，便于后续调试检索效果、截图展示和扩展评测流程。
 
