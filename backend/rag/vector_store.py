@@ -218,6 +218,9 @@ def retrieve_similar_chunks(session_id: str | None, query: str, top_k: int = 3) 
     metadatas = result.get("metadatas", [[]])[0]
     distances = result.get("distances", [[]])[0]
 
+    # 前端预览文本长度限制，至少保留 80 个字符
+    preview_limit = max(settings.rag_preview_text_limit, 80)
+
     # 整理成现有 RAG service 能直接消费的 chunk 字典结构
     matched_chunks = []
     for text, metadata, distance in zip(documents, metadatas, distances):
@@ -231,11 +234,15 @@ def retrieve_similar_chunks(session_id: str | None, query: str, top_k: int = 3) 
         # 将 metadata 和正文合并成统一 chunk 结构
         matched_chunks.append(
             {
+                # 当前检索结果排名（1 表示最相关）
+                # 方便前端展示引用顺序和调试检索效果
+                "rank": len(matched_chunks) + 1,
                 "db_chunk_id": metadata.get("db_chunk_id"),
                 "document_id": metadata.get("document_id"),
                 "file_name": metadata.get("file_name"),
                 "chunk_id": metadata.get("chunk_id"),
                 "text": text or "",
+                "text_preview": (text or "")[:preview_limit],
                 "text_length": len(text or ""),
                 "score": score,
             }

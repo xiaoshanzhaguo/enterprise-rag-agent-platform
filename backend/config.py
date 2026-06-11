@@ -7,6 +7,7 @@
 - Embedding 与向量库相关参数
 最终封装为全局 settings 对象，供其他模块直接使用。
 """
+
 import os
 # 导入 dataclass 装饰器。使得能很方便的定义“配置对象”这种纯数据类，而不用自己手写很多初始化代码。
 from dataclasses import dataclass
@@ -49,6 +50,31 @@ def _get_float_env(name: str, default: float) -> float:
     except ValueError:
         # 如果小数转换失败，就不要报错，直接退回默认值。
         return default
+
+
+def _get_bool_env(name: str, default: bool) -> bool:
+    """
+    读取”布尔类型“的环境变量。
+
+    :param name: 环境变量名
+    :param default: 默认值
+    :return: 一个布尔值
+    """
+    # 从环境变量里读取原始字符串
+    value = os.getenv(name)
+    # 如果环境变量不存在或只写了空值，就使用默认值
+    if value is None or not value.strip():
+        return default
+    # 统一转成小写，兼容 true / false 等常见写法
+    normalized_value = value.strip().lower()
+    # 这些值都视为开启
+    if normalized_value in {"1", "true", "yes", "on"}:
+        return True
+    # 这些值都视为关闭
+    if normalized_value in {"0", "false", "no", "off"}:
+        return False
+    # 遇到无法识别的布尔配置时，回退默认值
+    return default
 
 
 def _get_str_env(name: str, default: str) -> str:
@@ -102,6 +128,8 @@ class Settings:
     rag_preview_text_limit: int = _get_int_env("RAG_PREVIEW_TEXT_LIMIT", 220)
     # 向量检索最低相似度阈值。低于该分数的结果会被视为没有可靠依据。
     rag_vector_score_threshold: float = _get_float_env("RAG_VECTOR_SCORE_THRESHOLD", 0.6)
+    # 向量检索没有可靠命中时，是否允许回退到关键词检索。
+    rag_keyword_fallback_enabled: bool = _get_bool_env("RAG_KEYWORD_FALLBACK_ENABLED", True)
     # 默认 SQLite 数据库地址。相对路径会基于项目根目录解析。
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
     # Embedding 提供方。local 表示本地开源模型，openai 表示 OpenAI 兼容云端接口。

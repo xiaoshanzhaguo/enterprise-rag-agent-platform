@@ -111,6 +111,7 @@ class RagPreviewChunk(BaseModel):
     """
     前端可视化展示用的检索片段摘要。
     """
+    rank: int | None = None  # 检索排序，数字越小表示越靠前
     file_name: Optional[str] = None  # 命中文本块所属文件名
     chunk_id: int | None = None  # 文本块编号
     score: float = 0.0  # 检索分数；关键词模式为整数，向量模式为相似度小数

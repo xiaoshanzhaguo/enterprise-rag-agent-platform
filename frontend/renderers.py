@@ -248,9 +248,12 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
         text_preview = chunk.get("text_preview", "").strip()
         # 原文长度用于帮助用户判断片段规模
         text_length = chunk.get("text_length", 0)
+        # 后端返回的检索排序；没有时后续渲染会用前端循环序号兜底
+        rank = chunk.get("rank")
 
         # 将整理后的字段加入列表，后续两个展示区域都复用这一份数据
         preview_items.append({
+            "rank": rank,
             "source": source,
             "score": score,
             "text_length": text_length,
@@ -298,15 +301,17 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
         # 先集中展示引用来源，帮助用户快速判断模型答案引用了哪些文档片段
         st.markdown("**引用来源**")
         for index, item in enumerate(preview_items, start=1):
-            st.markdown(f"{index}. [来源: {item['source']}] · score={item['score']}")
+            rank = item["rank"] or index
+            st.markdown(f"{rank}. [来源: {item['source']}] · score={item['score']}")
 
         st.markdown("---")
 
         # 遍历每个命中的检索片段，并从 1 开始编号
         for index, item in enumerate(preview_items, start=1):
+            rank = item["rank"] or index
             # 渲染片段标题说明行，字段与模型引用格式保持一致
             st.markdown(
-                f"**原文片段 {index}** · "
+                f"**原文片段 {rank}** · "
                 f"[来源: {item['source']}] · "
                 f"score={item['score']} · "
                 f"{item['text_length']} 字"

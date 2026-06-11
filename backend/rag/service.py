@@ -14,6 +14,7 @@ RAG 服务层模块。
 - 采用“单会话 + 数据库持久化 chunks + 可选向量库检索 + 检索结果组装”的设计
 - 检索上下文会携带 file_name、chunk_id、score，并要求模型按来源引用回答
 - 当 RAG_RETRIEVAL_MODE=vector 时，检索会走 ChromaDB 语义相似度
+- 当 RAG_KEYWORD_FALLBACK_ENABLED=true 时，向量无可靠命中才回退到关键词检索
 - 适合本地开发、项目演示和求职场景下的工程化展示
 """
 from typing import Any
@@ -48,6 +49,33 @@ def build_source_label(chunk: dict[str, Any]) -> str:
     return f"{file_name}#chunk-{chunk_id}"
 
 
+def retrieve_keyword_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
+    """
+    使用关键词检索获取当前会话的 RAG 文本块。
+
+    函数说明：
+    1. 从数据库读取当前 session 已保存的 document_chunks。
+    2. 使用轻量关键词检索器计算 query 与 chunk 的相关性。
+    3. 返回和向量检索兼容的 chunk 字典列表。
+
+    :param session_id: 当前会话 ID，可以是字符串，也可以是 None
+    :param query: 当前用户问题
+    :param top_k: 最多返回几个最相关的块，默认 3
+    :return: 关键词检索命中的 chunk 列表
+    """
+    # 如果当前没有 session_id，则无法定位到对应会话的文档
+    if not session_id:
+        return []
+
+    # 从数据库中取出当前会话已索引的文本块
+    chunks = get_document_chunks(session_id)
+    if not chunks:
+        return []
+
+    # 根据 query 从所有文本块中检索最相关的前 top_k 个
+    return retrieve_top_chunks(query=query, chunks=chunks, top_k=top_k)
+
+
 def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
     """
     根据 session_id 和 query 获取最相关的 RAG 文本块。
@@ -74,18 +102,28 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
             query=query,
             top_k=top_k
         )
-        # 如果向量检索没有可靠命中，则回退到严格关键词检索。
-        # 这样“远程办公需要怎样申请”这类明确词面命中不会被向量阈值误过滤。
+        # 如果向量检索命中可靠结果，直接返回向量结果
         if vector_chunks:
             return vector_chunks
 
-    # 先从数据库中取出当前会话已索引的文本块
-    chunks = get_document_chunks(session_id)
-    if not chunks:
-        return []
+        # 如果关闭了关键词兜底，则向量无可靠命中时直接返回空列表
+        if not settings.rag_keyword_fallback_enabled:
+            return []
 
-    # 再根据 query 从所有文本块中检索最相关的前 top_k 个
-    return retrieve_top_chunks(query=query, chunks=chunks, top_k=top_k)
+        # 如果向量检索没有可靠命中，并且允许 fallback，则回退到严格关键词检索。
+        # 这样“远程办公需要怎样申请”这类明确词面命中不会被向量阈值误过滤。
+        return retrieve_keyword_chunks(
+            session_id=session_id,
+            query=query,
+            top_k=top_k
+        )
+
+    # keyword 模式下直接使用关键词检索
+    return retrieve_keyword_chunks(
+        session_id=session_id,
+        query=query,
+        top_k=top_k
+    )
 
 
 def build_rag_context_from_chunks(matched_chunks: list[dict[str, Any]]) -> str:
@@ -180,13 +218,14 @@ def build_rag_preview(session_id: str | None, query: str, top_k: int = 3) -> lis
     # - text_length：原始文本总长度
     return [
         {
+            "rank": item.get("rank", index),
             "file_name": item.get("file_name"),
             "chunk_id": item.get("chunk_id"),
             "score": item.get("score", 0),
             "source": build_source_label(item),
             "text": item.get("text", ""),
-            "text_preview": item.get("text", "")[:preview_limit],
+            "text_preview": item.get("text_preview") or item.get("text", "")[:preview_limit],
             "text_length": len(item.get("text", ""))
         }
-        for item in matched_chunks
+        for index, item in enumerate(matched_chunks, start=1)
     ]
