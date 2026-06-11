@@ -577,6 +577,7 @@ def save_rag_query_with_hits(
     query_text: str,
     top_k: int,
     matched_chunks: list[dict[str, Any]],
+    retrieval_mode: str,
     mode: str = "unknown",
 ) -> int | None:
     """
@@ -584,7 +585,7 @@ def save_rag_query_with_hits(
 
     函数说明：
     1. 先确保当前 session_id 对应的聊天会话存在。
-    2. 将用户本次 RAG 查询内容保存到 rag_queries 表。
+    2. 将用户本次 RAG 查询内容和实际检索方式保存到 rag_queries 表。
     3. 遍历本次检索命中的 matched_chunks，将每个命中文档块保存到 rag_hits 表。
     4. 每条 rag_hits 记录会保存：
        - 当前查询 ID
@@ -597,6 +598,7 @@ def save_rag_query_with_hits(
     :param query_text: 用户本次 RAG 查询文本
     :param top_k: 本次 RAG 检索返回的片段数量
     :param matched_chunks: 本次 RAG 检索命中的文本块列表。每个元素通常包含 db_chunk_id、score、chunk_id、text 等字段。其中 db_chunk_id 用于关联 document_chunks 表中的真实数据库记录。
+    :param retrieval_mode: 本次实际使用的检索方式，例如 vector 或 keyword
     :param mode: 当前会话模式。例如：内容分析、结构优化、工作流优化等。如果为空，则使用“unknown”
     :return: 保存成功时，返回本次 rag_queries 表中新插入记录的主键 ID；如果 session_id 或 query_text 为空，则返回None
     """
@@ -609,10 +611,10 @@ def save_rag_query_with_hits(
     with get_connection() as connection:
         query_cursor = connection.execute(
             """
-            INSERT INTO rag_queries (session_id, query_text, top_k, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO rag_queries (session_id, query_text, top_k, retrieval_mode, created_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (session_id, query_text, top_k, now),
+            (session_id, query_text, top_k, retrieval_mode or "unknown", now),
         )
         rag_query_id = int(query_cursor.lastrowid)
 

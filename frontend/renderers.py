@@ -221,7 +221,7 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
     将后端返回的 RAG chunk 转换为前端展示用字段。
 
     函数说明：
-    1. 统一读取 file_name、chunk_id、score、source 等展示字段。
+    1. 统一读取 rank、score、file_name、chunk_id、retrieval_mode、source 等展示字段。
     2. source 优先使用后端返回值；没有时用 file_name + chunk_id 兜底生成。
     3. display_text 优先展示完整原文；没有完整原文时退回 text_preview。
 
@@ -250,12 +250,18 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
         text_length = chunk.get("text_length", 0)
         # 后端返回的检索排序；没有时后续渲染会用前端循环序号兜底
         rank = chunk.get("rank")
+        # 后端返回的实际检索方式，用于解释当前命中来自向量检索还是关键词检索
+        retrieval_mode = chunk.get("retrieval_mode") or "unknown"
 
         # 将整理后的字段加入列表，后续两个展示区域都复用这一份数据
         preview_items.append({
             "rank": rank,
+            "file_name": chunk_file_name,
+            "chunk_id": chunk_id,
             "source": source,
             "score": score,
+            "retrieval_mode": retrieval_mode,
+            "text_preview": text_preview or text[:160] or "（无预览内容）",
             "text_length": text_length,
             "display_text": text or text_preview or "（无原文内容）"
         })
@@ -284,8 +290,11 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
     # 取出当前索引距离过期还剩多少秒
     expires_in_seconds = status.get("expires_in_seconds")
 
-    # 构造顶部摘要说明，先说明本次回答参考了哪个文档和多少个片段
-    caption_parts = [f"文档：{file_name}", f"命中片段：{len(chunks)}"]
+    # 从第一个命中片段读取实际检索方式；同一次预览通常使用同一种方式
+    retrieval_mode = chunks[0].get("retrieval_mode", "unknown")
+
+    # 构造顶部摘要说明，先说明本次回答参考了哪个文档、多少个片段以及使用的检索方式
+    caption_parts = [f"文档：{file_name}", f"top_k 命中：{len(chunks)}", f"检索方式：{retrieval_mode}"]
     # 如果过期时间有效且大于 0，就追加一条：索引大约多少分钟后过期
     if isinstance(expires_in_seconds, int) and expires_in_seconds > 0:
         caption_parts.append(f"索引约 {expires_in_seconds // 60} 分钟后过期")
@@ -298,11 +307,18 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
         # 把顶部说明用 · 拼成一行灰色小字说明
         st.caption(" · ".join(caption_parts))
 
-        # 先集中展示引用来源，帮助用户快速判断模型答案引用了哪些文档片段
-        st.markdown("**引用来源**")
+        # 先集中展示命中原因，帮助用户快速判断模型答案引用了哪些文档片段
+        st.markdown("**命中原因**")
         for index, item in enumerate(preview_items, start=1):
             rank = item["rank"] or index
-            st.markdown(f"{rank}. [来源: {item['source']}] · score={item['score']}")
+            st.markdown(
+                f"{rank}. "
+                f"检索方式={item['retrieval_mode']} · "
+                f"score={item['score']} · "
+                f"file_name={item['file_name']} · "
+                f"chunk_id={item['chunk_id']}"
+            )
+            st.caption(f"text_preview：{item['text_preview']}")
 
         st.markdown("---")
 
@@ -313,6 +329,7 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
             st.markdown(
                 f"**原文片段 {rank}** · "
                 f"[来源: {item['source']}] · "
+                f"检索方式={item['retrieval_mode']} · "
                 f"score={item['score']} · "
                 f"{item['text_length']} 字"
             )

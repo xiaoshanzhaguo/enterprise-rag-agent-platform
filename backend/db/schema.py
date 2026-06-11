@@ -76,6 +76,7 @@ CREATE_TABLE_SQL = [
         session_id TEXT NOT NULL,
         query_text TEXT NOT NULL,
         top_k INTEGER NOT NULL DEFAULT 3,
+        retrieval_mode TEXT NOT NULL DEFAULT 'unknown',
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )

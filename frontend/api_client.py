@@ -226,8 +226,20 @@ def get_rag_preview(session_id: str, query: str, top_k: int) -> list[dict]:
     if response.status_code != 200:
         return []
 
-    # 解析 JSON 响应，并取出里面的 chunks 字段。如果没有 chunks，就返回空列表
-    return response.json().get("chunks", [])
+    # 解析 JSON 响应，里面包含本次预览的检索方式和命中 chunks
+    payload = response.json()
+    # 读取本次实际检索方式，例如 vector 或 keyword
+    retrieval_mode = payload.get("retrieval_mode", "unknown")
+    # 取出 chunks 字段。如果没有 chunks，就返回空列表
+    chunks = payload.get("chunks", [])
+
+    # 将顶层 retrieval_mode 兜底写入每个 chunk，保证前端解释面板始终能展示检索方式
+    for chunk in chunks:
+        if isinstance(chunk, dict) and not chunk.get("retrieval_mode"):
+            chunk["retrieval_mode"] = retrieval_mode
+
+    # 返回补充后的命中片段列表
+    return chunks
 
 
 def get_rag_status(session_id: str) -> dict:

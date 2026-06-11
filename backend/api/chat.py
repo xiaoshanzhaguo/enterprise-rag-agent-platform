@@ -50,7 +50,7 @@ from backend.rag.chunker import split_text_into_chunks
 from backend.rag.store import save_document_chunks
 from backend.rag.store import clear_document_chunks
 from backend.rag.store import get_document_status
-from backend.rag.service import build_rag_preview
+from backend.rag.service import build_rag_preview, resolve_retrieval_mode
 from backend.db.repository import delete_chat_session
 from backend.db.repository import ensure_chat_session
 from backend.db.repository import load_latest_mode_sessions
@@ -193,6 +193,7 @@ def rag_preview(request: RagPreviewRequest):
     return RagPreviewResponse(
         session_id=request.session_id,
         query=request.query,
+        retrieval_mode=resolve_retrieval_mode(chunks),
         chunks=chunks
     )
 

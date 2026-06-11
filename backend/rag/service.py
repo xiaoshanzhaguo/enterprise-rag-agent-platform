@@ -49,6 +49,59 @@ def build_source_label(chunk: dict[str, Any]) -> str:
     return f"{file_name}#chunk-{chunk_id}"
 
 
+def attach_retrieval_metadata(chunks: list[dict[str, Any]], retrieval_mode: str) -> list[dict[str, Any]]:
+    """
+    为检索结果补充统一的解释性字段。
+
+    函数说明：
+    1. 给每个 chunk 补充 rank，保证前端和数据库都有稳定排序。
+    2. 给每个 chunk 补充 retrieval_mode，记录本次实际使用的检索方式。
+    3. 返回新的 chunk 列表，避免直接修改调用方传入的原始对象。
+
+    :param chunks: 原始检索结果列表
+    :param retrieval_mode: 实际检索方式，例如 vector 或 keyword
+    :return: 补充解释字段后的检索结果列表
+    """
+    # 存放补充元数据后的检索结果
+    enriched_chunks = []
+
+    # 遍历检索结果，并从 1 开始生成稳定排名
+    for index, chunk in enumerate(chunks, start=1):
+        # 复制一份 chunk，避免修改原始数据结构
+        enriched_chunk = dict(chunk)
+        # 如果检索器没有返回 rank，则使用当前顺序兜底
+        enriched_chunk["rank"] = enriched_chunk.get("rank") or index
+        # 标记本次命中的实际检索方式，便于前端解释和数据库记录
+        enriched_chunk["retrieval_mode"] = retrieval_mode
+        # 加入最终结果列表
+        enriched_chunks.append(enriched_chunk)
+
+    # 返回补充后的结果
+    return enriched_chunks
+
+
+def resolve_retrieval_mode(matched_chunks: list[dict[str, Any]]) -> str:
+    """
+    根据命中结果判断本次实际使用的检索方式。
+
+    函数说明：
+    1. 如果命中结果里已经携带 retrieval_mode，则优先使用该值。
+    2. 如果没有命中结果，则退回当前配置的 RAG_RETRIEVAL_MODE。
+    3. 该值用于 /rag_preview 展示和 rag_queries 日志记录。
+
+    :param matched_chunks: 本次检索命中的 chunk 列表
+    :return: 检索方式字符串
+    """
+    # 遍历命中结果，优先读取检索器标记的实际检索方式
+    for chunk in matched_chunks:
+        retrieval_mode = chunk.get("retrieval_mode")
+        if retrieval_mode:
+            return str(retrieval_mode)
+
+    # 没有命中结果时，使用当前配置的检索方式作为兜底说明
+    return settings.rag_retrieval_mode
+
+
 def retrieve_keyword_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
     """
     使用关键词检索获取当前会话的 RAG 文本块。
@@ -73,7 +126,9 @@ def retrieve_keyword_chunks(session_id: str | None, query: str, top_k: int = 3) 
         return []
 
     # 根据 query 从所有文本块中检索最相关的前 top_k 个
-    return retrieve_top_chunks(query=query, chunks=chunks, top_k=top_k)
+    keyword_chunks = retrieve_top_chunks(query=query, chunks=chunks, top_k=top_k)
+    # 给关键词检索结果补充 rank 和 retrieval_mode，便于前端解释和数据库记录
+    return attach_retrieval_metadata(keyword_chunks, "keyword")
 
 
 def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
@@ -104,7 +159,7 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
         )
         # 如果向量检索命中可靠结果，直接返回向量结果
         if vector_chunks:
-            return vector_chunks
+            return attach_retrieval_metadata(vector_chunks, "vector")
 
         # 如果关闭了关键词兜底，则向量无可靠命中时直接返回空列表
         if not settings.rag_keyword_fallback_enabled:
@@ -151,6 +206,7 @@ def build_rag_context_from_chunks(matched_chunks: list[dict[str, Any]]) -> str:
                 f"file_name={item.get('file_name') or '当前文档'} | "
                 f"chunk_id={item.get('chunk_id')} | "
                 f"score={item.get('score', 0)} | "
+                f"retrieval_mode={item.get('retrieval_mode') or resolve_retrieval_mode(matched_chunks)} | "
                 f"source={build_source_label(item)}]\n"
                 f"{item['text']}"
             )
@@ -181,13 +237,16 @@ def build_rag_context(session_id: str | None, query: str, top_k: int = 3) -> str
         query=query,
         top_k=top_k
     )
+    # 根据命中结果识别本次实际检索方式。vector 命中就是 vector；vector 未命中后 fallback 命中就是 keyword。
+    retrieval_mode = resolve_retrieval_mode(matched_chunks)
 
     # 持久化记录本次 RAG 查询及其命中的文本块，便于后续追踪检索效果和调试
     save_rag_query_with_hits(
         session_id=session_id,
         query_text=query,
         top_k=top_k,
-        matched_chunks=matched_chunks
+        matched_chunks=matched_chunks,
+        retrieval_mode=retrieval_mode
     )
 
     # 再把检索结果转换成 prompt 可直接使用的上下文字符串
@@ -222,6 +281,7 @@ def build_rag_preview(session_id: str | None, query: str, top_k: int = 3) -> lis
             "file_name": item.get("file_name"),
             "chunk_id": item.get("chunk_id"),
             "score": item.get("score", 0),
+            "retrieval_mode": item.get("retrieval_mode") or resolve_retrieval_mode(matched_chunks),
             "source": build_source_label(item),
             "text": item.get("text", ""),
             "text_preview": item.get("text_preview") or item.get("text", "")[:preview_limit],
