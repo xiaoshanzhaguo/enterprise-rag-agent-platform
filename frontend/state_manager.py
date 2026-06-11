@@ -7,6 +7,7 @@
 3. 清洗历史消息结构，避免异常数据影响页面渲染
 4. 确保所有当前支持的模式都有独立 session_id 和消息列表
 5. 构造发送给后端 API 的 history 上下文，控制历史长度并保留必要原始内容
+6. 保留 assistant 消息对应的 RAG 引用展示元数据
 
 说明：
 - 当前项目主历史存储已迁移到后端 SQLite
@@ -61,6 +62,7 @@ def normalize_messages(messages: list) -> list[dict]:
     - 过滤掉 role 或 content 不合法的消息
     - 保留合法的 role、content、raw_content
     - 清洗 workflow_blocks，确保分步结果结构可被前端安全渲染
+    - 清洗 rag_preview_chunks 和 rag_status_info，确保历史引用模块可恢复展示
 
     :param messages: 从旧版本地 JSON 文件读取出来的原始消息列表
     :return: 清洗后的消息列表
@@ -101,6 +103,20 @@ def normalize_messages(messages: list) -> list[dict]:
                 for key, value in workflow_blocks.items()
                 if isinstance(key, str) and isinstance(value, str)
             }
+
+        # assistant 消息可能带有当前回答对应的 RAG 命中片段，用于刷新后恢复引用模块
+        rag_preview_chunks = message.get("rag_preview_chunks")
+        if role == "assistant" and isinstance(rag_preview_chunks, list):
+            normalized_message["rag_preview_chunks"] = [
+                chunk
+                for chunk in rag_preview_chunks
+                if isinstance(chunk, dict)
+            ]
+
+        # assistant 消息可能带有当前回答对应的 RAG 文档状态，用于展示引用来源所属文档
+        rag_status_info = message.get("rag_status_info")
+        if role == "assistant" and isinstance(rag_status_info, dict):
+            normalized_message["rag_status_info"] = rag_status_info
 
         normalized_messages.append(normalized_message)
 
@@ -194,6 +210,7 @@ def build_history_for_api(messages: list[dict], max_length: int = MAX_HISTORY_LE
     函数说明：
     - 从前端消息列表中截取最近 max_length 条
     - 只保留 role 和 content 两个字段
+    - 不把 RAG 引用元数据发送给模型，避免展示数据污染对话上下文
     - 文件上传消息优先使用 raw_content，保证后端拿到的是完整上下文
     - 用于构造 ChatRequest.history，避免把过长历史全部传给模型
 

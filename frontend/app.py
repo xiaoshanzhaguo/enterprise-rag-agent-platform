@@ -6,14 +6,14 @@
 2. 管理多模式会话状态，包括不同模式下的 session_id、历史消息、数据库历史恢复与旧 JSON 历史兜底
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
-5. 渲染历史消息、当前结果、RAG 引用来源、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
+5. 渲染历史消息、当前结果、每条回答对应的 RAG 引用来源、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
 6. 在左侧边栏展示项目名称、模式选择和对话设置，并按当前模式展示可用的 RAG 设置
 7. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和数据库 RAG 文档
 
 说明：
 - 当前模块属于前端入口层，负责把页面状态管理、用户输入处理、后端请求发送和结果展示串起来
 - 页面基于 Streamlit 构建，后端依赖 FastAPI 提供聊天流式接口、工作流接口、RAG 接口和 SQLite 会话持久化接口
-- 当前实现支持“多模式 + 会话隔离 + 文件上传分析 + 第一阶段 RAG + SQLite 历史持久化 + 旧 JSON 历史兜底”的完整交互链路
+- 当前实现支持“多模式 + 会话隔离 + 文件上传分析 + 向量 RAG + SQLite 历史持久化 + 旧 JSON 历史兜底”的完整交互链路
 """
 
 # 导入时间模块，使得后面流式输出时用 time.sleep(0.01) 让文本增长更自然
@@ -372,6 +372,19 @@ for idx, message in enumerate(current_messages):
             # 判断当前历史结果是否只是 RAG 无依据提示；如果是，则不展示复制 / 导出按钮
             can_show_result_actions = not is_no_rag_evidence_result(message["content"])
 
+            # 读取当前 assistant 历史消息保存的 RAG 引用片段
+            message_rag_chunks = message.get("rag_preview_chunks", [])
+            # 读取当前 assistant 历史消息保存的 RAG 文档状态
+            message_rag_status = message.get("rag_status_info", {})
+
+            # 如果这条历史回答保存过引用片段，则折叠展示，避免旧消息占用太多页面空间
+            if can_show_result_actions and message_rag_chunks:
+                render_rag_preview(
+                    chunks=message_rag_chunks,
+                    status=message_rag_status,
+                    expanded=False
+                )
+
             if can_show_result_actions:
                 # 为历史 assistant 消息渲染整体结果操作区：复制整段结果 + 导出 Markdown
                 render_result_actions(
@@ -610,6 +623,21 @@ if chat_submission:
         # 调用后端 /rag_status/{session_id}，获取当前会话索引状态
         rag_status_info = rag_status_info or get_rag_status(current_session_id)
 
+    # 组装后端扩展参数。display_text 用于数据库保存前端展示文本，RAG 元数据用于保存每条回答自己的引用模块
+    user_options = {
+        # display_text 是前端聊天区展示文本；
+        # 上传文件场景下，它只展示用户问题和附件名，避免把完整文档全文保存成可见聊天记录。
+        # 后端会优先用 display_text 保存 message.content，同时用 input_text 保存 raw_content。
+        "display_text": submit_display_text
+    }
+
+    # 只有本轮确实有命中片段时，才把引用模块元数据交给后端保存
+    if rag_preview_chunks:
+        # 保存本轮命中的片段列表，刷新页面后这条回答仍能展示自己的引用来源
+        user_options["rag_preview_chunks"] = rag_preview_chunks
+        # 保存本轮文档状态，用于历史引用模块显示文档名等信息
+        user_options["rag_status_info"] = rag_status_info
+
     # -----------------------------
     # 第五步: 展示并写入用户消息
     # -----------------------------
@@ -641,12 +669,7 @@ if chat_submission:
         "persona": mode,
         # current_messages[:-1] 表示不把刚刚追加的当前用户输入再算进 history。因为当前这条消息已经单独放进 input_text 里了，不应该重复出现在历史中
         "history": build_history_for_api(current_messages[:-1]),
-        "user_options": {
-            # display_text 是前端聊天区展示文本；
-            # 上传文件场景下，它只展示用户问题和附件名，避免把完整文档全文保存成可见聊天记录。
-            # 后端会优先用 display_text 保存 message.content，同时用 input_text 保存 raw_content。
-            "display_text": submit_display_text
-        },
+        "user_options": user_options,
         "use_rag": use_rag,
         "rag_top_k": rag_top_k
     }
@@ -751,7 +774,7 @@ if chat_submission:
                 can_show_result_actions = not is_no_rag_evidence_result(final_display_text)
 
                 # 如果本轮启用了 RAG 且结果不是无依据提示，则展示引用来源和命中的原文片段
-                if use_rag and mode in RAG_ENABLED_MODES and can_show_result_actions:
+                if use_rag and mode in RAG_ENABLED_MODES and can_show_result_actions and rag_preview_chunks:
                     render_rag_preview(
                         chunks=rag_preview_chunks,
                         status=rag_status_info,
@@ -785,6 +808,13 @@ if chat_submission:
                 if is_workflow and workflow_blocks:
                     # 为什么用.copy()？因为 workflow_blocks 是一个字典，可变。.copy() 是复制一份，避免后面原字典变化时，把历史消息里的结果也带着改掉。
                     assistant_message["workflow_blocks"] = workflow_blocks.copy()
+
+                # 如果当前回答展示了 RAG 引用模块，则把引用数据挂到这条 assistant 消息上
+                if use_rag and mode in RAG_ENABLED_MODES and can_show_result_actions and rag_preview_chunks:
+                    # 保存本轮命中的引用片段，后续页面重跑或刷新时可以恢复到对应回答下面
+                    assistant_message["rag_preview_chunks"] = rag_preview_chunks.copy()
+                    # 保存本轮文档状态，作为引用模块的文档名兜底信息
+                    assistant_message["rag_status_info"] = rag_status_info.copy()
 
                 # 将 assistant 消息追加到当前模式的历史消息列表里
                 current_messages.append(assistant_message)

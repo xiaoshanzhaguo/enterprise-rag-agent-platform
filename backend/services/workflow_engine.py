@@ -34,6 +34,8 @@ from backend.db.repository import ensure_chat_session, save_chat_message
 from backend.prompt.prompt_builder import build_system_prompt
 # 导入请求模型和流式事件模型，用于约束请求结构和 SSE 事件结构
 from backend.schema.chat_schema import ChatRequest, StreamEvent
+# 导入 assistant 消息展示元数据构造函数，用于保存当前回答对应的引用模块
+from backend.services.message_metadata import build_assistant_message_metadata
 # 导入 SSE 格式化工具，将 StreamEvent 转换为 text/event-stream 格式
 from backend.utils.stream_helper import to_sse
 # 导入 RAG 上下文构造函数，用于为当前请求生成检索增强参考内容
@@ -304,7 +306,8 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                 role="assistant",
                 content=final_content,
                 raw_content=final_content,
-                mode=request.persona
+                mode=request.persona,
+                metadata=build_assistant_message_metadata(request.user_options)
             )
 
             # 所有步骤执行完成后，发送最终事件

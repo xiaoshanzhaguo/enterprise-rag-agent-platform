@@ -3,7 +3,7 @@
 
 职责：
 1. 管理聊天会话(chat_sessions)的数据读写
-2. 管理聊天消息(chat_messages)的数据读写
+2. 管理聊天消息(chat_messages)的数据读写，并支持保存单条消息的展示元数据
 3. 管理上传文档(documents)及文本块(document_chunks)的数据写入
 4. 管理 RAG 查询记录(rag_queries)及命中记录(rag_hits)的数据写入
 5. 提供历史会话恢复能力
@@ -39,6 +39,37 @@ def _current_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _load_message_metadata(metadata_json: str | None) -> dict[str, Any]:
+    """
+    解析聊天消息的元数据 JSON。
+
+    函数说明：
+    1. 如果 metadata_json 为空，则返回空字典。
+    2. 如果 JSON 解析失败，则返回空字典，避免历史数据异常影响页面恢复。
+    3. 只接受字典结构，其他 JSON 类型会被丢弃。
+
+    :param metadata_json: chat_messages.metadata_json 字段内容
+    :return: 解析后的消息元数据字典
+    """
+    # 没有元数据时直接返回空字典
+    if not metadata_json:
+        return {}
+
+    try:
+        # 将数据库里的 JSON 字符串解析为 Python 对象
+        metadata = json.loads(metadata_json)
+    except (TypeError, json.JSONDecodeError):
+        # 元数据损坏时不影响主消息展示
+        return {}
+
+    # 只允许字典结构继续向前端传递
+    if not isinstance(metadata, dict):
+        return {}
+
+    # 返回解析后的元数据
+    return metadata
+
+
 def _message_row_to_dict(row) -> dict[str, Any]:
     """
     将数据库消息记录转换为前端消息结构。
@@ -48,6 +79,7 @@ def _message_row_to_dict(row) -> dict[str, Any]:
     2. 保留 raw_content
     3. 自动识别工作流结果
     4. 将工作流 JSON 转换为可展示格式
+    5. 恢复单条 assistant 消息对应的 RAG 引用元数据
 
     :param row: chat_messages 表中的一条数据库记录
     :return: 前端消息字典
@@ -59,6 +91,25 @@ def _message_row_to_dict(row) -> dict[str, Any]:
 
     if row["raw_content"]:
         message["raw_content"] = row["raw_content"]
+
+    # 从 metadata_json 中恢复前端展示元数据，例如 RAG 引用来源和命中片段
+    metadata = _load_message_metadata(row["metadata_json"])
+
+    # 只给 assistant 消息恢复引用模块，避免用户消息携带无意义展示字段
+    if row["role"] == "assistant" and metadata:
+        # 恢复当前回答对应的 RAG 命中片段列表
+        rag_preview_chunks = metadata.get("rag_preview_chunks")
+        if isinstance(rag_preview_chunks, list):
+            message["rag_preview_chunks"] = [
+                chunk
+                for chunk in rag_preview_chunks
+                if isinstance(chunk, dict)
+            ]
+
+        # 恢复当前回答对应的文档状态信息
+        rag_status_info = metadata.get("rag_status_info")
+        if isinstance(rag_status_info, dict):
+            message["rag_status_info"] = rag_status_info
 
     if row["role"] == "assistant":
         try:
@@ -142,7 +193,7 @@ def get_session_messages(session_id: str | None) -> list[dict[str, Any]]:
         # 获取查询结果中的所有记录
         rows = connection.execute(
             """
-            SELECT role, content, raw_content
+            SELECT role, content, raw_content, metadata_json
             FROM chat_messages
             WHERE session_id = ?
             ORDER BY message_order ASC, id ASC
@@ -186,7 +237,7 @@ def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]
 
             rows = connection.execute(
                 """
-                SELECT role, content, raw_content
+                SELECT role, content, raw_content, metadata_json
                 FROM chat_messages
                 WHERE session_id = ?
                 ORDER BY message_order ASC, id ASC
@@ -228,6 +279,7 @@ def save_chat_message(
     content: str,
     raw_content: str | None = None,
     mode: str = "unknown",
+    metadata: dict[str, Any] | None = None,
 ) -> int | None:
     """
     保存聊天消息到数据库。
@@ -236,13 +288,15 @@ def save_chat_message(
     1. 确保当前会话存在
     2. 自动计算消息顺序(message_order)
     3. 保存消息内容
-    4. 更新会话最后更新时间
+    4. 保存消息展示元数据
+    5. 更新会话最后更新时间
 
     :param session_id: 当前会话ID
     :param role: 消息角色(user/assistant/system)
     :param content: 展示给用户的消息内容
     :param raw_content: 原始消息内容，可为空
     :param mode: 当前会话模式
+    :param metadata: 当前消息的展示元数据，例如 RAG 引用来源，可为空
     :return: 新插入消息的数据库主键ID；保存失败时返回None
     """
     if not session_id or not content:
@@ -250,6 +304,8 @@ def save_chat_message(
 
     ensure_chat_session(session_id=session_id, mode=mode)
     now = _current_timestamp()
+    # 将消息元数据转成 JSON 字符串保存；为空时写入 NULL
+    metadata_json = json.dumps(metadata, ensure_ascii=False) if metadata else None
 
     with get_connection() as connection:
         # 获得下一条消息序号
@@ -262,10 +318,10 @@ def save_chat_message(
         # 数据库执行完这条 SQL 后，给 Python 返回一个操作结果对象
         cursor = connection.execute(
             """
-            INSERT INTO chat_messages (session_id, role, content, raw_content, message_order, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (session_id, role, content, raw_content, metadata_json, message_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, role, content, raw_content, next_order, now),
+            (session_id, role, content, raw_content, metadata_json, next_order, now),
         )
         connection.execute(
             "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",

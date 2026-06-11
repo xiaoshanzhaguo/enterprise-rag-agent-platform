@@ -14,7 +14,7 @@
 
 数据模型覆盖：
 1. 会话管理
-2. 消息历史
+2. 消息历史和消息展示元数据
 3. 文档管理
 4. RAG 检索
 5. Prompt 评测
@@ -38,6 +38,7 @@ CREATE_TABLE_SQL = [
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         raw_content TEXT,
+        metadata_json TEXT,
         message_order INTEGER NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE

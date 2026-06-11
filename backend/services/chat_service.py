@@ -31,6 +31,8 @@ from backend.config import settings
 from backend.db.repository import ensure_chat_session, save_chat_message
 # 构造 RAG 参考内容
 from backend.rag.service import build_rag_context
+# 构造 assistant 消息展示元数据
+from backend.services.message_metadata import build_assistant_message_metadata
 # 生成系统提示词
 from backend.prompt.prompt_builder import build_system_prompt
 # 请求模型、流式事件模型
@@ -245,7 +247,8 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                 role="assistant",
                 content=full_text,
                 raw_content=full_text,
-                mode=request.persona
+                mode=request.persona,
+                metadata=build_assistant_message_metadata(request.user_options)
             )
 
             # 模型输出完成后，发送最终事件
