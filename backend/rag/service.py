@@ -214,6 +214,7 @@ def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, top_k: int
 def build_rag_context_from_chunks(matched_chunks: list[dict[str, Any]]) -> str:
     """
     将已检索出的文本块转换为可直接拼入 prompt 的上下文。
+
     :param matched_chunks: 检索出的 chunk 列表
     :return: 一个字符串
     """

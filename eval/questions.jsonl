@@ -1,0 +1,18 @@
+{"question": "公司试用期是多久？", "expected_source": "企业知识库.md#chunk-1", "must_contain": ["三个月"]}
+{"question": "五天带薪年假是什么规定？", "expected_source": "企业知识库.md#chunk-1", "must_contain": ["五天", "带薪年假"]}
+{"question": "公司是否提供免费晚餐？", "expected_source": "企业知识库.md#chunk-1", "must_contain": ["不提供", "免费晚餐"]}
+{"question": "远程办公需要怎样申请？", "expected_source": "企业知识库.md#chunk-1", "must_contain": ["提前", "直属主管"]}
+{"question": "信息安全培训需要几天内完成？", "expected_source": "企业知识库.md#chunk-2", "must_contain": ["七天", "信息安全培训"]}
+{"question": "公司账号需要开启什么认证？", "expected_source": "企业知识库.md#chunk-2", "must_contain": ["双因素认证"]}
+{"question": "笔记本电脑遗失后多久需要报备？", "expected_source": "企业知识库.md#chunk-2", "must_contain": ["二十四小时", "IT服务台"]}
+{"question": "差旅报销需要在多久内提交？", "expected_source": "企业知识库.md#chunk-3", "must_contain": ["十五个工作日", "提交"]}
+{"question": "单张发票金额超过五千元需要谁审批？", "expected_source": "企业知识库.md#chunk-3", "must_contain": ["五千元", "部门负责人"]}
+{"question": "打车报销需要上传什么材料？", "expected_source": "企业知识库.md#chunk-3", "must_contain": ["行程单", "发票"]}
+{"question": "弹性上班时间是什么？", "expected_source": "企业知识库.md#chunk-4", "must_contain": ["八点到十点"]}
+{"question": "每月迟到超过三次会怎样？", "expected_source": "企业知识库.md#chunk-4", "must_contain": ["三次", "主管面谈"]}
+{"question": "采购金额超过一万元需要走什么流程？", "expected_source": "企业知识库.md#chunk-5", "must_contain": ["一万元", "采购评审"]}
+{"question": "P1故障需要多久响应？", "expected_source": "企业知识库.md#chunk-6", "must_contain": ["十五分钟", "四小时"]}
+{"question": "公司是否报销健身卡？", "expected_source": null, "must_contain": [], "should_reject": true}
+{"question": "公司有没有通勤班车？", "expected_source": null, "must_contain": [], "should_reject": true}
+{"question": "员工是否可以携带宠物上班？", "expected_source": null, "must_contain": [], "should_reject": true}
+{"question": "公司是否提供股票期权？", "expected_source": null, "must_contain": [], "should_reject": true}
