@@ -10,7 +10,7 @@ RAG 服务层模块。
 4. 解耦存储层、检索层与业务层，提升 RAG 链路的可维护性
 
 说明：
-- 当前实现为第一阶段轻量版 RAG
+- 当前实现为轻量工程化 RAG，包含持久化 chunk、可解释引用、检索日志和可配置检索模式
 - 采用“单会话 + 数据库持久化 chunks + 可选向量库检索 + 检索结果组装”的设计
 - 检索上下文会携带 file_name、chunk_id、score，并要求模型按来源引用回答
 - 当 RAG_RETRIEVAL_MODE=vector 时，检索会走 ChromaDB 语义相似度
@@ -27,7 +27,7 @@ from backend.rag.vector_store import retrieve_similar_chunks
 
 
 NO_RAG_EVIDENCE_MESSAGE = "知识库中没有找到依据"
-NO_HIT_RETRIEVAL_MODE = "no_hit"
+NO_HIT_RETRIEVAL_MODE: str = "no_hit"
 
 
 def build_source_label(chunk: dict[str, Any]) -> str:

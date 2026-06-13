@@ -4,7 +4,7 @@ API 路由模块。
 职责：
 1. 注册前端可调用的后端接口
 2. 提供聊天流式响应接口
-3. 提供工作流流式响应接口
+3. 提供工作流和轻量 Agent 流式响应接口
 4. 提供文档上传、文本切块、RAG 索引构建、检索预览、状态查询与清理接口
 5. 提供聊天历史恢复接口
 6. 提供聊天会话创建、恢复与删除接口
@@ -15,7 +15,7 @@ API 路由模块。
 - 不负责具体业务逻辑实现
 - 不负责模型调用细节
 - 不负责数据库操作实现
-- 聊天与工作流逻辑由 Service 层负责
+- 聊天、工作流和轻量 Agent 逻辑由 Service 层负责
 - 聊天记录、文档索引与检索记录持久化由 Repository 层负责
 - 文档切块、检索与状态管理由 RAG 模块负责
 - 前端所有业务请求均通过本模块进入系统
@@ -25,6 +25,7 @@ API 路由模块。
 聊天相关：
 - POST /chat_stream
 - POST /workflow_stream
+- POST /agent_stream
 
 聊天历史相关：
 - POST /chat_history
@@ -66,6 +67,7 @@ from backend.schema.chat_schema import (
 )
 from backend.services.chat_service import chat_with_ai
 from backend.services.workflow_engine import run_workflow_stream
+from backend.services.agent_service import run_agent_stream
 
 # 路由注册器：集中管理当前模块下的所有接口
 router = APIRouter()
@@ -140,6 +142,17 @@ def workflow_stream(request: ChatRequest):
     """
     client = get_client()  # 创建统一的大模型客户端
     return run_workflow_stream(request, client)  # 将请求交给工作流服务处理
+
+
+@router.post("/agent_stream")
+def agent_stream(request: ChatRequest):
+    """
+    企业知识库问答 Agent 流式接口。
+
+    接收前端 Agent 请求，初始化模型客户端，并调用轻量 Agent 服务返回 SSE 事件流响应。
+    """
+    client = get_client()  # 创建统一的大模型客户端
+    return run_agent_stream(request, client)  # 将请求交给轻量 Agent 服务处理
 
 
 @router.post("/index_document", response_model=IndexDocumentResponse)

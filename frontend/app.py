@@ -152,7 +152,8 @@ MODE_TO_TASK_TYPE = {
     "结构优化": "rewrite",
     "风格改写": "rewrite",
     "多版本生成": "chat",
-    "工作流优化": "workflow"
+    "工作流优化": "workflow",
+    "企业知识库问答": "agent"
 }
 
 # 每个模式的简短说明文案。当前模式切换后，给用户一个简短提示，帮助理解这个模式是干什么的
@@ -161,7 +162,8 @@ MODE_DESCRIPTIONS = {
     "结构优化": "整理表达层次和逻辑结构",
     "风格改写": "保持原意，调整表达语气",
     "多版本生成": "生成不同场景可直接使用的版本",
-    "工作流优化": "分步骤总结、分析并提出建议"
+    "工作流优化": "分步骤总结、分析并提出建议",
+    "企业知识库问答": "判断是否需要知识库，并基于证据回答"
 }
 
 # 当前前端支持的所有模式列表
@@ -183,12 +185,13 @@ st.markdown(
 )
 
 # -----------------------------
-# 第一阶段启用 RAG 的模式
-# 先只支持：内容分析、工作流优化
+# 启用 RAG 设置的模式
+# 内容分析 / 工作流优化仍保留原有 RAG 能力；企业知识库问答由轻量 Agent 决策是否真正检索
 # -----------------------------
 RAG_ENABLED_MODES = {
     "内容分析",
-    "工作流优化"
+    "工作流优化",
+    "企业知识库问答"
 }
 
 # RAG 无命中时后端返回的固定提示。前端用它判断是否需要隐藏复制 / 导出等结果操作按钮
@@ -213,10 +216,17 @@ def is_no_rag_evidence_result(result_text: str) -> bool:
     if normalized_text == NO_RAG_EVIDENCE_MESSAGE:
         return True
 
-    # workflow 模式会把无依据提示放进分步骤 Markdown 中，需要逐行过滤标题和无依据提示
+    # workflow / Agent 模式会把无依据提示放进分步骤 Markdown 中，需要逐行过滤标题和无依据提示
     meaningful_lines = []
-    # workflow 的三个固定展示标题关键词。用关键词判断，比完整匹配 emoji 标题更稳
-    workflow_title_keywords = {"内容总结", "问题分析", "优化建议"}
+    # 分步骤固定展示标题关键词。用关键词判断，比完整匹配 emoji 标题更稳
+    workflow_title_keywords = {
+        "内容总结",
+        "问题分析",
+        "优化建议",
+        "判断是否需要知识库",
+        "检索证据",
+        "生成回答",
+    }
 
     # 逐行检查是否还存在真正的回答内容
     for line in normalized_text.splitlines():
@@ -225,11 +235,14 @@ def is_no_rag_evidence_result(result_text: str) -> bool:
         # 空行不算有效内容
         if not stripped_line:
             continue
-        # workflow 标题行不算有效内容
+        # 分步骤标题行不算有效内容
         if stripped_line.startswith("###") and any(keyword in stripped_line for keyword in workflow_title_keywords):
             continue
-        # 无依据提示本身不算有效内容
-        if stripped_line == NO_RAG_EVIDENCE_MESSAGE:
+        # 无依据提示本身不算有效内容；Agent 可能会在后面追加“请补充...”类引导，也仍然不是可导出的正式结果
+        if stripped_line.startswith(NO_RAG_EVIDENCE_MESSAGE):
+            continue
+        # Agent 的判断过程说明不是最终答案内容，判断无依据结果时需要忽略
+        if stripped_line.startswith(("判断结果：", "判断依据：", "检索方式：")):
             continue
 
         meaningful_lines.append(stripped_line)
@@ -240,7 +253,8 @@ def is_no_rag_evidence_result(result_text: str) -> bool:
 # 当用户只上传文件、未输入 query 时的默认提示词
 DEFAULT_FILE_MODE_PROMPTS = {
     "内容分析": "请基于上传文档完成内容分析，提炼主题、关键信息和结论。",
-    "工作流优化": "请基于上传文档进行工作流优化，分步骤总结、分析并提出建议。"
+    "工作流优化": "请基于上传文档进行工作流优化，分步骤总结、分析并提出建议。",
+    "企业知识库问答": "请基于上传文档回答企业知识库问题。"
 }
 
 # chat_input 允许附加的文件类型
@@ -255,7 +269,8 @@ UPLOAD_ENABLED_MODES = {
     "内容分析",
     "结构优化",
     "风格改写",
-    "工作流优化"
+    "工作流优化",
+    "企业知识库问答"
 }
 
 
@@ -546,6 +561,11 @@ if chat_submission:
         submit_display_text = user_text
         submit_raw_text = user_text
 
+    # 将当前模式名映射成后端任务类型，后续用于选择接口和判断是否属于分步骤输出
+    task_type = MODE_TO_TASK_TYPE[mode]
+    # workflow 和轻量 Agent 都会返回 step_start / step_complete，需要按分步骤结构渲染
+    is_stepwise = task_type in {"workflow", "agent"}
+
     # 如果用户开启了 RAG，但既没有上传新文件，数据库里也没有历史文档，则停止本次提交
     if use_rag and mode in RAG_ENABLED_MODES and not uploaded_file_text and not has_persisted_rag_document:
         st.warning("当前会话没有可检索文档。请先上传文件，或关闭 RAG 后直接提问。")
@@ -610,8 +630,9 @@ if chat_submission:
     # 默认没有 RAG 命中片段；只有启用 RAG 时才会调用后端获取
     rag_preview_chunks = []
 
-    # 如果启用了 RAG，则先获取本次 query 命中的片段，稍后放到模型答案下方展示
-    if use_rag and mode in RAG_ENABLED_MODES:
+    # 如果启用了 RAG，则先获取本次 query 命中的片段，稍后放到模型答案下方展示。
+    # 企业知识库问答模式由后端 Agent 自己先判断是否需要知识库，因此这里不提前调用 /rag_preview，避免“还没判断就先检索”。
+    if use_rag and mode in RAG_ENABLED_MODES and task_type != "agent":
         # 本地向量检索需要先为 query 生成 embedding，用 spinner 避免检索阶段出现空白等待
         with st.spinner("正在检索知识库并匹配引用片段..."):
             # 调用后端 /rag_preview 接口，获取本次 query 命中的片段摘要
@@ -652,14 +673,6 @@ if chat_submission:
     })
 
     # -----------------------------
-    # 第六步: 根据模式决定调用哪个接口
-    # -----------------------------
-    # 将当前模式名映射成后端任务类型
-    task_type = MODE_TO_TASK_TYPE[mode]
-    # 判断当前是否属于 workflow 模式
-    is_workflow = task_type == "workflow"
-
-    # -----------------------------
     # 第七步: 构造符合 ChatRequest 的请求体并发送
     # -----------------------------
     payload = {
@@ -676,7 +689,7 @@ if chat_submission:
 
     # 发送流式请求。这里可能会等待后端建立 SSE 连接，因此给出明确提示，避免页面像是没有响应。
     with st.spinner("正在连接后端并生成回答..."):
-        response = post_stream_request(payload, is_workflow)
+        response = post_stream_request(payload, task_type)
 
     # 请求失败直接报错
     if response.status_code != 200:
@@ -691,7 +704,7 @@ if chat_submission:
             # 普通聊天模式的完整文本累计区
             full_response = ""
 
-            # workflow 模式下的分步骤文本累计区
+            # workflow / Agent 模式下的分步骤文本累计区
             workflow_blocks: dict[str, str] = {}
 
             # 标记是否收到第一条有效事件，用来清理“思考中”
@@ -711,15 +724,15 @@ if chat_submission:
 
                 # 工作流开始 / 步骤开始事件
                 if event_type in {"workflow_start", "step_start"}:
-                    # 如果当前模式确实是 workflow，并且事件带了步骤名，就把当前已积累的 workflow 内容重新渲染一次，这样可以让前端在步骤切换时保持结构化展示
-                    if is_workflow and step_name:
+                    # 如果当前模式确实是分步骤输出，并且事件带了步骤名，就把当前已积累的内容重新渲染一次，这样可以让前端在步骤切换时保持结构化展示
+                    if is_stepwise and step_name:
                         current_markdown = format_workflow_blocks(workflow_blocks)
                         if current_markdown:
                             placeholder.markdown(current_markdown)
 
                 # 增量事件：按模式分别处理
                 elif event_type == "delta":
-                    if is_workflow:
+                    if is_stepwise:
                         if step_name:
                             # 如果该步骤还没有内容，先初始化为空字符串。如：{}会变成{"summary": ""}
                             workflow_blocks.setdefault(step_name, "")
@@ -746,8 +759,8 @@ if chat_submission:
 
                 # 最终完成事件
                 elif event_type == "final":
-                    if is_workflow:
-                        # workflow 模式下，最终渲染一遍已积累好的步骤结果
+                    if is_stepwise:
+                        # 分步骤模式下，最终渲染一遍已积累好的步骤结果
                         placeholder.markdown(format_workflow_blocks(workflow_blocks))
                     else:
                         # 如果前面没有累计到内容，但 final 给了完整文本，则用 final 兜底
@@ -761,9 +774,9 @@ if chat_submission:
                     break
 
             # 生成最终写入聊天记录的 assistant 内容。区分模式：
-            # - workflow -> 最终结果来自格式化后的 workflow_blocks
+            # - workflow / Agent -> 最终结果来自格式化后的 workflow_blocks
             # - 普通聊天 -> 最终结果就是 full_response
-            if is_workflow:
+            if is_stepwise:
                 final_display_text = format_workflow_blocks(workflow_blocks)
             else:
                 final_display_text = full_response
@@ -788,7 +801,7 @@ if chat_submission:
                         widget_key_suffix="latest_result"
                     )
 
-                if can_show_result_actions and is_workflow and workflow_blocks:
+                if can_show_result_actions and task_type == "workflow" and workflow_blocks:
                     # 插入一个很小的竖向空白间距。unsafe_allow_html=True表示：允许 Streamlit 按 HTML 来渲染这段字符串
                     st.markdown("<div style='height: 0.25rem;'></div>", unsafe_allow_html=True)
 
@@ -804,8 +817,8 @@ if chat_submission:
                     "content": final_display_text
                 }
 
-                # workflow 模式下，把分步结构一起保存，便于历史消息继续支持“分步复制”
-                if is_workflow and workflow_blocks:
+                # 分步骤模式下，把分步结构一起保存，便于历史消息刷新后继续按步骤展示
+                if is_stepwise and workflow_blocks:
                     # 为什么用.copy()？因为 workflow_blocks 是一个字典，可变。.copy() 是复制一份，避免后面原字典变化时，把历史消息里的结果也带着改掉。
                     assistant_message["workflow_blocks"] = workflow_blocks.copy()
 

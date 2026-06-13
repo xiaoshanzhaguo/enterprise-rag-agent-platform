@@ -4,18 +4,18 @@ Schema 数据模型模块。
 职责：
 1. 定义前后端交互时使用的核心数据结构，包括聊天请求、流式事件、文档索引、RAG 引用预览、RAG 状态、聊天历史恢复与会话创建等接口模型
 2. 通过 Pydantic 模型约束字段类型、默认值和取值范围，保证接口输入输出结构清晰、可校验、可维护
-3. 统一管理聊天、工作流、RAG 第一阶段、SQLite 历史持久化相关的数据协议
+3. 统一管理聊天、工作流、轻量 Agent、RAG 检索增强、SQLite 历史持久化相关的数据协议
 4. 作为 API 层、Service 层、Repository 层和前端之间的“数据契约”
 
 说明：
 - 当前模块属于 schema / 协议层，不直接处理业务逻辑
 - 主要作用是统一接口字段结构，避免前后端联调时出现字段不一致
-- ChatRequest 用于聊天和工作流请求
+- ChatRequest 用于聊天、工作流和轻量 Agent 请求
 - StreamEvent 用于 SSE 流式响应协议
 - IndexDocumentRequest / IndexDocumentResponse 用于文档索引接口
 - RagPreviewRequest / RagPreviewResponse / RagStatusResponse 用于 RAG 检索引用预览与状态查询
 - ChatHistoryRequest / ChatSessionCreateRequest 用于聊天历史恢复和会话管理
-- 适合当前项目“流式输出 + 多模式内容处理 + 第一阶段 RAG + SQLite 历史持久化”的工程结构
+- 适合当前项目“流式输出 + 多模式内容处理 + 可解释 RAG + SQLite 历史持久化”的工程结构
 """
 
 from pydantic import BaseModel, Field
@@ -25,7 +25,7 @@ from typing import Optional, Literal, TypeAlias, List, Dict, Any
 MessageRole: TypeAlias = Literal["system", "user", "assistant"]
 
 # 任务类型：限定当前项目支持的任务模式
-TaskType: TypeAlias = Literal["chat", "summary", "rewrite", "translate", "workflow"]
+TaskType: TypeAlias = Literal["chat", "summary", "rewrite", "translate", "workflow", "agent"]
 
 # 流式事件类型：限定 SSE 输出中允许出现的事件名称
 StreamEventType: TypeAlias = Literal[
@@ -57,7 +57,7 @@ class ChatRequest(BaseModel):
     history: List[MessageItem] = Field(default_factory=list)  # 历史消息列表
     user_options: Dict[str, Any] = Field(default_factory=dict)  # 扩展参数，如语气、长度、语言等
 
-    # RAG 第一阶段新增字段
+    # RAG 检索增强字段
     use_rag: bool = False # 是否启用检索增强
     rag_top_k: int = Field(default=3, ge=1, le=5) # 检索返回的片段数量
 

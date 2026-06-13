@@ -5,7 +5,7 @@
 1. 统一封装 Streamlit 前端对 FastAPI 后端接口的调用
 2. 提供聊天历史恢复、空会话创建、会话删除等会话管理请求能力
 3. 提供文档索引、文档清理、RAG 引用预览查询和 RAG 状态查询能力
-4. 提供聊天 / 工作流流式请求发送能力
+4. 提供聊天 / 工作流 / 轻量 Agent 流式请求发送能力
 5. 提供 SSE 事件流解析能力，将后端返回的 data: {...} 事件转换为前端可直接消费的事件字典
 
 说明：
@@ -173,18 +173,24 @@ def clear_indexed_document(session_id: str) -> None:
         pass
 
 
-def post_stream_request(payload: dict, is_workflow: bool):
+def post_stream_request(payload: dict, task_type: str):
     """
     根据任务类型发送流式请求。
 
     :param payload: 请求体
-    :param is_workflow: 是否是工作流模式
+    :param task_type: 后端任务类型，例如 chat、workflow 或 agent
     :return: requests.Response 响应对象。该对象封装了后端返回的流式 HTTP 响应，调用方可继续通过 iter_lines() 逐行解析 SSE 事件。
     """
     # 根据当前模式选择后端接口：
     # - workflow 模式走 /workflow_stream
+    # - agent 模式走 /agent_stream
     # - 其他模式走 /chat_stream
-    endpoint = "/workflow_stream" if is_workflow else "/chat_stream"
+    if task_type == "workflow":
+        endpoint = "/workflow_stream"
+    elif task_type == "agent":
+        endpoint = "/agent_stream"
+    else:
+        endpoint = "/chat_stream"
     # 发送流式请求到后端，并将 requests 返回的响应对象直接返回给调用方
     return requests.post(
         f"{BACKEND_BASE_URL}{endpoint}",
