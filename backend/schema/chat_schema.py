@@ -74,6 +74,7 @@ class StreamEvent(BaseModel):
     task_type: Optional[TaskType] = None  # 当前任务类型
     step_name: Optional[str] = None  # 当前事件关联的步骤名称
     content: str = ""  # 当前事件携带的文本内容
+    metadata: Dict[str, Any] = Field(default_factory=dict)  # 当前事件携带的扩展元数据，例如 Agent 最终返回的 RAG 引用片段
     is_final: bool = False  # 是否为最后一条流式消息
     error_message: Optional[str] = None  # 错误信息，仅在 error 事件中使用
 

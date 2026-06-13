@@ -469,6 +469,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
 
             # 将 Agent 分步骤结果序列化为 JSON
             final_content = json.dumps(final_result, ensure_ascii=False)
+            # 构造当前回答对应的引用模块元数据，既用于数据库保存，也用于本次 SSE final 事件返回前端
+            assistant_metadata = _build_agent_rag_metadata(request, matched_chunks)
             # 保存 assistant 消息；如果本轮有引用片段，则把引用模块元数据一起保存
             save_chat_message(
                 session_id=request.session_id,
@@ -476,7 +478,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 content=final_content,
                 raw_content=final_content,
                 mode=request.persona,
-                metadata=_build_agent_rag_metadata(request, matched_chunks),
+                metadata=assistant_metadata,
             )
 
             # 发送最终完成事件
@@ -486,6 +488,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     session_id=request.session_id,
                     task_type=request.task_type,
                     content=final_content,
+                    metadata=assistant_metadata or {},
                     is_final=True,
                 )
             )

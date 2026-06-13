@@ -725,6 +725,9 @@ if chat_submission:
             # workflow / Agent 模式下的分步骤文本累计区
             workflow_blocks: dict[str, str] = {}
 
+            # Agent final 事件可能携带后端实际检索到的引用模块元数据，用于本轮回答即时展示
+            response_metadata = {}
+
             # 标记是否收到第一条有效事件，用来清理“思考中”
             first_event_received = False
 
@@ -733,6 +736,7 @@ if chat_submission:
                 event_type = event.get("event_type")
                 step_name = event.get("step_name")
                 content = event.get("content", "")
+                event_metadata = event.get("metadata") or {}
                 error_message = event.get("error_message")
 
                 # 第一次真正收到事件时，清除“思考中...”占位提示
@@ -777,6 +781,10 @@ if chat_submission:
 
                 # 最终完成事件
                 elif event_type == "final":
+                    # final 事件可能携带当前回答对应的引用元数据，先保存下来，后面统一渲染引用模块
+                    if isinstance(event_metadata, dict) and event_metadata:
+                        response_metadata = event_metadata
+
                     if is_stepwise:
                         # 分步骤模式下，最终渲染一遍已积累好的步骤结果
                         placeholder.markdown(format_workflow_blocks(workflow_blocks))
@@ -801,6 +809,19 @@ if chat_submission:
 
             # 当前轮结果生成后，渲染操作区并写入历史
             if final_display_text.strip():
+                # Agent 模式的引用块由后端实际检索结果随 final 事件返回；普通 RAG 模式仍沿用前端预览结果
+                if response_metadata:
+                    metadata_chunks = response_metadata.get("rag_preview_chunks")
+                    metadata_status = response_metadata.get("rag_status_info")
+                    if isinstance(metadata_chunks, list):
+                        rag_preview_chunks = [
+                            chunk
+                            for chunk in metadata_chunks
+                            if isinstance(chunk, dict)
+                        ]
+                    if isinstance(metadata_status, dict):
+                        rag_status_info = metadata_status
+
                 # 当前结果如果只是 RAG 无依据提示，则不展示复制 / 导出等结果操作
                 can_show_result_actions = not is_no_rag_evidence_result(final_display_text)
 
