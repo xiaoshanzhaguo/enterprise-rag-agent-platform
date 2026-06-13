@@ -148,7 +148,7 @@ def index_uploaded_document(session_id: str, file_name: str, document_text: str)
     # 把后端返回的 JSON 响应解析成 Python 字典
     result = response.json()
     # 如果成功，就返回成功标记和一条提示文案。
-    return True, f"文档索引完成，共切分 {result['chunk_count']} 个文本块。"
+    return True, f"文档索引已完成，已生成 {result['chunk_count']} 个可检索文本块。"
 
 
 def clear_indexed_document(session_id: str) -> None:

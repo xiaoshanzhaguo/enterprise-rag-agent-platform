@@ -486,7 +486,8 @@ if mode in RAG_ENABLED_MODES:
             # 如果数据库有文档但用户手动关闭 RAG，则提示文档仍在，但本次不会用于检索
             st.info(f"当前会话已保存文档：{file_name}。在左侧对话设置中开启 RAG 后，可以继续基于该文档提问。")
 
-    # 当前没有数据库文档但用户手动开启了 RAG 时，用 warning 提醒需要上传文件
+    # 当前没有数据库文档但用户手动开启了 RAG 时，用 warning 提醒需要上传文件。
+    # 该提示只说明当前会话在本轮提交前还没有已保存文档，不属于索引完成提示，因此可以和后续索引状态共存。
     elif use_rag:
         st.warning("当前会话暂无可检索文档。请上传文件后使用 RAG，或关闭 RAG 后直接提问。")
 
@@ -609,12 +610,12 @@ if chat_submission:
         )
 
         if need_reindex:
-            # 本地 embedding 首次加载模型或生成向量可能需要较久，用状态提示避免页面长时间空白
-            with st.status("正在为附件生成向量索引，请稍候...", expanded=True) as index_status:
+            # 文档解析、chunk 持久化和向量化可能需要一段时间，用状态提示避免页面长时间空白
+            with st.status("正在建立知识库索引...", expanded=True) as index_status:
                 # 提示用户当前阶段是在处理文档索引，而不是前端卡死
-                st.write("正在切分文档并写入 SQLite。")
-                # 提示用户向量模式下会继续生成 embedding 并写入 ChromaDB
-                st.write("如果当前使用本地 BGE-M3，首次运行可能需要加载或下载模型。")
+                st.write("正在解析文档并切分为可检索文本块。")
+                # 提示用户向量模式下会调用当前配置的 embedding 服务并写入向量库
+                st.write("正在调用已配置的 Embedding 服务生成向量，并写入本地向量库。")
                 # 调用后端 /index_document 接口，让后端为当前会话建立文档索引
                 success, message = index_uploaded_document(
                     session_id=current_session_id,
@@ -631,8 +632,6 @@ if chat_submission:
 
             # 将状态标记为完成，明确告诉用户索引阶段已经结束
             index_status.update(label=message, state="complete")
-            # 索引成功则显示提示
-            st.success(message)
 
             # 记录当前模式当前会话已索引过这份文档
             st.session_state.rag_index_state[mode] = {
