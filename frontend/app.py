@@ -8,7 +8,7 @@
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
 5. 渲染历史消息、当前结果、每条回答对应的 RAG 引用来源、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
 6. 在左侧边栏展示项目名称、模式选择和对话设置，并按当前模式展示可用的 RAG 设置
-7. 支持新建当前模式聊天、清空当前模式聊天，并同步清理后端数据库会话和数据库 RAG 文档
+7. 支持清空当前会话，并同步清理后端数据库会话和数据库 RAG 文档
 
 说明：
 - 当前模块属于前端入口层，负责把页面状态管理、用户输入处理、后端请求发送和结果展示串起来
@@ -20,7 +20,7 @@
 import sys
 import time
 from pathlib import Path
-# 导入 uuid4()，生成新的唯一会话 ID，每次新建聊天或清空当前模式聊天时都会生成新的 session_id
+# 导入 uuid4()，生成新的唯一会话 ID，每次清空当前会话时都会生成新的 session_id
 from uuid import uuid4
 
 
@@ -556,33 +556,8 @@ for idx, message in enumerate(current_messages):
 # -----------------------------
 # 会话控制按钮
 # -----------------------------
-if st.sidebar.button("新建当前模式聊天"):
-    # 取出旧会话 ID，用于同步清理旧会话相关资源
-    old_session_id = st.session_state.mode_sessions[mode]["session_id"]
-
-    # 清理旧会话在数据库 RAG store 中的文档索引
-    clear_indexed_document(old_session_id)
-
-    # 删除旧会话在 SQLite 中的聊天记录、文档记录和 RAG 关联记录
-    clear_chat_session(old_session_id)
-
-    # 生成新的会话 ID，只更新前端状态；数据库等用户真正发送内容时再创建记录
-    new_session_id = str(uuid4())
-
-    # 重置当前模式会话：重新生成 session_id，并清空消息
-    st.session_state.mode_sessions[mode] = {
-        "session_id": new_session_id,
-        "messages": []
-    }
-
-    # 同步清理当前模式的前端索引状态缓存
-    st.session_state.rag_index_state.pop(mode, None)
-
-    # 强制页面重新执行，让新会话立即生效
-    st.rerun()
-
-if st.sidebar.button("清空当前模式聊天"):
-    # 清理当前模式旧 session 对应的数据库 RAG 文档和数据库会话数据，只影响当前模式，不影响其他模式的历史
+if st.sidebar.button("清空当前会话"):
+    # 清理当前会话对应的数据库 RAG 文档和数据库会话数据，只影响当前模式，不影响其他模式的历史
     old_session_id = st.session_state.mode_sessions[mode]["session_id"]
     clear_indexed_document(old_session_id)
     clear_chat_session(old_session_id)
@@ -590,7 +565,7 @@ if st.sidebar.button("清空当前模式聊天"):
     # 生成新的会话 ID，只更新前端状态；数据库等用户真正发送内容时再创建记录
     new_session_id = str(uuid4())
 
-    # 只重置当前模式会话
+    # 重置当前模式下正在使用的会话
     st.session_state.mode_sessions[mode] = {
         "session_id": new_session_id,
         "messages": []
