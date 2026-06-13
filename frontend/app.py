@@ -194,6 +194,9 @@ RAG_ENABLED_MODES = {
     "企业知识库问答"
 }
 
+# 企业知识库问答模式名称。单独抽成常量，避免后续判断里重复写字符串
+AGENT_MODE_NAME = "企业知识库问答"
+
 # RAG 无命中时后端返回的固定提示。前端用它判断是否需要隐藏复制 / 导出等结果操作按钮
 NO_RAG_EVIDENCE_MESSAGE = "知识库中没有找到依据。"
 
@@ -309,7 +312,7 @@ current_messages = current_session["messages"]
 # 说明：
 # - 这里先只准备状态，不渲染控件
 # - RAG 控件会放到左侧边栏的“对话设置”区域里
-# - use_rag: 当前 session 有数据库文档时默认启用，否则默认关闭
+# - use_rag: 当前 session 有数据库文档时默认启用；企业知识库问答模式默认允许 RAG；其他模式无文档时默认关闭
 # - rag_top_k: 默认检索3个片段
 # - rag_status_info: 后端 /rag_status 返回的当前 session 文档状态，后面用于展示文件名和判断是否有可检索文档
 # - has_persisted_rag_document: 当前 session 是否已经在数据库中保存过 RAG 文档和 chunk
@@ -336,9 +339,11 @@ if mode in RAG_ENABLED_MODES:
         st.session_state[rag_checkbox_key] = True
         st.session_state[rag_default_applied_key] = True
 
-    # 如果数据库没有文档，并且当前 session 的 RAG 勾选状态还没初始化，则默认关闭 RAG
+    # 如果数据库没有文档，并且当前 session 的 RAG 勾选状态还没初始化，则按模式决定默认值：
+    # - 企业知识库问答默认允许 RAG，让用户上传文件后自然进入知识库问答链路
+    # - 其他模式默认关闭，避免普通内容处理入口误触发 RAG
     if not has_persisted_rag_document and rag_checkbox_key not in st.session_state:
-        st.session_state[rag_checkbox_key] = False
+        st.session_state[rag_checkbox_key] = mode == AGENT_MODE_NAME
 
 
 # -----------------------------
@@ -537,6 +542,17 @@ if chat_submission:
     if not user_text and uploaded_file is None:
         st.stop()
 
+    # 将当前模式名映射成后端任务类型，后续用于选择接口和判断是否属于分步骤输出
+    task_type = MODE_TO_TASK_TYPE[mode]
+    # workflow 和轻量 Agent 都会返回 step_start / step_complete，需要按分步骤结构渲染
+    is_stepwise = task_type in {"workflow", "agent"}
+
+    # 企业知识库问答模式里，只要本轮上传了文件，就自动按 RAG 流程处理。
+    # 这样可以避免“上传了知识库文件，但忘记勾选 RAG，最终按普通文件输入回答”的误导性结果。
+    if uploaded_file_text and mode == AGENT_MODE_NAME and mode in RAG_ENABLED_MODES and not use_rag:
+        use_rag = True
+        st.info("检测到企业知识库问答模式已上传文件，本轮已自动启用 RAG 检索。")
+
     # -----------------------------
     # 第三步：构造前端展示文本和后端实际提交文本
     # -----------------------------
@@ -561,13 +577,15 @@ if chat_submission:
         submit_display_text = user_text
         submit_raw_text = user_text
 
-    # 将当前模式名映射成后端任务类型，后续用于选择接口和判断是否属于分步骤输出
-    task_type = MODE_TO_TASK_TYPE[mode]
-    # workflow 和轻量 Agent 都会返回 step_start / step_complete，需要按分步骤结构渲染
-    is_stepwise = task_type in {"workflow", "agent"}
-
-    # 如果用户开启了 RAG，但既没有上传新文件，数据库里也没有历史文档，则停止本次提交
-    if use_rag and mode in RAG_ENABLED_MODES and not uploaded_file_text and not has_persisted_rag_document:
+    # 如果非 Agent 模式开启了 RAG，但既没有上传新文件，数据库里也没有历史文档，则停止本次提交。
+    # Agent 模式允许继续进入后端决策：普通问题会跳过检索，知识库问题会得到“没有依据”的明确结果。
+    if (
+        use_rag
+        and mode in RAG_ENABLED_MODES
+        and task_type != "agent"
+        and not uploaded_file_text
+        and not has_persisted_rag_document
+    ):
         st.warning("当前会话没有可检索文档。请先上传文件，或关闭 RAG 后直接提问。")
         st.stop()
 
