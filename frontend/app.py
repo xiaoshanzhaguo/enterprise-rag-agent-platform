@@ -2,7 +2,7 @@
 前端主页面模块（app.py）。
 
 职责：
-1. 负责初始化 Streamlit 页面，并组织整个 AI 内容分析与创作助手的前端交互流程
+1. 负责初始化 Streamlit 页面，并组织整个企业知识库问答 Agent 的前端交互流程
 2. 管理多模式会话状态，包括不同模式下的 session_id、历史消息、数据库历史恢复与旧 JSON 历史兜底
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
@@ -76,7 +76,7 @@ from frontend.state_manager import (
 # 页面基础配置
 # -----------------------------
 st.set_page_config(
-    page_title="AI 内容分析与创作助手", # 浏览器标签页标题
+    page_title="企业知识库问答 Agent", # 浏览器标签页标题
     page_icon="🤖", # 页面图标
     layout="wide", # 宽屏布局
     initial_sidebar_state="expanded", # 默认展开侧边栏
@@ -96,11 +96,14 @@ st.markdown(
     section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
         padding-top: 0 !important;
     }
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 10px;
+    }
     section[data-testid="stSidebar"] hr {
         margin: 0 0 30px 0;
     }
     .sidebar-brand {
-        margin: 20px 0 30px 0;
+        margin: 1rem 0;
         color: rgb(38, 39, 48);
         font-size: 1.28rem;
         font-weight: 760;
@@ -129,6 +132,40 @@ st.markdown(
         font-size: 0.9rem;
         line-height: 1.45;
     }
+    .mode-category {
+        margin-top: 0.45rem;
+        color: rgba(49, 51, 63, 0.52);
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .sidebar-static-mode {
+        height: 68px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+    .sidebar-static-mode-label {
+        margin: 0 0 0.5rem 0;
+        color: rgba(49, 51, 63, 0.68);
+        font-size: 0.9rem;
+        line-height: 1.35;
+    }
+    .sidebar-static-mode-value {
+        min-height: 24px;
+        display: flex;
+        align-items: center;
+        color: rgb(38, 39, 48);
+        font-size: 0.95rem;
+        font-weight: 650;
+        line-height: 1.3;
+    }
+    section[data-testid="stSidebar"] [data-testid="stSelectbox"] {
+        margin-bottom: -1rem;
+    }
+    section[data-testid="stSidebar"] [data-testid="stExpander"] {
+        margin-top: 8px;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -136,10 +173,13 @@ st.markdown(
 
 # 左侧边栏顶部只展示项目名称，让侧边栏的应用身份更简洁清晰
 st.sidebar.markdown(
-    '<div class="sidebar-brand">AI 内容分析与创作助手</div>',
+    '<div class="sidebar-brand">企业知识库问答 Agent</div>',
     unsafe_allow_html=True
 )
-st.sidebar.divider()
+st.sidebar.markdown(
+    '<div style="border-top: 1px solid rgba(49, 51, 63, 0.18); margin: 0 0 10px 0;"></div>',
+    unsafe_allow_html=True
+)
 
 
 # -----------------------------
@@ -148,36 +188,122 @@ st.sidebar.divider()
 # persona 先沿用展示名称，便于后端按人设/风格扩展
 # -----------------------------
 MODE_TO_TASK_TYPE = {
+    "企业知识库问答": "agent",
     "内容分析": "summary",
     "结构优化": "rewrite",
     "风格改写": "rewrite",
     "多版本生成": "chat",
-    "工作流优化": "workflow",
-    "企业知识库问答": "agent"
+    "工作流优化": "workflow"
 }
 
 # 每个模式的简短说明文案。当前模式切换后，给用户一个简短提示，帮助理解这个模式是干什么的
 MODE_DESCRIPTIONS = {
-    "内容分析": "提炼主题、关键信息和结论",
-    "结构优化": "整理表达层次和逻辑结构",
-    "风格改写": "保持原意，调整表达语气",
-    "多版本生成": "生成不同场景可直接使用的版本",
-    "工作流优化": "分步骤总结、分析并提出建议",
-    "企业知识库问答": "判断是否需要知识库，并基于证据回答"
+    "企业知识库问答": "上传企业文档后，系统会判断问题是否需要知识库、检索证据，并生成带来源引用的回答。",
+    "内容分析": "附加文本处理能力，用于提炼主题、关键信息和结论。",
+    "结构优化": "附加文本处理能力，用于整理表达层次和逻辑结构。",
+    "风格改写": "附加文本处理能力，用于保持原意并调整表达语气。",
+    "多版本生成": "附加文本处理能力，用于生成不同场景可直接使用的表达版本。",
+    "工作流优化": "附加文本处理能力，用于分步骤总结、分析并提出建议。"
 }
 
-# 当前前端支持的所有模式列表
-AVAILABLE_MODES = list(MODE_TO_TASK_TYPE.keys())
+# 核心功能列表：默认优先展示企业知识库问答，让用户一进入项目就看到主定位
+CORE_MODES = ["企业知识库问答"]
 
-# 在侧边栏中让用户选择当前模式
-mode = st.sidebar.selectbox("选择功能", AVAILABLE_MODES)
+# 附加功能列表：保留原有内容处理能力，但不再作为项目主定位
+AUXILIARY_MODES = [
+    "内容分析",
+    "结构优化",
+    "风格改写",
+    "多版本生成",
+    "工作流优化",
+]
 
-# 在主内容区顶部展示当前模式。字号比普通说明更大，但不使用页面级大标题，避免抢占对话区域注意力
+# 当前前端支持的所有模式列表，核心功能排在最前面，用于历史恢复和会话状态初始化
+AVAILABLE_MODES = CORE_MODES + AUXILIARY_MODES
+
+
+def sync_mode_from_group() -> None:
+    """
+    根据功能类型同步当前模式。
+
+    函数说明：
+    1. 切到核心功能时，当前模式固定为企业知识库问答。
+    2. 切到附加功能时，当前模式使用最近一次选择的附加模式。
+    3. 这样既能突出主入口，也避免下拉框里重复显示“附加功能”前缀。
+
+    :return: None
+    """
+    # 读取当前功能类型；没有时默认核心功能
+    mode_group = st.session_state.get("mode_group", "核心功能")
+    # 如果是核心功能，则固定进入企业知识库问答
+    if mode_group == "核心功能":
+        st.session_state.selected_mode = CORE_MODES[0]
+        return
+
+    # 如果是附加功能，则使用最近一次选择的附加模式；没有时默认第一个附加模式
+    st.session_state.selected_mode = st.session_state.get("auxiliary_mode", AUXILIARY_MODES[0])
+
+
+# 初始化功能类型和当前模式，保证首次进入页面默认展示企业知识库问答
+if "selected_mode" not in st.session_state:
+    st.session_state.selected_mode = CORE_MODES[0]
+
+if "mode_group" not in st.session_state:
+    st.session_state.mode_group = "核心功能"
+
+if "auxiliary_mode" not in st.session_state:
+    st.session_state.auxiliary_mode = AUXILIARY_MODES[0]
+
+
+# 先选择功能类型，避免在一个下拉框里重复显示“附加功能”前缀
+st.sidebar.radio(
+    "功能类型",
+    ["核心功能", "附加功能"],
+    key="mode_group",
+    horizontal=True,
+    on_change=sync_mode_from_group
+)
+
+# 核心功能使用静态展示，附加功能使用下拉框；静态区域固定高度，保证底部分割线位置稳定
+if st.session_state.mode_group == "核心功能":
+    # 核心功能当前只有企业知识库问答，不做成下拉框，避免用户误以为还有其他核心选项
+    mode = CORE_MODES[0]
+    st.session_state.selected_mode = mode
+    # 用固定高度的静态块对齐附加功能下拉框区域，让下方横线切换时不跳动
+    st.sidebar.markdown(
+        """
+        <div class="sidebar-static-mode">
+            <div class="sidebar-static-mode-label">当前核心功能</div>
+            <div class="sidebar-static-mode-value">企业知识库问答</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    # 附加功能使用独立下拉框，选项里不再重复出现“附加功能”前缀
+    mode = st.sidebar.selectbox(
+        "选择附加功能",
+        AUXILIARY_MODES,
+        key="auxiliary_mode"
+    )
+    st.session_state.selected_mode = mode
+
+# 用横线把功能选择区域和对话设置区域分开，让侧边栏层级更清楚
+st.sidebar.markdown(
+    '<div style="border-top: 1px solid rgba(49, 51, 63, 0.18); margin: 10px 0 8px 0;"></div>',
+    unsafe_allow_html=True
+)
+
+# 根据当前模式判断它属于核心功能还是附加功能
+mode_category = "核心功能" if mode in CORE_MODES else "附加功能"
+
+# 在主内容区顶部展示当前模式和定位。企业知识库问答作为主场景，附加模式作为辅助文本处理能力。
 st.markdown(
     f"""
     <div class="mode-header">
-        <div class="mode-kicker">当前模式</div>
+        <div class="mode-kicker">当前入口</div>
         <div class="mode-title">{mode}</div>
+        <div class="mode-category">{mode_category}</div>
         <div class="mode-description">{MODE_DESCRIPTIONS[mode]}</div>
     </div>
     """,
@@ -372,6 +498,12 @@ with st.sidebar.expander("对话设置", expanded=True):
     else:
         # 不支持 RAG 的模式不展示开关，避免用户误以为该模式可以检索文档
         st.info("当前模式暂不支持文档检索增强（RAG）。")
+
+# 用横线结束对话设置区域，让对话设置和下方会话控制按钮形成清晰分组
+st.sidebar.markdown(
+    '<div style="border-top: 1px solid rgba(49, 51, 63, 0.18); margin: -8px 0 0 0;"></div>',
+    unsafe_allow_html=True
+)
 
 
 # -----------------------------

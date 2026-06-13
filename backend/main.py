@@ -21,7 +21,7 @@ from backend.db import init_database
 
 # 创建 FastAPI 应用实例
 app = FastAPI(
-    title="AI 内容分析与创作助手", # 接口文档里显示的项目名称
+    title="基于 RAG 的企业知识库问答与评测平台", # 接口文档里显示的项目名称
     version="0.1.0" # 当前后端版本号
 )
 
