@@ -2,7 +2,7 @@
 Schema 数据模型模块。
 
 职责：
-1. 定义前后端交互时使用的核心数据结构，包括聊天请求、流式事件、文档索引、RAG 引用预览、RAG 状态、聊天历史恢复与会话创建等接口模型
+1. 定义前后端交互时使用的核心数据结构，包括聊天请求、流式事件、文档索引、RAG 引用预览、RAG 状态、聊天历史恢复、会话列表与会话创建等接口模型
 2. 通过 Pydantic 模型约束字段类型、默认值和取值范围，保证接口输入输出结构清晰、可校验、可维护
 3. 统一管理聊天、工作流、轻量 Agent、RAG 检索增强、SQLite 历史持久化相关的数据协议
 4. 作为 API 层、Service 层、Repository 层和前端之间的“数据契约”
@@ -14,7 +14,7 @@ Schema 数据模型模块。
 - StreamEvent 用于 SSE 流式响应协议
 - IndexDocumentRequest / IndexDocumentResponse 用于文档索引接口
 - RagPreviewRequest / RagPreviewResponse / RagStatusResponse 用于 RAG 检索引用预览与状态查询
-- ChatHistoryRequest / ChatSessionCreateRequest 用于聊天历史恢复和会话管理
+- ChatHistoryRequest / ChatSessionSummary / ChatSessionDetailResponse / ChatSessionCreateRequest 用于聊天历史恢复和会话管理
 - 适合当前项目“流式输出 + 多模式内容处理 + 可解释 RAG + SQLite 历史持久化”的工程结构
 """
 
@@ -149,6 +149,43 @@ class ChatHistoryRequest(BaseModel):
     前端刷新后恢复历史时使用的请求模型。
     """
     mode_names: List[str] # 需要恢复历史会话的前端模式名称列表
+
+
+class ChatSessionSummary(BaseModel):
+    """
+    侧边栏历史会话摘要模型。
+
+    用于展示最近会话列表，不包含完整消息内容。
+    """
+    session_id: str  # 会话 ID
+    mode: str  # 会话所属模式
+    title: str = "未命名会话"  # 会话标题
+    created_at: str  # 会话创建时间
+    updated_at: str  # 会话最后更新时间
+    message_count: int = 0  # 会话消息数量
+
+
+class ChatSessionListResponse(BaseModel):
+    """
+    最近会话列表响应模型。
+
+    用于前端侧边栏展示最近 10 条历史会话。
+    """
+    sessions: List[ChatSessionSummary]  # 最近会话摘要列表
+
+
+class ChatSessionDetailResponse(BaseModel):
+    """
+    指定会话详情响应模型。
+
+    用于点击历史会话后恢复对应消息。
+    """
+    session_id: str  # 会话 ID
+    mode: str  # 会话所属模式
+    title: Optional[str] = None  # 会话标题
+    created_at: str  # 会话创建时间
+    updated_at: str  # 会话最后更新时间
+    messages: List[Dict[str, Any]] = Field(default_factory=list)  # 会话下的全部消息
 
 
 class ChatSessionCreateRequest(BaseModel):

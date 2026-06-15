@@ -3,7 +3,7 @@
 
 职责：
 1. 统一封装 Streamlit 前端对 FastAPI 后端接口的调用
-2. 提供聊天历史恢复、空会话创建、会话删除等会话管理请求能力
+2. 提供聊天历史恢复、最近会话列表、指定会话恢复、空会话创建、会话删除等会话管理请求能力
 3. 提供文档索引、文档清理、RAG 引用预览查询和 RAG 状态查询能力
 4. 提供聊天 / 工作流 / 轻量 Agent 流式请求发送能力
 5. 提供 SSE 事件流解析能力，将后端返回的 data: {...} 事件转换为前端可直接消费的事件字典
@@ -69,6 +69,89 @@ def load_chat_history(mode_names: list[str]) -> dict | None:
         return None
 
     return mode_sessions
+
+
+def list_recent_chat_sessions(limit: int = 10) -> list[dict]:
+    """
+    获取最近更新的聊天会话列表。
+
+    函数说明：
+    - 调用后端 GET /chat_sessions 接口
+    - 默认获取最近10条非空会话
+    - 用于左侧边栏展示历史会话入口
+    - 请求失败时返回空列表，避免影响主页面使用
+
+    :param limit: 最多获取多少条历史会话
+    :return: 最近会话摘要列表；请求失败时返回空列表
+    """
+    try:
+        # 调用后端最近会话列表接口
+        response = requests.get(
+            f"{BACKEND_BASE_URL}/chat_sessions",
+            params={"limit": limit},
+            timeout=10
+        )
+    except requests.RequestException:
+        # 后端不可用时不阻断页面，只是不展示历史列表
+        return []
+
+    # 状态码异常时返回空列表
+    if response.status_code != 200:
+        return []
+
+    # 读取响应中的 sessions 字段
+    sessions = response.json().get("sessions", [])
+    # 只有列表结构才返回给页面层
+    if not isinstance(sessions, list):
+        return []
+
+    # 过滤掉异常元素，避免脏数据影响侧边栏渲染
+    return [
+        session
+        for session in sessions
+        if isinstance(session, dict)
+    ]
+
+
+def load_chat_session(session_id: str) -> dict | None:
+    """
+    获取指定聊天会话详情。
+
+    函数说明：
+    - 调用后端 GET /chat_session/{session_id} 接口
+    - 获取会话所属模式和完整消息列表
+    - 用于用户点击侧边栏历史会话后恢复对应聊天
+    - 请求失败时返回 None，避免页面中断
+
+    :param session_id: 需要恢复的会话ID
+    :return: 会话详情字典；请求失败或结构异常时返回 None
+    """
+    try:
+        # 调用后端指定会话详情接口
+        response = requests.get(
+            f"{BACKEND_BASE_URL}/chat_session/{session_id}",
+            timeout=10
+        )
+    except requests.RequestException:
+        # 网络异常时返回 None，由页面层决定是否提示
+        return None
+
+    # 状态码异常时返回 None
+    if response.status_code != 200:
+        return None
+
+    # 解析响应 JSON
+    session = response.json()
+    # 必须是字典结构，且包含 session_id、mode、messages 三个关键字段
+    if not isinstance(session, dict):
+        return None
+
+    # 消息列表必须是列表结构
+    if not isinstance(session.get("messages"), list):
+        return None
+
+    # 返回会话详情
+    return session
 
 
 def create_chat_session(session_id: str, mode: str) -> None:

@@ -6,7 +6,7 @@
 2. 管理聊天消息(chat_messages)的数据读写，并支持保存单条消息的展示元数据
 3. 管理上传文档(documents)及文本块(document_chunks)的数据写入
 4. 管理 RAG 查询记录(rag_queries)及命中记录(rag_hits)的数据写入
-5. 提供历史会话恢复能力
+5. 提供历史会话恢复能力，并支持最近会话列表与指定会话详情读取
 6. 提供会话删除能力
 7. 将数据库记录转换为前端可直接使用的数据结构
 
@@ -251,6 +251,117 @@ def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]
             }
 
     return mode_sessions
+
+
+def list_recent_chat_sessions(limit: int = 10) -> list[dict[str, Any]]:
+    """
+    查询最近更新的聊天会话列表。
+
+    函数说明：
+    1. 从 chat_sessions 表中读取最近更新的会话。
+    2. 关联 chat_messages 统计每个会话的消息数量。
+    3. 只返回已经产生过消息的会话，避免空会话干扰前端历史列表。
+    4. title 为空时使用第一条用户消息作为兜底标题。
+
+    :param limit: 最多返回多少条会话记录，默认返回最近10条
+    :return: 最近会话摘要列表，供前端侧边栏展示
+    """
+    # 将 limit 转成整数，避免外部传入异常类型
+    safe_limit = int(limit or 10)
+    # 限制返回数量范围，避免一次性读取过多历史数据
+    safe_limit = max(1, min(safe_limit, 50))
+
+    # 打开数据库连接，读取最近会话摘要
+    with get_connection() as connection:
+        # 查询最近更新的非空会话，并用第一条用户消息兜底标题
+        rows = connection.execute(
+            """
+            SELECT
+                chat_sessions.id AS session_id,
+                chat_sessions.mode AS mode,
+                COALESCE(
+                    NULLIF(TRIM(chat_sessions.title), ''),
+                    (
+                        SELECT chat_messages.content
+                        FROM chat_messages
+                        WHERE chat_messages.session_id = chat_sessions.id
+                          AND chat_messages.role = 'user'
+                        ORDER BY chat_messages.message_order ASC, chat_messages.id ASC
+                        LIMIT 1
+                    ),
+                    '未命名会话'
+                ) AS title,
+                chat_sessions.created_at AS created_at,
+                chat_sessions.updated_at AS updated_at,
+                COUNT(chat_messages.id) AS message_count
+            FROM chat_sessions
+            LEFT JOIN chat_messages ON chat_messages.session_id = chat_sessions.id
+            GROUP BY chat_sessions.id
+            HAVING COUNT(chat_messages.id) > 0
+            ORDER BY chat_sessions.updated_at DESC, chat_sessions.created_at DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+
+    # 将 sqlite3.Row 转成前端更容易消费的普通字典
+    return [
+        {
+            "session_id": row["session_id"],
+            "mode": row["mode"],
+            "title": row["title"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "message_count": int(row["message_count"]),
+        }
+        for row in rows
+    ]
+
+
+def get_chat_session_detail(session_id: str | None) -> dict[str, Any] | None:
+    """
+    读取指定聊天会话详情。
+
+    函数说明：
+    1. 根据 session_id 查询 chat_sessions 会话记录。
+    2. 读取该会话下的所有消息，并转换为前端消息结构。
+    3. 会话不存在时返回 None，由 API 层转换为 404。
+
+    :param session_id: 需要恢复的会话ID
+    :return: 会话详情字典；会话不存在时返回 None
+    """
+    # 如果没有传入会话ID，直接返回 None
+    if not session_id:
+        return None
+
+    # 打开数据库连接，查询会话基础信息
+    with get_connection() as connection:
+        # 根据主键读取会话记录
+        session = connection.execute(
+            """
+            SELECT id, mode, title, created_at, updated_at
+            FROM chat_sessions
+            WHERE id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+
+    # 如果数据库里没有这个会话，则交给 API 层返回 404
+    if not session:
+        return None
+
+    # 读取并清洗当前会话的消息列表
+    messages = get_session_messages(session_id)
+
+    # 返回前端恢复会话所需的完整结构
+    return {
+        "session_id": session["id"],
+        "mode": session["mode"],
+        "title": session["title"],
+        "created_at": session["created_at"],
+        "updated_at": session["updated_at"],
+        "messages": messages,
+    }
 
 
 def delete_chat_session(session_id: str | None) -> None:

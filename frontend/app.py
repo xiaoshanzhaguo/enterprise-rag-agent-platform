@@ -3,12 +3,12 @@
 
 职责：
 1. 负责初始化 Streamlit 页面，并组织整个企业知识库问答 Agent 的前端交互流程
-2. 管理多模式会话状态，包括不同模式下的 session_id、历史消息、数据库历史恢复与旧 JSON 历史兜底
+2. 管理多模式会话状态，包括不同模式下的 session_id、历史消息、最近会话列表、数据库历史恢复与旧 JSON 历史兜底
 3. 统一处理用户输入，包括纯文本输入、文件上传输入以及启用 RAG 时的文档索引逻辑
 4. 调用后端聊天接口、工作流接口、RAG 接口和会话管理接口，并解析流式 SSE 响应
 5. 渲染历史消息、当前结果、每条回答对应的 RAG 引用来源、结果复制、Markdown 导出和 workflow 分步复制等前端展示能力
-6. 在左侧边栏展示项目名称、模式选择和对话设置，并按当前模式展示可用的 RAG 设置
-7. 支持清空当前会话，并同步清理后端数据库会话和数据库 RAG 文档
+6. 在左侧边栏展示项目名称、模式选择、对话设置和最近历史会话，并按当前模式展示可用的 RAG 设置
+7. 支持新建会话、点击历史会话恢复对应消息，并通过单条删除按钮清理指定会话及其数据库关联数据
 
 说明：
 - 当前模块属于前端入口层，负责把页面状态管理、用户输入处理、后端请求发送和结果展示串起来
@@ -19,8 +19,9 @@
 # 导入时间模块，使得后面流式输出时用 time.sleep(0.01) 让文本增长更自然
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
-# 导入 uuid4()，生成新的唯一会话 ID，每次清空当前会话时都会生成新的 session_id
+# 导入 uuid4()，生成新的唯一会话 ID，每次重置当前前端会话时都会生成新的 session_id
 from uuid import uuid4
 
 
@@ -40,12 +41,13 @@ from backend.utils.workflow_formatter import format_workflow_blocks
 # 导入“前端请求封装层”里的函数
 from frontend.api_client import (
     clear_chat_session, # 删除后端数据库中的聊天会话
-    clear_indexed_document, # 通知后端删除某个会话的文档索引
     index_uploaded_document, # 通知后端给文档建立索引
     iter_sse_events, # 逐条解析后端返回的 SSE 事件流
     get_rag_preview, # 获取本次 query 命中的 RAG 片段摘要
     get_rag_status, # 获取当前会话的 RAG 状态
+    list_recent_chat_sessions, # 获取最近更新的历史会话列表
     load_chat_history, # 从后端数据库恢复聊天历史
+    load_chat_session, # 根据 session_id 获取指定历史会话详情
     post_stream_request # 统一发送流式请求到后端
 )
 
@@ -166,6 +168,34 @@ st.markdown(
     section[data-testid="stSidebar"] [data-testid="stExpander"] {
         margin-top: 8px;
     }
+    .sidebar-history-title {
+        margin: 12px 0 10px 0;
+        color: rgba(49, 51, 63, 0.82);
+        font-size: 0.92rem;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+    .sidebar-history-empty {
+        margin: 0 0 8px 0;
+        color: rgba(49, 51, 63, 0.56);
+        font-size: 0.86rem;
+        line-height: 1.45;
+    }
+    section[data-testid="stSidebar"] .st-key-sidebar_history_list[data-testid="stVerticalBlock"],
+    section[data-testid="stSidebar"] .st-key-sidebar_history_list [data-testid="stVerticalBlock"] {
+        /* 只压缩会话历史列表内部间距，避免影响整个侧边栏的功能区和设置区 */
+        gap: 0;
+    }
+    .sidebar-history-row-gap {
+        height: 5px;
+    }
+    section[data-testid="stSidebar"] .st-key-sidebar_history_list [data-testid="stElementContainer"]:has(.sidebar-history-row-gap),
+    section[data-testid="stSidebar"] .st-key-sidebar_history_list [data-testid="stMarkdown"]:has(.sidebar-history-row-gap),
+    section[data-testid="stSidebar"] .st-key-sidebar_history_list [data-testid="stMarkdownContainer"]:has(.sidebar-history-row-gap) {
+        /* Streamlit 会给 markdown 外层包一层高度为 0 的容器，这里让 spacer 真正参与历史行布局 */
+        min-height: 5px;
+        height: 5px;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -244,6 +274,329 @@ def sync_mode_from_group() -> None:
     st.session_state.selected_mode = st.session_state.get("auxiliary_mode", AUXILIARY_MODES[0])
 
 
+def format_history_session_time(timestamp_text: str | None) -> str | None:
+    """
+    将数据库时间格式化为会话历史显示名称。
+
+    函数说明：
+    1. 接收数据库中的 created_at 或 updated_at 字符串。
+    2. 优先按 YYYY-MM-DD HH:MM:SS 解析。
+    3. 兼容 ISO 格式时间字符串。
+    4. 格式化为 YYYY-MM-DD_HH-MM-SS，作为更简洁的会话历史名称。
+
+    :param timestamp_text: 数据库返回的时间字符串
+    :return: 格式化后的时间名称；解析失败时返回 None
+    """
+    # 如果没有时间字符串，直接返回 None，让外层继续使用其他兜底字段
+    if not timestamp_text:
+        return None
+
+    # 去掉首尾空白，避免数据库值或接口值带空格影响解析
+    normalized_timestamp = str(timestamp_text).strip()
+    # 如果清理后为空字符串，直接返回 None
+    if not normalized_timestamp:
+        return None
+
+    # 当前数据库默认保存的是本地时间字符串，例如 2026-06-14 19:30:00
+    parse_patterns = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+    ]
+
+    # 逐个尝试已知时间格式
+    for pattern in parse_patterns:
+        try:
+            # 解析时间字符串。将字符串转换成 datatime 对象
+            parsed_time = datetime.strptime(normalized_timestamp, pattern)
+        except ValueError:
+            # 当前格式不匹配时继续尝试下一个格式
+            continue
+
+        # 返回用户希望的会话历史名称格式。将 datetime对象 转换成字符串
+        return parsed_time.strftime("%Y-%m-%d_%H-%M-%S")
+
+    try:
+        # 兼容带毫秒或时区的 ISO 字符串
+        parsed_time = datetime.fromisoformat(normalized_timestamp)
+    except ValueError:
+        # 所有解析方式都失败时返回 None
+        return None
+
+    # 返回用户希望的会话历史名称格式
+    return parsed_time.strftime("%Y-%m-%d_%H-%M-%S")
+
+
+def build_history_session_label(session: dict) -> str:
+    """
+    构造侧边栏历史会话展示文案。
+
+    函数说明：
+    1. 优先使用 updated_at 作为会话历史名称。
+    2. 如果 updated_at 不存在，则使用 created_at 兜底。
+    3. 时间统一格式化为 YYYY-MM-DD_HH-MM-SS，让左侧会话历史更简洁。
+    4. 如果时间字段异常，再使用原始 title 兜底。
+
+    :param session: 后端返回的会话摘要字典
+    :return: 适合侧边栏展示的会话文案
+    """
+    # 优先使用 updated_at，表示这个会话最近一次发生变化的时间
+    formatted_updated_time = format_history_session_time(session.get("updated_at"))
+    # 如果 updated_at 可以解析，则直接作为会话历史名称
+    if formatted_updated_time:
+        return formatted_updated_time
+
+    # updated_at 不可用时，使用 created_at 作为兜底
+    formatted_created_time = format_history_session_time(session.get("created_at"))
+    # 如果 created_at 可以解析，则直接作为会话历史名称
+    if formatted_created_time:
+        return formatted_created_time
+
+    # 如果时间字段都异常，则保留原始标题兜底，避免按钮为空
+    fallback_title = " ".join(str(session.get("title") or "未命名会话").split())
+    # 返回兜底标题
+    return fallback_title or "未命名会话"
+
+
+def restore_history_session(session: dict) -> bool:
+    """
+    将指定历史会话恢复为当前前端会话。
+
+    函数说明：
+    1. 校验后端返回的会话模式是否属于当前前端支持的模式。
+    2. 将该 session_id 和 messages 写入对应模式的 mode_sessions。
+    3. 同步左侧功能类型与当前模式，保证页面刷新后展示正确入口。
+    4. 清理该模式的前端 RAG 指纹缓存，让文档状态以后端数据库为准重新判断。
+
+    :param session: 后端返回的会话详情字典
+    :return: True 表示恢复成功；False 表示会话结构不合法
+    """
+    # 读取会话 ID
+    session_id = str(session.get("session_id") or "")
+    # 读取会话所属模式
+    session_mode = str(session.get("mode") or "")
+    # 读取会话消息列表
+    messages = session.get("messages", [])
+
+    # 会话 ID、模式和消息列表任一不合法，都不能恢复
+    if not session_id or session_mode not in AVAILABLE_MODES or not isinstance(messages, list):
+        return False
+
+    # 把历史会话写回它所属模式的前端状态
+    st.session_state.mode_sessions[session_mode] = {
+        "session_id": session_id,
+        "messages": messages
+    }
+
+    # 如果恢复的是核心功能，则左侧功能类型切回核心功能
+    if session_mode in CORE_MODES:
+        st.session_state.mode_group = "核心功能"
+    else:
+        # 如果恢复的是附加功能，则左侧功能类型切回附加功能
+        st.session_state.mode_group = "附加功能"
+        # 同步附加功能下拉框选中项
+        st.session_state.auxiliary_mode = session_mode
+
+    # 同步当前模式
+    st.session_state.selected_mode = session_mode
+    # 清理该模式前端内存索引状态，后续 RAG 状态重新以数据库查询结果为准
+    st.session_state.rag_index_state.pop(session_mode, None)
+    # 返回恢复成功
+    return True
+
+
+def reset_mode_to_empty_session(session_mode: str) -> None:
+    """
+    将指定模式重置为一个新的空前端会话。
+
+    函数说明：
+    1. 生成新的 session_id，但不立即写入数据库。
+    2. 清空该模式的前端消息列表。
+    3. 清理该模式的前端 RAG 指纹缓存。
+    4. 用于删除当前正在使用的历史会话后重置前端状态。
+
+    :param session_mode: 需要重置的前端模式名称
+    :return: None
+    """
+    # 如果传入模式不在当前支持列表中，则不处理
+    if session_mode not in AVAILABLE_MODES:
+        return
+
+    # 生成新的会话 ID，只更新前端状态；数据库等用户真正发送内容时再创建记录
+    new_session_id = str(uuid4())
+
+    # 重置指定模式下正在使用的会话
+    st.session_state.mode_sessions[session_mode] = {
+        "session_id": new_session_id,
+        "messages": []
+    }
+
+    # 清空该模式的前端索引状态缓存
+    st.session_state.rag_index_state.pop(session_mode, None)
+
+
+def render_sidebar_session_area(active_mode: str) -> None:
+    """
+    渲染侧边栏会话入口区域。
+
+    函数说明：
+    1. 在项目标题下方展示“新建会话”和最近会话列表。
+    2. 点击历史会话时，把待恢复会话写入 pending_history_session，下一轮页面重跑时再恢复。
+    3. 删除历史会话时，同步清理数据库记录和前端缓存状态。
+    4. 该区域放在功能选择之前，让用户先看到当前项目的会话上下文。
+
+    :param active_mode: 当前前端正在使用的模式名称
+    :return: None
+    """
+    # 如果当前模式不在支持列表中，则不渲染会话区域，避免异常状态影响页面启动
+    if active_mode not in AVAILABLE_MODES:
+        return
+
+    # 读取当前模式正在使用的 session_id，用于高亮当前会话
+    active_session_id = st.session_state.mode_sessions[active_mode]["session_id"]
+
+    # 侧边栏新建会话按钮
+    # 新建会话只切换到新的空 session，不删除旧会话；旧会话继续留在数据库和历史列表中
+    if st.sidebar.button(
+        "新建会话",
+        width="stretch",
+        icon="✏️"
+    ):
+        # 当前项目在发送消息时已自动落库，这里只需要重置前端当前模式到新的空会话
+        reset_mode_to_empty_session(active_mode)
+        # 刷新页面，让新的 session_id、RAG 状态和输入区立即生效
+        st.rerun()
+
+    # 侧边栏会话历史列表
+    st.sidebar.markdown(
+        '<div class="sidebar-history-title">会话历史</div>',
+        unsafe_allow_html=True
+    )
+
+    # 从后端数据库读取最近10条非空会话，用于展示 SQLite 持久化历史能力
+    recent_sessions = list_recent_chat_sessions(limit=10)
+
+    # 如果没有历史会话，则展示轻量空状态
+    if not recent_sessions:
+        st.sidebar.markdown(
+            '<div class="sidebar-history-empty">暂无会话历史，发送第一条消息后会自动出现。</div>',
+            unsafe_allow_html=True
+        )
+        return
+
+    # 过滤出 session_id 合法的会话，避免异常数据影响按钮 key
+    valid_recent_sessions = [
+        session
+        for session in recent_sessions
+        if session.get("session_id")
+    ]
+
+    # 如果过滤后没有可用会话 ID，则展示空状态
+    if not valid_recent_sessions:
+        st.sidebar.markdown(
+            '<div class="sidebar-history-empty">暂无可展示的历史会话。</div>',
+            unsafe_allow_html=True
+        )
+        return
+
+    # 在侧边栏容器中渲染“加载 + 删除”两列按钮
+    with st.sidebar.container(key="sidebar_history_list"):
+        # 遍历最近10条会话，保持后端按更新时间倒序返回的顺序
+        for index, session in enumerate(valid_recent_sessions):
+            # 读取当前行的会话 ID
+            history_session_id = str(session.get("session_id"))
+            # 读取当前行的会话模式，用于删除当前模式缓存时定位
+            history_session_mode = str(session.get("mode") or "")
+            # 判断当前行是否就是页面正在展示的会话
+            is_current_history_session = history_session_id == active_session_id
+            # 构造侧边栏按钮展示文案
+            history_label = build_history_session_label(session)
+
+            # 一行分成两列：左侧加载会话，右侧删除会话
+            load_col, delete_col = st.columns([4, 1])
+
+            with load_col:
+                # 点击左侧按钮时加载对应会话；当前会话使用 primary 高亮
+                if st.button(
+                    history_label,
+                    width="stretch",
+                    icon="📄",
+                    key=f"load_history_{history_session_id}",
+                    type="primary" if is_current_history_session else "secondary"
+                ):
+                    # 当前会话已经在页面上，不需要重复恢复
+                    if is_current_history_session:
+                        st.rerun()
+
+                    # 从后端读取完整会话详情
+                    selected_session = load_chat_session(history_session_id)
+                    # 如果读取成功，则先写入待恢复状态，下一轮在控件渲染前真正恢复
+                    if selected_session:
+                        st.session_state.pending_history_session = selected_session
+                        st.rerun()
+                    else:
+                        # 恢复失败时给出侧边栏提示，不影响当前会话继续使用
+                        st.sidebar.warning("历史会话恢复失败，请稍后重试。")
+
+            with delete_col:
+                # 点击右侧按钮时删除该会话；只删除这一条历史会话，不影响其他会话
+                if st.button(
+                    "",
+                    width="stretch",
+                    icon="❌",
+                    key=f"delete_history_{history_session_id}"
+                ):
+                    # 删除数据库中的会话及其关联消息、文档和 RAG 记录
+                    clear_chat_session(history_session_id)
+
+                    # 如果删除的是当前正在展示的会话，则把该模式重置为空会话
+                    if is_current_history_session:
+                        reset_mode_to_empty_session(active_mode)
+                    # 如果删除的是其他模式当前缓存的会话，也同步清理该模式的前端状态
+                    elif (
+                        history_session_mode in st.session_state.mode_sessions
+                        and st.session_state.mode_sessions[history_session_mode]["session_id"] == history_session_id
+                    ):
+                        reset_mode_to_empty_session(history_session_mode)
+
+                    # 删除完成后刷新页面，更新侧边栏历史列表
+                    st.rerun()
+
+            # 如果后面还有历史会话，则插入 5px 间距，让多条会话之间更容易区分
+            if index < len(valid_recent_sessions) - 1:
+                st.markdown(
+                    '<div class="sidebar-history-row-gap"></div>',
+                    unsafe_allow_html=True
+                )
+
+
+# -----------------------------
+# Session State 初始化
+# 如果不存在，或被清空为 {}，则重新初始化
+# 这里必须放在功能类型 radio 渲染之前：
+# - 历史会话恢复可能需要同步 mode_group / auxiliary_mode
+# - Streamlit 不允许在 radio 渲染后再修改同名 session_state
+# -----------------------------
+if "mode_sessions" not in st.session_state or not st.session_state.mode_sessions:
+    # 页面初始化时优先从后端 SQLite 数据库恢复历史会话；
+    # 如果后端不可用、请求失败或数据库暂无历史，则回退读取旧版本地 JSON 历史。
+    db_mode_sessions = load_chat_history(AVAILABLE_MODES)
+    st.session_state.mode_sessions = db_mode_sessions or load_mode_sessions(AVAILABLE_MODES)
+
+# 确保所有当前支持的模式都有自己的会话容器
+st.session_state.mode_sessions = ensure_mode_sessions(
+    st.session_state.mode_sessions,
+    AVAILABLE_MODES
+)
+
+# -----------------------------
+# 初始化前端文件指纹缓存
+# 用于记录当前页面运行期间上传文件的指纹，避免同一 session 重复索引同一份文件
+# 当前 RAG 文档状态以数据库 /rag_status 返回结果为准
+# -----------------------------
+if "rag_index_state" not in st.session_state:
+    st.session_state.rag_index_state = {}
+
+
 # 初始化功能类型和当前模式，保证首次进入页面默认展示企业知识库问答
 if "selected_mode" not in st.session_state:
     st.session_state.selected_mode = CORE_MODES[0]
@@ -253,6 +606,26 @@ if "mode_group" not in st.session_state:
 
 if "auxiliary_mode" not in st.session_state:
     st.session_state.auxiliary_mode = AUXILIARY_MODES[0]
+
+
+# 如果上一轮点击了历史会话加载按钮，则在控件渲染前恢复状态
+pending_history_session = st.session_state.pop("pending_history_session", None)
+# 只有字典结构才尝试恢复，避免异常状态影响页面启动
+if isinstance(pending_history_session, dict):
+    restore_history_session(pending_history_session)
+
+
+# 先根据当前 session_state 推导一个侧边栏会话区域使用的模式。
+# 该区域显示在功能选择之前，因此不能依赖后面 radio 渲染之后才得到的 mode 变量。
+sidebar_session_mode = st.session_state.selected_mode
+
+# 会话入口放在项目标题下方，让用户先看到当前项目的会话上下文
+render_sidebar_session_area(sidebar_session_mode)
+
+st.sidebar.markdown(
+    '<div style="border-top: 1px solid rgba(49, 51, 63, 0.18); margin: 10px 0 10px 0;"></div>',
+    unsafe_allow_html=True
+)
 
 
 # 先选择功能类型，避免在一个下拉框里重复显示“附加功能”前缀
@@ -403,30 +776,6 @@ UPLOAD_ENABLED_MODES = {
 }
 
 
-# -----------------------------
-# Session State 初始化
-# 如果不存在，或被清空为 {}，则重新初始化
-# -----------------------------
-if "mode_sessions" not in st.session_state or not st.session_state.mode_sessions:
-    # 页面初始化时优先从后端 SQLite 数据库恢复历史会话；
-    # 如果后端不可用、请求失败或数据库暂无历史，则回退读取旧版本地 JSON 历史。
-    db_mode_sessions = load_chat_history(AVAILABLE_MODES)
-    st.session_state.mode_sessions = db_mode_sessions or load_mode_sessions(AVAILABLE_MODES)
-
-# 确保所有当前支持的模式都有自己的会话容器
-st.session_state.mode_sessions = ensure_mode_sessions(
-    st.session_state.mode_sessions,
-    AVAILABLE_MODES
-)
-
-# -----------------------------
-# 初始化前端文件指纹缓存
-# 用于记录当前页面运行期间上传文件的指纹，避免同一 session 重复索引同一份文件
-# 当前 RAG 文档状态以数据库 /rag_status 返回结果为准
-# -----------------------------
-if "rag_index_state" not in st.session_state:
-    st.session_state.rag_index_state = {}
-
 # 当前模式对应的会话状态：当前模式完整会话对象、session_id、消息列表
 current_session = st.session_state.mode_sessions[mode]
 current_session_id = current_session["session_id"]
@@ -499,13 +848,6 @@ with st.sidebar.expander("对话设置", expanded=True):
         # 不支持 RAG 的模式不展示开关，避免用户误以为该模式可以检索文档
         st.info("当前模式暂不支持文档检索增强（RAG）。")
 
-# 用横线结束对话设置区域，让对话设置和下方会话控制按钮形成清晰分组
-st.sidebar.markdown(
-    '<div style="border-top: 1px solid rgba(49, 51, 63, 0.18); margin: -8px 0 0 0;"></div>',
-    unsafe_allow_html=True
-)
-
-
 # -----------------------------
 # 展示当前模式的历史消息
 # assistant 消息支持 Markdown，便于工作流分段展示
@@ -551,30 +893,6 @@ for idx, message in enumerate(current_messages):
                     workflow_blocks=message["workflow_blocks"],
                     widget_key_suffix=f"history_steps_{idx}"
                 )
-
-
-# -----------------------------
-# 会话控制按钮
-# -----------------------------
-if st.sidebar.button("清空当前会话"):
-    # 清理当前会话对应的数据库 RAG 文档和数据库会话数据，只影响当前模式，不影响其他模式的历史
-    old_session_id = st.session_state.mode_sessions[mode]["session_id"]
-    clear_indexed_document(old_session_id)
-    clear_chat_session(old_session_id)
-
-    # 生成新的会话 ID，只更新前端状态；数据库等用户真正发送内容时再创建记录
-    new_session_id = str(uuid4())
-
-    # 重置当前模式下正在使用的会话
-    st.session_state.mode_sessions[mode] = {
-        "session_id": new_session_id,
-        "messages": []
-    }
-
-    # 只清空当前模式的前端索引状态缓存
-    st.session_state.rag_index_state.pop(mode, None)
-
-    st.rerun()
 
 # -----------------------------
 # RAG 文档状态提示
@@ -976,3 +1294,5 @@ if chat_submission:
 
                 # 将 assistant 消息追加到当前模式的历史消息列表里
                 current_messages.append(assistant_message)
+                # 后端已经完成本轮消息落库后，刷新页面让侧边栏重新读取最新会话列表
+                st.rerun()

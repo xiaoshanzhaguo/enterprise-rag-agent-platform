@@ -7,7 +7,7 @@ API 路由模块。
 3. 提供工作流和轻量 Agent 流式响应接口
 4. 提供文档上传、文本切块、RAG 索引构建、检索预览、状态查询与清理接口
 5. 提供聊天历史恢复接口
-6. 提供聊天会话创建、恢复与删除接口
+6. 提供最近会话列表、指定会话恢复、会话创建与删除接口
 7. 统一作为前端与业务服务层之间的请求入口
 
 说明：
@@ -29,6 +29,8 @@ API 路由模块。
 
 聊天历史相关：
 - POST /chat_history
+- GET /chat_sessions
+- GET /chat_session/{session_id}
 - POST /chat_session
 - DELETE /chat_session/{session_id}
 
@@ -44,7 +46,7 @@ RAG 相关：
 - RAG 检索记录持久化存储于 SQLite，检索预览会返回引用来源和命中原文片段
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.llm.client import get_client
 from backend.rag.chunker import split_text_into_chunks
@@ -54,10 +56,14 @@ from backend.rag.store import get_document_status
 from backend.rag.service import build_rag_preview, resolve_retrieval_mode
 from backend.db.repository import delete_chat_session
 from backend.db.repository import ensure_chat_session
+from backend.db.repository import get_chat_session_detail
+from backend.db.repository import list_recent_chat_sessions
 from backend.db.repository import load_latest_mode_sessions
 from backend.schema.chat_schema import (
     ChatRequest,
     ChatHistoryRequest,
+    ChatSessionDetailResponse,
+    ChatSessionListResponse,
     ChatSessionCreateRequest,
     IndexDocumentRequest,
     IndexDocumentResponse,
@@ -85,6 +91,40 @@ def chat_history(request: ChatHistoryRequest):
     return {
         "mode_sessions": load_latest_mode_sessions(request.mode_names)
     }
+
+
+@router.get("/chat_sessions", response_model=ChatSessionListResponse)
+def chat_sessions(limit: int = Query(default=10, ge=1, le=50)):
+    """
+    返回最近更新的聊天会话列表，用于前端侧边栏展示历史会话。
+
+    :param limit: 最多返回多少条会话，默认10条
+    :return: 最近会话摘要列表
+    """
+    # 读取最近更新的会话摘要；Repository 会过滤空会话
+    sessions = list_recent_chat_sessions(limit=limit)
+    # 按响应模型返回，保证前端拿到稳定字段
+    return {
+        "sessions": sessions
+    }
+
+
+@router.get("/chat_session/{session_id}", response_model=ChatSessionDetailResponse)
+def chat_session_detail(session_id: str):
+    """
+    返回指定会话详情，用于前端点击历史会话后恢复对应消息。
+
+    :param session_id: 需要恢复的会话ID
+    :return: 会话详情与消息列表
+    """
+    # 从数据库读取指定会话详情
+    session = get_chat_session_detail(session_id)
+    # 会话不存在时返回 404，避免前端误以为恢复成功
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在或已被删除。")
+
+    # 返回会话详情
+    return session
 
 
 @router.post("/chat_session")
