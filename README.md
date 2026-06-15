@@ -1,147 +1,301 @@
-# AI内容分析与创作助手
+# 基于 RAG 的企业知识库问答与评测平台
 
-> 一个面向 **AI 应用开发工程师** 岗位展示的 **AI 内容分析与创作助手** 项目。项目采用 **Streamlit + FastAPI + OpenAI SDK 兼容调用** 的前后端分离架构，聚焦内容理解、内容加工、文本创作与多步骤分析流程，支持多模式问答、流式输出和基础工作流编排。
+> 面向企业内部文档的知识库问答 Agent，支持文档上传、语义检索、引用回答、无依据拒答、会话持久化和评测集验证。项目采用 Streamlit + FastAPI + SQLite + ChromaDB 的前后端分离架构，形成从文档入库、检索问答到效果评测的完整闭环。
 
 ---
 
 ## 项目定位
 
-本项目定位为一个聚焦 **内容理解、内容分析、内容优化与内容生成** 的 **AI 内容分析与创作助手**。它的目标不是训练底层模型，而是围绕 **大模型接入、Prompt 工程、内容处理工作流、流式交互体验、前后端联调** 等关键能力，完成一个可运行、可展示、可持续扩展的 AI 应用原型。
+本项目定位为一个 **企业知识库问答 Agent**，核心目标是让用户可以上传企业内部文档，并围绕文档内容进行可追溯、可解释、可评测的问答。
 
-项目主要面向以下内容生产与分析场景：
+它不是一个只会调用大模型接口的聊天页面，而是围绕真实 RAG 应用链路实现了：
 
-- 长文本总结与重点提炼
-- 文本翻译与跨语言表达
-- 文案改写与表达优化
-- 输入内容的问题分析与改进建议
-- 基于固定步骤的内容处理工作流
-- 面向写作、运营、学习、求职等场景的辅助创作
+- 文档上传与文本切块
+- Embedding 生成与 ChromaDB 向量检索
+- SQLite 持久化会话、消息、文档、chunk、检索记录
+- 带来源引用的回答
+- 检索不到依据时明确拒答
+- 前端展示引用来源、命中片段和检索原因
+- Eval 评测集量化验证 RAG 效果
+- 轻量 Agent 判断问题是否需要知识库
+
+除企业知识库问答主流程外，系统还提供内容分析、结构优化、风格改写、多版本生成和工作流优化等附加文本处理能力，用于覆盖知识库问答之外的常见文本处理场景。
 
 ---
 
-## 功能介绍
+## 核心功能
 
-### 1. 多模式内容处理助手
+### 1. 企业知识库问答
 
-当前系统已支持以下模式：
+用户可以上传企业文档，例如员工手册、制度说明、项目文档、FAQ 等，然后直接围绕文档提问。系统会判断问题是否需要知识库，并在需要时执行 RAG 检索。
 
-- **聊天模式**：支持通用问答与开放式内容交流
-- **总结模式**：对文章、笔记、观点等内容进行概括与重点提炼
-- **翻译模式**：将输入文本翻译为英文，适用于跨语言内容处理
-- **改写模式**：优化文本表达，使文案更清晰、更自然、更适合传播或展示
-- **工作流分析模式**：将用户输入拆解为多个分析步骤，依次输出结果，更适合复杂内容处理任务
+示例：
 
-### 2. 流式输出体验
+```text
+试用期是多久？
+```
 
-后端通过 `StreamingResponse` 实现流式返回，前端逐字符渲染模型输出，让用户能够看到回答逐步生成，提升交互实时性与产品体验。
+回答示例：
 
-### 3. Prompt 分层设计
+```text
+公司试用期为三个月。[来源: 员工手册测试文档.txt#chunk-1]
+```
 
-项目对 Prompt 做了基础模块化设计：
+### 2. 文档上传与切块
 
-- `base_prompt`：系统基础提示
-- `prompt_templates`：角色模板
-- `prompt_builder`：最终 Prompt 拼装逻辑
+前端支持在聊天输入框中附加文档，后端会提取文本、切分 chunk，并保存到 SQLite 数据库。
 
-这种拆分方式有利于后续扩展更多角色、模式和参数配置。
+每个 chunk 会记录：
 
-### 4. 内容分析工作流能力
+- `document_id`
+- `file_name`
+- `chunk_id`
+- `text`
+- `text_length`
+- `created_at`
 
-项目已实现一个基础多步骤内容分析工作流：
+### 3. Embedding + ChromaDB 向量检索
 
-1. 内容总结
-2. 问题分析
-3. 优化建议
+项目支持基于 Embedding 的语义检索，并使用本地 ChromaDB 持久化向量数据，默认目录为：
 
-每个步骤分别调用模型，并以结构化标题分段返回，前端再对返回内容进行格式化展示。这使系统不再局限于简单问答，而是具备了对输入内容进行“理解—拆解—优化”的基础处理能力，也是后续演进到 **Agent / Workflow / 多阶段内容生产编排** 的良好起点。
+```text
+data/chroma/
+```
 
-### 5. RAG 可解释引用面板
+向量库 metadata 会保存：
 
-项目已支持基于 SQLite + ChromaDB 的本地 RAG 检索链路。上传文档后，系统会保存文档 chunk，并在向量检索模式下写入本地向量库。用户提问后，前端会展示本次命中的引用来源和命中原因，包括：
+- `session_id`
+- `document_id`
+- `db_chunk_id`
+- `file_name`
+- `chunk_id`
+
+同时保留关键词检索作为 fallback，可通过配置切换检索方式。
+
+### 4. 引用来源与命中片段展示
+
+RAG 回答会展示对应来源，前端会在回答下方展示引用来源与命中的原文片段，方便用户判断模型回答是否有依据。
+
+展示内容包括：
 
 - `rank`：命中排序
-- `score`：检索相关性分数
+- `score`：相似度或关键词得分
 - `file_name`：来源文件名
 - `chunk_id`：命中文本块编号
 - `text_preview`：命中内容预览
-- `retrieval_mode`：实际检索方式，支持 `vector` / `keyword` / `no_hit`
+- `retrieval_mode`：实际检索方式，如 `vector`、`keyword`、`no_hit`
 
-同时，后端会将历史检索记录写入 `rag_queries` 和 `rag_hits`，便于后续调试检索效果、截图展示和扩展评测流程。
+### 5. 无依据拒答
+
+当知识库中没有可靠依据时，系统会明确返回：
+
+```text
+知识库中没有找到依据。
+```
+
+这种设计可以避免模型在企业知识库场景中凭空编造答案，更符合严肃业务场景下的问答要求。
+
+### 6. RAG 可解释面板
+
+前端会展示本轮问题命中的 top_k 片段、分数、来源文件、chunk 编号和原文预览。后端也会记录检索过程，便于后续调试和展示。
+
+相关数据库表：
+
+- `rag_queries`
+- `rag_hits`
+
+### 7. 聊天会话持久化
+
+聊天会话和消息会写入 SQLite，默认数据库文件为：
+
+```text
+data/app.db
+```
+
+前端侧边栏支持：
+
+- 新建会话
+- 查看最近 10 条会话
+- 点击历史会话恢复消息
+- 当前会话高亮
+- 删除单条历史会话
+- 回复完成后自动刷新历史列表
+
+### 8. Eval 评测集
+
+项目内置轻量评测集，用于量化 RAG 效果。
+
+评测文件：
+
+```text
+eval/questions.jsonl
+eval/run_eval.py
+eval/report.md
+```
+
+项目根目录运行命令：
+
+```bash
+python eval/run_eval.py
+```
+
+评测报告会展示：
+
+- 检索命中率
+- 引用命中率
+- 关键词包含率
+- 无依据拒答准确率
+- 失败案例
 
 ---
 
-## 技术栈
+## 附加文本处理能力
 
-### 后端
+除企业知识库问答主流程外，项目还提供以下附加能力：
 
-- **Python**
-- **FastAPI**：提供后端接口与流式响应
-- **Pydantic**：请求数据校验
-- **OpenAI Python SDK**：兼容式接入模型服务
-- **python-dotenv**：管理环境变量
+- **内容分析**：提炼主题、关键信息、主要结论和关键词
+- **结构优化**：优化文本结构和表达层次
+- **风格改写**：调整文本风格，使表达更自然或更适合目标场景
+- **多版本生成**：围绕同一输入生成多个表达版本
+- **工作流优化**：按步骤总结状态、分析问题并给出优化建议
 
-### 前端
+这些能力用于补充知识库问答之外的文本处理需求，让同一个工作台可以覆盖更多轻量文本任务。
 
-- **Streamlit**：快速搭建 AI 应用交互界面
-- **requests**：前后端通信
+---
 
-### 模型接入
+## 推荐演示流程
 
-- 基于 OpenAI SDK 兼容方式接入第三方大模型服务
-- 当前代码中已封装客户端初始化逻辑，便于后续切换不同模型供应商
+建议按下面顺序演示，能比较完整地展示项目价值：
+
+1. 启动后端和前端
+2. 打开前端页面，确认默认入口为“企业知识库问答”
+3. 上传员工手册测试文档
+4. 提问：
+
+   ```text
+   试用期是多久？
+   ```
+
+5. 查看模型回答中的引用来源
+6. 展开引用来源与命中原文片段
+7. 提问一个文档中没有依据的问题：
+
+   ```text
+   公司是否报销健身卡？
+   ```
+
+8. 展示系统返回“知识库中没有找到依据。”
+9. 查看 RAG 可解释面板中的命中情况
+10. 刷新页面或新建会话，展示聊天会话持久化
+11. 运行评测脚本：
+
+    ```bash
+    python eval/run_eval.py
+    ```
+
+12. 展示 `eval/report.md` 中的评测结果
+
+---
+
+## 技术亮点
+
+- **前后端分离**：Streamlit 负责交互，FastAPI 负责接口和业务流程
+- **SSE 流式输出**：模型回答逐步返回，提升对话体验
+- **SQLite 持久化**：保存会话、消息、文档、chunk、检索问题和命中记录
+- **ChromaDB 向量库**：支持本地持久化语义检索
+- **Embedding 配置化**：支持本地模型或 OpenAI 兼容 embedding 服务
+- **RAG 引用可解释**：前端展示来源、分数、chunk 和原文片段
+- **无依据拒答**：检索不到可靠依据时避免强行回答
+- **Eval 评测集**：用命中率、引用准确率和拒答准确率量化效果
+- **轻量 Agent 决策**：判断问题是否需要知识库，避免所有问题都盲目 RAG
+- **多模式扩展**：在知识库问答主流程之外，提供内容分析和工作流等附加能力
 
 ---
 
 ## 系统架构
 
-```
-+---------------------+
-|   Streamlit 前端    |
-|  模式切换 / 对话窗  |
-|  流式渲染 / 格式化  |
-+----------+----------+
-           |
-           | HTTP / Streaming
-           v
-+---------------------+
-|   FastAPI 后端      |
-|  路由层 / Service   |
-|  Prompt Builder     |
-|  Workflow Engine    |
-+----------+----------+
-           |
-           | OpenAI SDK Compatible API
-           v
-+---------------------+
-|   LLM Provider      |
-|   DeepSeek / 兼容模型 |
-+---------------------+
+```text
++-----------------------------+
+|        Streamlit 前端        |
+|  会话历史 / 文档上传 / RAG展示 |
++--------------+--------------+
+               |
+               | HTTP / SSE
+               v
++-----------------------------+
+|        FastAPI 后端          |
+|  Chat API / Agent / RAG 服务 |
++--------------+--------------+
+               |
+      +--------+--------+
+      |                 |
+      v                 v
++------------+    +-------------+
+|  SQLite    |    |  ChromaDB   |
+| 会话/文档/检索 |    |  向量索引   |
++------------+    +-------------+
+      |
+      v
++-----------------------------+
+| OpenAI SDK 兼容模型与 Embedding |
++-----------------------------+
 ```
 
-### 目录设计
+---
 
-```
+## 目录结构
+
+```text
 ai-assistant-platform/
 ├── backend/
-│   ├── api/                # 路由层
-│   ├── llm/                # 模型客户端封装
-│   ├── prompt/             # Prompt 模板与构建逻辑
-│   ├── schema/             # 请求数据结构
-│   ├── services/           # 核心业务逻辑 / 工作流引擎
-│   └── main.py             # FastAPI 入口
+│   ├── api/                 # FastAPI 路由
+│   ├── db/                  # SQLite 连接、建表和数据读写
+│   ├── llm/                 # LLM 客户端封装
+│   ├── prompt/              # Prompt 模板与构建逻辑
+│   ├── rag/                 # chunk、embedding、向量库和检索服务
+│   ├── schema/              # 请求和响应数据结构
+│   ├── services/            # 聊天、Agent、工作流和元数据服务
+│   └── main.py              # FastAPI 入口
 ├── frontend/
-│   └── app.py              # Streamlit 前端入口
+│   ├── app.py               # Streamlit 前端入口
+│   ├── api_client.py        # 前端请求封装
+│   ├── file_parser.py       # 文件解析
+│   ├── renderers.py         # 前端展示组件
+│   └── state_manager.py     # 前端状态管理
+├── eval/
+│   ├── questions.jsonl      # 评测问题集
+│   ├── run_eval.py          # 评测脚本
+│   └── report.md            # 评测报告
+├── data/
+│   ├── app.db               # SQLite 数据库，运行后生成
+│   └── chroma/              # ChromaDB 向量库，运行后生成
 ├── requirements.txt
+├── .env.example
 └── README.md
 ```
 
-### 分层说明
+---
 
-- **前端层**：负责用户输入、模式切换、历史消息展示、流式渲染
-- **接口层**：负责接收请求并路由到对应服务
-- **服务层**：负责模型调用与业务逻辑封装
-- **Prompt 层**：负责系统角色设定与提示词拼装
-- **模型层**：负责统一封装 LLM 客户端，降低模型切换成本
+## 数据库设计
+
+项目默认使用 SQLite，数据库路径：
+
+```text
+data/app.db
+```
+
+核心表包括：
+
+- `chat_sessions`
+- `chat_messages`
+- `documents`
+- `document_chunks`
+- `rag_queries`
+- `rag_hits`
+- `eval_cases`
+- `eval_results`
+
+这些表分别用于保存聊天会话、消息、上传文档、文档切块、RAG 查询记录、命中片段和评测结果。
 
 ---
 
@@ -154,7 +308,17 @@ git clone https://github.com/xiaoshanzhaguo/ai-intelligent-assistant-platform.gi
 cd ai-intelligent-assistant-platform
 ```
 
-### 2.创建虚拟环境并安装依赖
+### 2. 创建虚拟环境并安装依赖
+
+Windows PowerShell：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+macOS / Linux：
 
 ```bash
 python -m venv .venv
@@ -162,92 +326,146 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Windows 可使用：
+### 3. 配置环境变量
+
+复制 `.env.example` 为 `.env`，然后填写自己的模型服务配置。
 
 ```bash
-.venv\Scripts\activate
+cp .env.example .env
 ```
 
-### 3.配置环境变量
+主要配置项：
 
-在项目根目录创建 `.env` 文件，示例：
-
-```bash
-BASE_URL=your_model_base_url
-```
-
-DEEPSEEK_API_KEY配置在本机的系统环境变量中，示例：
-
-```bash
+```env
+BASE_URL=your_llm_base_url
 DEEPSEEK_API_KEY=your_api_key
+LLM_MODEL=your_llm_model
+
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL=BAAI/bge-m3
+EMBEDDING_BASE_URL=your_embedding_base_url
+EMBEDDING_API_KEY=your_embedding_api_key
+
+VECTOR_STORE_DIR=./data/chroma
+RAG_RETRIEVAL_MODE=vector
+DATABASE_URL=sqlite:///./data/app.db
+FRONTEND_BACKEND_BASE_URL=http://127.0.0.1:8000
 ```
 
-### 4.启动后端
+说明：
+
+- `EMBEDDING_PROVIDER=local` 时，使用本地 embedding 模型，适合演示和低成本测试。
+- `EMBEDDING_PROVIDER=openai` 时，使用 OpenAI 兼容 embedding 服务，需要配置 `EMBEDDING_BASE_URL` 和 `EMBEDDING_API_KEY`。
+- 如果本机设置了 SOCKS 代理，需要确保安装了 `httpx[socks]`，当前 `requirements.txt` 已包含。
+
+### 4. 初始化数据库
+
+```bash
+python -m backend.db.init_db
+```
+
+启动项目时也会连接数据库并创建表，手动执行可以提前确认数据库是否正常生成。
+
+### 5. 启动后端
 
 ```bash
 uvicorn backend.main:app --reload --port 8000
 ```
 
-### 5.启动前端
+### 6. 启动前端
 
 ```bash
 streamlit run frontend/app.py
 ```
 
-### 6.打开页面
-
-默认浏览器访问 Streamlit 本地地址即可开始体验。
+默认打开 Streamlit 本地页面后，即可开始上传文档并进行企业知识库问答。
 
 ---
 
-## 核心亮点
+## 评测方式
 
-### 1. 聚焦“内容分析 + 内容创作”场景
+运行：
 
-项目不是泛泛的聊天机器人，而是围绕 **内容理解、内容提炼、表达优化、创作辅助** 进行功能设计，更贴近真实 AI 内容应用场景，例如写作助手、运营文案助手、学习笔记助手、求职表达优化助手等。
+```bash
+python eval/run_eval.py
+```
 
-### 2. 具备完整 AI 应用闭环
+生成或更新：
 
-不是单纯调用一个模型接口，而是实现了：
+```text
+eval/report.md
+```
 
-- 前端交互
-- 模式切换
-- 后端封装
-- Prompt 组织
-- 流式响应
-- 工作流处理
+报告适合作为演示材料，展示当前 RAG 链路在测试集上的命中率、引用准确率、关键词覆盖率和无依据拒答准确率。
 
-这使项目更接近真实的 AI 内容应用开发场景。
+---
 
-### 3. 支持流式输出，强调创作体验
+## 截屏展示
 
-相比一次性返回结果，流式输出更符合当前 AI 创作类产品的交互范式。用户可以更快看到内容逐步生成，降低等待感，提升交互自然度。
+### 1. 企业知识库问答首页
 
-### 4. Prompt 工程模块化
+默认进入“企业知识库问答”核心入口，侧边栏展示会话入口、功能类型和对话设置。
 
-通过 `base_prompt + role_prompt + prompt_builder` 的方式组织提示词，为后续扩展不同内容角色与创作风格打下基础，例如：
+![企业知识库问答首页](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615174721369.png)
 
-- 文章总结助手
-- 英文润色助手
-- 小红书文案助手
-- 面试回答优化助手
-- 学习笔记整理助手
+### 2. 上传企业文档
 
-### 5. 具备内容工作流编排雏形
+在聊天输入框中上传员工手册测试文档，作为本轮知识库问答的数据来源。
 
-`工作流分析` 模式已经不是单轮简单问答，而是把内容处理任务拆成多个阶段依次执行并展示结果。这体现了从 **ChatBot** 向 **AI 内容工作流应用** 演进的思路。
+![上传员工手册文档](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615174808177.png)
 
-### 6. 架构具备扩展性
+员工手册测试文档，具体内容如下所示。
 
-项目已经做了前后端职责划分和模型客户端封装，后续升级到：
+![员工手册测试文档详情](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615174853796.png)
 
-- 多模型切换
-- RAG 内容知识库
-- Agent 创作流程
-- Tool Calling
-- 用户画像与记忆机制
+### 3. 基于文档提问
 
-都有较好的演进基础。
+用户提问“试用期是多久？”，系统进入知识库检索和回答流程。
+
+![基于员工手册提问试用期](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615175013390.png)
+
+### 4. 引用回答
+
+回答中包含明确来源，便于追溯答案依据。
+
+![带引用来源的回答](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615175133809.png)
+
+### 5. 命中原文片段
+
+前端展示命中的 chunk、score 和原文片段，增强 RAG 可解释性。
+
+![RAG 命中原文片段](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615175153007.png)
+
+### 6. 无依据拒答
+
+当知识库没有相关依据时，系统明确拒答，避免凭空生成答案。
+
+![无依据拒答示例](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615175223207.png)
+
+### 7.会话历史
+
+会话历史列表如下图所示。
+
+![会话历史列表](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615182211845.png)
+
+### 8. Eval 评测报告
+
+运行评测脚本后生成报告，用命中率、引用准确率和拒答准确率验证 RAG 效果。
+
+![Eval 评测报告](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615175719392.png)
+
+---
+
+## 项目边界
+
+当前项目重点是完整走通企业知识库问答的工程链路，因此暂不追求复杂多 Agent 编排，也不强依赖 LangChain。后续可以继续扩展：
+
+- 多知识库管理
+- 用户登录与权限隔离
+- 文档增量更新
+- 更完整的检索评测平台
+- 多轮问题改写
+- 更细粒度的 citation 对齐
 
 ---
 
