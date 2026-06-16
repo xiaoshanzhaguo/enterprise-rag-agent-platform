@@ -685,7 +685,7 @@ st.markdown(
 
 # -----------------------------
 # 启用 RAG 设置的模式
-# 内容分析 / 工作流优化仍保留原有 RAG 能力；企业知识库问答由轻量 Agent 决策是否真正检索
+# 内容分析 / 工作流优化仍保留原有 RAG 能力；企业知识库问答由 Agent 路由决策是否真正检索
 # -----------------------------
 RAG_ENABLED_MODES = {
     "内容分析",
@@ -698,6 +698,36 @@ AGENT_MODE_NAME = "企业知识库问答"
 
 # RAG 无命中时后端返回的固定提示。前端用它判断是否需要隐藏复制 / 导出等结果操作按钮
 NO_RAG_EVIDENCE_MESSAGE = "知识库中没有找到依据。"
+
+
+def build_result_copy_text(
+    result_text: str,
+    workflow_blocks: dict[str, str] | None = None,
+    preferred_step_name: str | None = None,
+) -> str:
+    """
+    构造“复制当前结果”按钮实际复制的文本。
+
+    函数说明：
+    1. 普通结果默认复制完整结果文本。
+    2. Agent 这类分步骤结果可以指定 preferred_step_name，只复制最终回答步骤。
+    3. 如果指定步骤不存在或内容为空，则回退复制完整展示文本。
+
+    :param result_text: 当前页面展示的完整结果文本
+    :param workflow_blocks: workflow / Agent 分步骤结果字典
+    :param preferred_step_name: 优先复制的步骤名，例如 generate_answer
+    :return: 复制按钮实际写入剪贴板的文本
+    """
+    # 如果调用方指定了优先复制的步骤，并且传入了分步骤数据，则先尝试取这一步的内容
+    if preferred_step_name and isinstance(workflow_blocks, dict):
+        # 读取指定步骤内容，并去掉首尾空白
+        preferred_text = workflow_blocks.get(preferred_step_name, "").strip()
+        # 指定步骤存在有效内容时，直接作为复制文本
+        if preferred_text:
+            return preferred_text
+
+    # 没有指定步骤或步骤内容为空时，回退到完整结果文本
+    return result_text.strip()
 
 
 def is_no_rag_evidence_result(result_text: str) -> bool:
@@ -880,9 +910,16 @@ for idx, message in enumerate(current_messages):
                 )
 
             if can_show_result_actions:
+                # Agent 历史消息展示完整流程，但复制按钮只复制“生成回答”这一步的正文
+                result_copy_text = build_result_copy_text(
+                    result_text=message["content"],
+                    workflow_blocks=message.get("workflow_blocks"),
+                    preferred_step_name="generate_answer" if mode == AGENT_MODE_NAME else None,
+                )
+
                 # 为历史 assistant 消息渲染整体结果操作区：复制整段结果 + 导出 Markdown
                 render_result_actions(
-                    result_text=message["content"],
+                    result_text=result_copy_text,
                     mode_name=mode,
                     widget_key_suffix=f"history_{idx}"
                 )
@@ -970,7 +1007,7 @@ if chat_submission:
 
     # 将当前模式名映射成后端任务类型，后续用于选择接口和判断是否属于分步骤输出
     task_type = MODE_TO_TASK_TYPE[mode]
-    # workflow 和轻量 Agent 都会返回 step_start / step_complete，需要按分步骤结构渲染
+    # workflow 和 Agent 都会返回 step_start / step_complete，需要按分步骤结构渲染
     is_stepwise = task_type in {"workflow", "agent"}
 
     # 企业知识库问答模式里，只要本轮上传了文件，就自动按 RAG 流程处理。
@@ -1258,8 +1295,15 @@ if chat_submission:
                     )
 
                 if can_show_result_actions:
-                    render_result_actions(
+                    # Agent 模式页面展示完整流程，但复制按钮只复制“生成回答”这一步，便于用户直接拿走答案
+                    result_copy_text = build_result_copy_text(
                         result_text=final_display_text,
+                        workflow_blocks=workflow_blocks if is_stepwise else None,
+                        preferred_step_name="generate_answer" if task_type == "agent" else None,
+                    )
+
+                    render_result_actions(
+                        result_text=result_copy_text,
                         mode_name=mode,
                         widget_key_suffix="latest_result"
                     )
