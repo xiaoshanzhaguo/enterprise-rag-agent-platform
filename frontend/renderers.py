@@ -52,7 +52,7 @@ def build_markdown_content(mode_name: str, result_text: str) -> str:
     export_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
     return (
-        "# AI 内容分析与创作助手导出结果\n\n"
+        "# 企业知识库问答 Agent 导出结果\n\n"
         f"- 模式：{mode_name}\n"
         f"- 导出时间：{export_time}\n\n"
         "---\n\n"
