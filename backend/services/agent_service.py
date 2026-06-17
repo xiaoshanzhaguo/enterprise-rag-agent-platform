@@ -242,6 +242,26 @@ def _normalize_rewritten_query(question: str, rewritten_query: Any) -> str:
     return normalized_query[:120]
 
 
+def _format_retrieval_mode_for_display(retrieval_mode: str) -> str:
+    """
+    格式化前端展示用的检索方式。
+
+    函数说明：
+    1. 保留数据库中的原始 retrieval_mode，不影响 rag_queries 统计。
+    2. 当项目配置为 vector，但最终命中来自 keyword 时，明确说明这是向量无可靠命中后的关键词兜底。
+    3. 避免用户看到 keyword 时误以为系统没有启用向量检索。
+
+    :param retrieval_mode: RAG 服务层返回的实际命中方式
+    :return: 更适合前端展示的检索方式文案
+    """
+    # 当前配置为向量模式，但结果来自关键词，说明发生了 fallback
+    if settings.rag_retrieval_mode == "vector" and retrieval_mode == "keyword":
+        return "keyword（vector 未达到阈值后回退）"
+
+    # 其他情况直接展示原始检索方式
+    return retrieval_mode
+
+
 def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str, str] | None:
     """
     使用大模型进行意图分类和检索 query 改写。
@@ -824,20 +844,22 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     retrieval_mode=retrieval_mode,
                     mode=request.mode,
                 )
+                # 格式化展示文案，避免 fallback 场景只显示 keyword 造成误解
+                retrieval_mode_display = _format_retrieval_mode_for_display(retrieval_mode)
                 # 命中证据时展示命中数量、检索方式和最高排名来源
                 if matched_chunks:
                     first_source = build_source_label(matched_chunks[0])
                     retrieve_text = (
                         f"已命中 {len(matched_chunks)} 个知识库片段。\n\n"
                         f"检索问题：{retrieval_query}\n\n"
-                        f"检索方式：{retrieval_mode}\n\n"
+                        f"检索方式：{retrieval_mode_display}\n\n"
                         f"优先证据：{first_source}"
                     )
                 else:
                     retrieve_text = (
                         f"{NO_RAG_EVIDENCE_MESSAGE}。\n\n"
                         f"检索问题：{retrieval_query}\n\n"
-                        f"检索方式：{retrieval_mode}"
+                        f"检索方式：{retrieval_mode_display}"
                     )
             else:
                 # 不需要知识库时明确告诉用户本轮跳过检索
