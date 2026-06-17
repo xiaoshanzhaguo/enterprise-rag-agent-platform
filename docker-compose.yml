@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: enterprise-rag-agent-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # 大模型服务配置：默认从宿主机 .env 或环境变量读取
+      BASE_URL: ${BASE_URL:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+
+      # Embedding 与向量检索配置
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      VECTOR_STORE_DIR: /app/data/chroma
+      HF_HOME: /app/data/huggingface
+      RAG_RETRIEVAL_MODE: ${RAG_RETRIEVAL_MODE:-vector}
+      RAG_STORE_TTL_SECONDS: ${RAG_STORE_TTL_SECONDS:-3600}
+      RAG_STORE_MAX_SESSIONS: ${RAG_STORE_MAX_SESSIONS:-50}
+      RAG_PREVIEW_TEXT_LIMIT: ${RAG_PREVIEW_TEXT_LIMIT:-220}
+      RAG_VECTOR_SCORE_THRESHOLD: ${RAG_VECTOR_SCORE_THRESHOLD:-0.6}
+      RAG_KEYWORD_FALLBACK_ENABLED: ${RAG_KEYWORD_FALLBACK_ENABLED:-true}
+
+      # SQLite 数据库配置：写入挂载的 /app/data/app.db
+      DATABASE_URL: sqlite:////app/data/app.db
+    volumes:
+      # 挂载 data 目录，持久化 SQLite 数据库和 data/chroma 向量库
+      - ./data:/app/data
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: enterprise-rag-agent-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8501:8501"
+    environment:
+      # 容器网络里通过服务名 backend 访问后端，不能使用 127.0.0.1
+      FRONTEND_BACKEND_BASE_URL: http://backend:8000
+    volumes:
+      # 前端也挂载 data，保证导入和状态读取路径一致
+      - ./data:/app/data

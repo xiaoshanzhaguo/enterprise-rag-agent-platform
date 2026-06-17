@@ -346,6 +346,32 @@ streamlit run frontend/app.py
 
 默认打开 Streamlit 本地页面后，即可开始上传文档并进行企业知识库问答。
 
+### 7. 使用 Docker Compose 启动
+
+如果希望用容器快速启动完整项目，可以在项目根目录执行：
+
+```bash
+docker compose up --build
+```
+
+启动完成后访问：
+
+```text
+http://localhost:8501
+```
+
+Docker 启动说明：
+
+- 后端容器端口：`8000`
+- 前端容器端口：`8501`
+- `./data` 会挂载到容器内 `/app/data`
+- SQLite 数据库会写入 `./data/app.db`
+- ChromaDB 向量库会写入 `./data/chroma/`
+- 本地 embedding 模型缓存会写入 `./data/huggingface/`
+- 前端容器会通过 `http://backend:8000` 访问后端服务
+
+如果使用云端大模型或云端 embedding，请先在本地 `.env` 中配置对应环境变量，`docker-compose.yml` 会读取这些变量。
+
 ---
 
 ## 评测方式

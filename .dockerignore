@@ -1,0 +1,22 @@
+# Git 元数据不需要进入镜像
+.git
+.gitignore
+
+# Python 缓存与虚拟环境
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 本地运行数据通过 docker-compose volume 挂载，不打进镜像
+data/
+
+# 本地环境变量文件可能包含密钥，不打进镜像
+.env
+
+# 本地日志和临时文件
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
