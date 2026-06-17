@@ -2,15 +2,15 @@
 企业知识库问答 Agent 服务模块。
 
 职责：
-1. 通过模型路由决策和规则兜底，判断用户问题是否需要查询企业知识库。
-2. 需要知识库时执行 RAG 检索，并根据证据是否充分决定是否生成引用答案。
+1. 通过模型意图分类、query rewrite 和规则兜底，判断用户问题是否需要查询企业知识库。
+2. 需要知识库时使用改写后的检索 query 执行 RAG 检索，并根据证据是否充分决定是否生成引用答案。
 3. 不需要知识库时走普通对话流程，避免所有问题都盲目 RAG。
 4. 将 Agent 决策、检索证据、生成回答三个阶段转换为 SSE 步骤事件返回前端。
 5. 保存用户消息、Agent 最终结果和当前回答对应的引用元数据。
 
 说明：
 - 当前模块是轻量 Agent / Workflow 改造，不引入 LangChain 或复杂多 Agent。
-- Agent 判断阶段优先使用模型做路由决策，模型不可用时回退到规则判断。
+- Agent 判断阶段优先使用模型做意图分类和检索 query 改写，模型不可用时回退到规则判断。
 - Agent 流程固定为：判断是否需要知识库 -> 检索证据 -> 生成回答。
 - 如果知识库证据不足，Agent 不会强行回答，而是明确说明缺少依据。
 - 如果问题不依赖企业知识库，Agent 会跳过检索，直接按普通对话回答。
@@ -213,18 +213,47 @@ def _is_general_text_task_without_policy_anchor(question: str) -> bool:
     return has_general_text_action and not has_policy_anchor
 
 
-def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str] | None:
+def _normalize_rewritten_query(question: str, rewritten_query: Any) -> str:
     """
-    使用大模型判断当前问题是否需要查询企业知识库。
+    归一化模型改写后的检索 query。
 
     函数说明：
-    1. 让模型只做轻量路由决策，不生成最终答案。
-    2. 要求模型返回固定 JSON，包含 need_knowledge_base 和 reason。
+    1. 去掉模型可能额外输出的空白、引号和换行。
+    2. 如果模型没有给出可用 query，则回退到用户原始问题。
+    3. 限制 query 长度，避免把大段文本直接送入检索链路。
+
+    :param question: 用户原始问题
+    :param rewritten_query: 模型输出的改写 query
+    :return: 可用于 RAG 检索的 query
+    """
+    # 用户原始问题作为最终兜底，保证检索链路始终有 query 可用
+    fallback_query = question.strip()
+    # 非字符串结构无法作为检索 query，直接回退
+    if not isinstance(rewritten_query, str):
+        return fallback_query
+
+    # 清理首尾空白、换行和常见包裹引号
+    normalized_query = rewritten_query.strip().strip('"').strip("'").strip()
+    # 空字符串没有检索价值，回退到原始问题
+    if not normalized_query:
+        return fallback_query
+
+    # 过长 query 会稀释检索重点，因此只保留前 120 个字符
+    return normalized_query[:120]
+
+
+def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str, str] | None:
+    """
+    使用大模型进行意图分类和检索 query 改写。
+
+    函数说明：
+    1. 让模型只做轻量路由决策和检索 query 改写，不生成最终答案。
+    2. 要求模型返回固定 JSON，包含 need_knowledge_base、reason 和 rewritten_query。
     3. 如果模型输出不合规或调用失败，则返回 None，让外层规则判断兜底。
 
     :param question: 用户当前输入的问题
     :param client: OpenAI 兼容客户端
-    :return: 二元组，第一项表示是否需要知识库，第二项是判断理由；失败时返回 None
+    :return: 三元组，依次表示是否需要知识库、判断理由、检索 query；失败时返回 None
     """
     # 如果没有可用客户端，则无法进行模型决策
     if client is None:
@@ -238,12 +267,14 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
                 {
                     "role": "system",
                     "content": (
-                        "你是企业知识库问答系统的路由 Agent，只负责判断用户问题是否需要查询企业知识库。"
+                        "你是企业知识库问答系统的意图分类与检索改写 Agent，只负责判断用户问题是否需要查询企业知识库，并在需要时改写检索 query。"
                         "如果问题涉及公司制度、员工手册、流程、报销、请假、年假、试用期、远程办公、权限、合同、采购、内部规则或需要基于上传文档回答，则 need_knowledge_base=true。"
                         "如果问题只是让你写请假邮件、写通知、写文案、翻译、改写、总结、开放闲聊、代码问题或不依赖企业内部文档的常识问题，则 need_knowledge_base=false。"
                         "只有当用户明确要求按照公司制度、请假流程、员工手册、内部规定或已有文档依据来回答时，才把请假类问题判断为 need_knowledge_base=true。"
+                        "当 need_knowledge_base=true 时，rewritten_query 必须是适合向量检索的短查询，保留核心实体、制度词和约束词，去掉寒暄、附件说明和无关口语。"
+                        "当 need_knowledge_base=false 时，rewritten_query 必须为空字符串。"
                         "只返回 JSON，不要返回 Markdown，不要补充解释。"
-                        "JSON 格式必须是：{\"need_knowledge_base\": true, \"reason\": \"简短中文理由\"}"
+                        "JSON 格式必须是：{\"need_knowledge_base\": true, \"reason\": \"简短中文理由\", \"rewritten_query\": \"适合检索的中文短查询\"}"
                     ),
                 },
                 {
@@ -281,11 +312,18 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
     if not reason:
         reason = "模型判断当前问题需要按路由结果处理。"
 
-    # 返回模型决策结果
-    return need_knowledge_base, f"Agent 判断：{reason}"
+    # 需要知识库时使用模型改写后的 query；不需要知识库时不保留检索 query
+    rewritten_query = (
+        _normalize_rewritten_query(question, decision_json.get("rewritten_query"))
+        if need_knowledge_base
+        else ""
+    )
+
+    # 返回模型决策结果和检索 query
+    return need_knowledge_base, f"Agent 判断：{reason}", rewritten_query
 
 
-def _decide_need_knowledge_base_by_rule(question: str, use_rag: bool) -> tuple[bool, str]:
+def _decide_need_knowledge_base_by_rule(question: str, use_rag: bool) -> tuple[bool, str, str]:
     """
     使用规则兜底判断当前问题是否需要查询企业知识库。
 
@@ -296,70 +334,70 @@ def _decide_need_knowledge_base_by_rule(question: str, use_rag: bool) -> tuple[b
 
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
-    :return: 二元组，第一项表示是否需要知识库，第二项是判断理由
+    :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
     """
     # 去掉首尾空白，避免空格影响关键词判断
     normalized_question = question.strip()
 
     # 如果前端没有开启 RAG，则尊重用户设置，走普通对话
     if not use_rag:
-        return False, "当前未开启 RAG，按普通对话处理。"
+        return False, "当前未开启 RAG，按普通对话处理。", ""
 
     # 空问题没有检索价值，直接走普通对话兜底
     if not normalized_question:
-        return False, "当前问题为空，跳过知识库检索。"
+        return False, "当前问题为空，跳过知识库检索。", ""
 
     # 短寒暄或身份询问通常不需要企业知识库
     if len(normalized_question) <= 12 and any(keyword in normalized_question for keyword in GENERAL_CHAT_KEYWORDS):
-        return False, "当前问题属于寒暄或普通对话，不需要查询企业知识库。"
+        return False, "当前问题属于寒暄或普通对话，不需要查询企业知识库。", ""
 
     # 通用写作任务如果没有明确要求公司制度或文档依据，则不查询知识库
     if _is_general_text_task_without_policy_anchor(normalized_question):
-        return False, "当前问题属于通用文本生成任务，不需要查询企业知识库。"
+        return False, "当前问题属于通用文本生成任务，不需要查询企业知识库。", ""
 
     # 只要命中企业知识库相关关键词，就认为需要检索文档证据
     if any(keyword in normalized_question for keyword in KNOWLEDGE_REQUIRED_KEYWORDS):
-        return True, "当前问题涉及企业制度、流程、文档或规则，需要查询知识库。"
+        return True, "当前问题涉及企业制度、流程、文档或规则，需要查询知识库。", normalized_question
 
     # 没有明确知识库信号时，不强行检索
-    return False, "当前问题没有明显企业知识库信号，按普通对话处理。"
+    return False, "当前问题没有明显企业知识库信号，按普通对话处理。", ""
 
 
-def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tuple[bool, str]:
+def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tuple[bool, str, str]:
     """
-    判断当前问题是否需要查询企业知识库。
+    判断当前问题是否需要查询企业知识库，并生成检索 query。
 
     函数说明：
     1. 如果前端没有开启 RAG，直接判定为不需要知识库。
     2. 如果问题是短寒暄或普通身份询问，跳过知识库检索。
-    3. 对其余问题优先使用大模型做路由决策，让 Agent 自己判断是否需要知识库。
+    3. 对其余问题优先使用大模型做意图分类和 query rewrite。
     4. 如果模型决策失败，则回退到规则判断，保证流程稳定。
 
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
-    :param client: OpenAI 兼容客户端，用于执行轻量 Agent 路由判断
-    :return: 二元组，第一项表示是否需要知识库，第二项是判断理由
+    :param client: OpenAI 兼容客户端，用于执行轻量 Agent 意图分类和 query rewrite
+    :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
     """
     # 去掉首尾空白，避免空格影响关键词判断
     normalized_question = question.strip()
 
     # 如果前端没有开启 RAG，则尊重用户设置，走普通对话
     if not use_rag:
-        return False, "当前未开启 RAG，按普通对话处理。"
+        return False, "当前未开启 RAG，按普通对话处理。", ""
 
     # 空问题没有检索价值，直接走普通对话兜底
     if not normalized_question:
-        return False, "当前问题为空，跳过知识库检索。"
+        return False, "当前问题为空，跳过知识库检索。", ""
 
     # 短寒暄或身份询问通常不需要企业知识库
     if len(normalized_question) <= 12 and any(keyword in normalized_question for keyword in GENERAL_CHAT_KEYWORDS):
-        return False, "当前问题属于寒暄或普通对话，不需要查询企业知识库。"
+        return False, "当前问题属于寒暄或普通对话，不需要查询企业知识库。", ""
 
     # 通用写作任务不需要先查知识库，避免“写请假邮件”被误判成公司制度问答
     if _is_general_text_task_without_policy_anchor(normalized_question):
-        return False, "当前问题属于通用文本生成任务，不需要查询企业知识库。"
+        return False, "当前问题属于通用文本生成任务，不需要查询企业知识库。", ""
 
-    # 优先让模型做一次轻量路由判断，增强 Agent 自主决策能力
+    # 优先让模型做一次轻量意图分类和 query rewrite，增强 Agent 自主决策能力
     llm_decision = _decide_need_knowledge_base_by_llm(
         question=normalized_question,
         client=client,
@@ -729,8 +767,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 )
             )
 
-            # 执行轻量规则判断
-            need_knowledge_base, decision_reason = decide_need_knowledge_base(
+            # 执行意图分类和 query rewrite
+            need_knowledge_base, decision_reason, retrieval_query = decide_need_knowledge_base(
                 question=request.input_text,
                 use_rag=request.use_rag,
                 client=client,
@@ -740,6 +778,9 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 f"判断结果：{'需要查询知识库' if need_knowledge_base else '不需要查询知识库'}。\n\n"
                 f"判断依据：{decision_reason}"
             )
+            # 如果需要知识库，则展示本轮实际用于检索的 query，方便用户理解 Agent 为什么这样检索
+            if need_knowledge_base:
+                judge_text += f"\n\n改写后的检索问题：{retrieval_query}"
             # 保存判断步骤结果
             final_result[STEP_JUDGE_KNOWLEDGE] = judge_text
             # 通知前端：判断步骤完成
@@ -768,16 +809,16 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             retrieval_mode = NO_HIT_RETRIEVAL_MODE
             # 如果判断需要知识库，则执行 RAG 检索
             if need_knowledge_base:
-                # 调用 RAG 检索链路，返回命中片段和实际检索方式
+                # 调用 RAG 检索链路，使用改写后的 query 返回命中片段和实际检索方式
                 matched_chunks, retrieval_mode = retrieve_rag_chunks_with_mode(
                     session_id=request.session_id,
-                    query=request.input_text,
+                    query=retrieval_query,
                     top_k=request.rag_top_k,
                 )
                 # 保存本次检索记录，便于第 10 天可解释面板和数据库追踪继续生效
                 save_rag_query_with_hits(
                     session_id=request.session_id,
-                    query_text=request.input_text,
+                    query_text=retrieval_query,
                     top_k=request.rag_top_k,
                     matched_chunks=matched_chunks,
                     retrieval_mode=retrieval_mode,
@@ -788,12 +829,14 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     first_source = build_source_label(matched_chunks[0])
                     retrieve_text = (
                         f"已命中 {len(matched_chunks)} 个知识库片段。\n\n"
+                        f"检索问题：{retrieval_query}\n\n"
                         f"检索方式：{retrieval_mode}\n\n"
                         f"优先证据：{first_source}"
                     )
                 else:
                     retrieve_text = (
                         f"{NO_RAG_EVIDENCE_MESSAGE}。\n\n"
+                        f"检索问题：{retrieval_query}\n\n"
                         f"检索方式：{retrieval_mode}"
                     )
             else:
@@ -869,6 +912,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     user_prompt = (
                         "请基于上方知识库证据回答下面的问题。"
                         "涉及事实、规则、数字或结论时，句末必须附引用。\n\n"
+                        f"【检索改写问题】\n{retrieval_query}\n\n"
                         f"【用户问题】\n{request.input_text}"
                     )
                 else:
