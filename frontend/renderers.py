@@ -20,8 +20,6 @@ from uuid import uuid4
 
 # 导入 Streamlit 主模块，并简写成 st。后面所有页面组件都通过 st.xxx() 调用。
 import streamlit as st
-# 导入 Streamlit 的自定义组件模块。后面用 components.html(...) 渲染 HTML + CSS + JS，自定义复制按钮。
-import streamlit.components.v1 as components
 
 
 def build_markdown_filename(mode_name: str) -> str:
@@ -62,7 +60,12 @@ def build_markdown_content(mode_name: str, result_text: str) -> str:
 
 def render_copy_button(text: str, label: str, button_id_suffix: str) -> None:
     """
-    渲染一个复制按钮，用于将指定文本复制到剪贴板。通过内嵌 HTML + JS 将结果复制到系统剪贴板。
+    渲染一个复制按钮，用于将指定文本复制到剪贴板。
+
+    函数说明：
+    1. 使用 st.html 渲染轻量 HTML 按钮，避免继续依赖即将废弃的旧组件 API。
+    2. 通过浏览器 navigator.clipboard 写入用户本地剪贴板。
+    3. 每个按钮使用唯一 DOM ID，避免同一页面多个复制按钮互相冲突。
 
     :param text: 需要复制的文本内容
     :param label: 按钮显示文字
@@ -72,60 +75,50 @@ def render_copy_button(text: str, label: str, button_id_suffix: str) -> None:
     # 生成一个唯一按钮 ID，避免多个复制按钮冲突。button_id_suffix：人为区分按钮用途、uuid4().hex：再加一个随机唯一值
     button_id = f"copy_btn_{button_id_suffix}_{uuid4().hex}"
 
-    # 渲染HTML自定义组件
-    components.html(
-        # 开始写一个 Python f-string 多行 HTML 模板
+    # 使用 st.html 替代旧组件 API，避免后续版本移除风险
+    st.html(
         f"""
-        <html>
-        <head>
-            <style>
-                html, body {{
-                    margin: 0;
-                    padding: 0;
-                    background: transparent;
-                    overflow: hidden;
-                }}
+        <style>
+            #{button_id} {{
+                width: 100%;
+                height: 38px;
+                border: 1px solid #d0d7de;
+                border-radius: 0.5rem;
+                background: white;
+                color: #111827;
+                font-size: 0.95rem;
+                cursor: pointer;
+                box-sizing: border-box;
+            }}
 
-                .copy-btn {{
-                    width: 100%;
-                    height: 38px;
-                    border: 1px solid #d0d7de;
-                    border-radius: 0.5rem;
-                    background: white;
-                    color: #111827;
-                    font-size: 0.95rem;
-                    cursor: pointer;
-                    box-sizing: border-box;
-                }}
+            #{button_id}:hover {{
+                background: #f9fafb;
+            }}
+        </style>
 
-                .copy-btn:hover {{
-                    background: #f9fafb;
-                }}
-            </style>
-        </head>
-        <body>
-            <button id="{button_id}" class="copy-btn">{label}</button>
+        <button id="{button_id}" type="button">{label}</button>
 
-            <script>
+        <script>
+            (() => {{
                 const btn = document.getElementById("{button_id}");
+                if (!btn) {{
+                    return;
+                }}
+
                 btn.onclick = async () => {{
+                    const oldText = btn.innerText;
                     try {{
                         await navigator.clipboard.writeText({json.dumps(text)});
-                        const oldText = btn.innerText;
                         btn.innerText = "已复制";
-                        setTimeout(() => btn.innerText = oldText, 1500);
                     }} catch (err) {{
-                        const oldText = btn.innerText;
                         btn.innerText = "复制失败";
-                        setTimeout(() => btn.innerText = oldText, 1500);
                     }}
+                    setTimeout(() => btn.innerText = oldText, 1500);
                 }};
-            </script>
-        </body>
-        </html>
+            }})();
+        </script>
         """,
-        # 表示这个 HTML 组件在页面里占 40 像素高
-        height=40
+        unsafe_allow_javascript=True,
     )
 
 
