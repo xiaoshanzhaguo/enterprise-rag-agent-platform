@@ -940,13 +940,17 @@ if mode in RAG_ENABLED_MODES:
     if has_persisted_rag_document:
         # 从 /rag_status 返回结果中读取当前会话已保存的文档名
         file_name = rag_status_info.get("file_name") or "未命名文件"
+        # 从 /rag_status 返回结果中读取当前文档已切分出的文本块数量
+        chunk_count = rag_status_info.get("chunk_count", 0)
+        # chunk 数量用于告诉用户文档已经完成可检索切块；异常结构时不展示数量，避免提示误导
+        chunk_count_text = f"，共 {chunk_count} 个文本块" if isinstance(chunk_count, int) and chunk_count > 0 else ""
 
         # 如果 RAG 已开启，用成功提示强调后续问题会基于该文档检索
         if use_rag:
-            st.success(f"RAG 已开启，当前会话将基于已保存文档进行检索：{file_name}")
+            st.success(f"RAG 已开启，当前会话将基于已保存文档进行检索：{file_name}{chunk_count_text}")
         else:
             # 如果数据库有文档但用户手动关闭 RAG，则提示文档仍在，但本次不会用于检索
-            st.info(f"当前会话已保存文档：{file_name}。在左侧对话设置中开启 RAG 后，可以继续基于该文档提问。")
+            st.info(f"当前会话已保存文档：{file_name}{chunk_count_text}。在左侧对话设置中开启 RAG 后，可以继续基于该文档提问。")
 
     # 当前没有数据库文档但用户手动开启了 RAG 时，用 warning 提醒需要上传文件。
     # 该提示只说明当前会话在本轮提交前还没有已保存文档，不属于索引完成提示，因此可以和后续索引状态共存。
