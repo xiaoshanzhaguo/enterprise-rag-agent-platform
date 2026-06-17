@@ -53,7 +53,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None  # 会话 ID，用于区分不同对话
     task_type: TaskType = "chat"  # 当前任务类型
     input_text: str  # 用户本次输入内容
-    persona: str = "default"   # 助手人设或内容风格标识
+    mode: str = "default"   # 当前功能模式，例如企业知识库问答、内容分析、结构优化等
     history: List[MessageItem] = Field(default_factory=list)  # 历史消息列表
     user_options: Dict[str, Any] = Field(default_factory=dict)  # 扩展参数，如语气、长度、语言等
 

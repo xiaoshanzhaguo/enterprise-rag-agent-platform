@@ -100,7 +100,7 @@ def _build_model_input_text(request: ChatRequest) -> str:
         )
 
     # 根据当前模式获取对应的输入包装配置
-    wrapper = MODE_INPUT_WRAPPERS.get(request.persona)
+    wrapper = MODE_INPUT_WRAPPERS.get(request.mode)
     # 如果当前模式存在专用包装规则，则构造增强后的模型输入
     if wrapper:
         return (
@@ -148,7 +148,7 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
             display_text = request.user_options.get("display_text", request.input_text)
             ensure_chat_session(
                 session_id=request.session_id,
-                mode=request.persona,
+                mode=request.mode,
                 title=display_text[:80] # 最多取前80个字符作为标题
             )
             save_chat_message(
@@ -156,12 +156,12 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                 role="user",
                 content=display_text,
                 raw_content=request.input_text,
-                mode=request.persona
+                mode=request.mode
             )
 
             # 根据模式生成 Prompt。
             # RAG 模式下优先做“基于知识库回答/处理”，避免内容分析等模式的固定格式压过检索问答意图。
-            system_prompt = build_system_prompt("default" if request.use_rag else request.persona)
+            system_prompt = build_system_prompt("default" if request.use_rag else request.mode)
 
             # 通知前端：当前任务已开始。发送 SSE 事件
             # 后端不是等全部回答生成完再返回，而是每生成一小段，就包装成 SSE 格式，立刻交给前端
@@ -247,7 +247,7 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                 role="assistant",
                 content=full_text,
                 raw_content=full_text,
-                mode=request.persona,
+                mode=request.mode,
                 metadata=build_assistant_message_metadata(request.user_options)
             )
 

@@ -215,7 +215,7 @@ st.sidebar.markdown(
 # -----------------------------
 # 模式映射
 # 前端展示名称 -> 后端 task_type
-# persona 先沿用展示名称，便于后端按人设/风格扩展
+# mode 使用前端展示名称，便于后端按当前功能模式选择提示词和保存会话
 # -----------------------------
 MODE_TO_TASK_TYPE = {
     "企业知识库问答": "agent",
@@ -1164,7 +1164,7 @@ if chat_submission:
         "session_id": current_session_id,
         "task_type": task_type,
         "input_text": submit_raw_text,
-        "persona": mode,
+        "mode": mode,
         # current_messages[:-1] 表示不把刚刚追加的当前用户输入再算进 history。因为当前这条消息已经单独放进 input_text 里了，不应该重复出现在历史中
         "history": build_history_for_api(current_messages[:-1]),
         "user_options": user_options,

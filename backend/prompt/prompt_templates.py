@@ -1,4 +1,4 @@
-PERSONA_PROMPTS = {
+MODE_PROMPTS = {
     "default": """
         你是一名面向真实使用场景的企业知识库问答与文本处理助手。
 

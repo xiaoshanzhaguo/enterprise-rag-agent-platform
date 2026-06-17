@@ -130,7 +130,7 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
             display_text = request.user_options.get("display_text", request.input_text)
             ensure_chat_session(
                 session_id=request.session_id,
-                mode=request.persona,
+                mode=request.mode,
                 title=display_text[:80]
             )
             save_chat_message(
@@ -138,11 +138,11 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                 role="user",
                 content=display_text,
                 raw_content=request.input_text,
-                mode=request.persona
+                mode=request.mode
             )
 
             # 根据模式生成 Prompt
-            system_prompt = build_system_prompt(request.persona)
+            system_prompt = build_system_prompt(request.mode)
 
             # 通知前端：整个工作流开始
             yield to_sse(
@@ -306,7 +306,7 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                 role="assistant",
                 content=final_content,
                 raw_content=final_content,
-                mode=request.persona,
+                mode=request.mode,
                 metadata=build_assistant_message_metadata(request.user_options)
             )
 

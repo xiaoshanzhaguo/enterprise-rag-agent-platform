@@ -696,7 +696,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             # 确保当前会话存在，并用用户问题作为会话标题
             ensure_chat_session(
                 session_id=request.session_id,
-                mode=request.persona,
+                mode=request.mode,
                 title=display_text[:80],
             )
             # 保存用户消息
@@ -705,7 +705,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 role="user",
                 content=display_text,
                 raw_content=request.input_text,
-                mode=request.persona,
+                mode=request.mode,
             )
 
             # 通知前端：Agent 流程开始
@@ -781,7 +781,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     top_k=request.rag_top_k,
                     matched_chunks=matched_chunks,
                     retrieval_mode=retrieval_mode,
-                    mode=request.persona,
+                    mode=request.mode,
                 )
                 # 命中证据时展示命中数量、检索方式和最高排名来源
                 if matched_chunks:
@@ -915,7 +915,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 role="assistant",
                 content=final_content,
                 raw_content=final_content,
-                mode=request.persona,
+                mode=request.mode,
                 metadata=assistant_metadata,
             )
 
