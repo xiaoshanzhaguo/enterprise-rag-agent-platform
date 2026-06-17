@@ -932,6 +932,41 @@ for idx, message in enumerate(current_messages):
                 )
 
 # -----------------------------
+# 统一输入入口
+# 使用 st.chat_input 同时支持:
+# 1. 纯文本输入
+# 2. 文本 + 文件附件
+# 3. 仅上传文件
+# -----------------------------
+chat_submission = st.chat_input(
+    "请输入内容，或直接附加文件后发送...",
+    accept_file=(mode in UPLOAD_ENABLED_MODES), # 当前模式支持文件上传时，才允许附加文件
+    file_type=CHAT_INPUT_FILE_TYPES if mode in UPLOAD_ENABLED_MODES else None, # 如果支持上传文件，只允许 txt / md / pdf
+    key=f"chat_input_{mode}" # 不同模式使用不同 key，避免输入框状态冲突
+)
+
+submit_display_text = None   # 显示给前端聊天区看的文本
+submit_raw_text = None       # 真正发给后端处理的文本
+uploaded_file_name = None    # 上传文件名
+uploaded_file_text = None    # 提取出来的文件全文文本
+uploaded_file = None         # 当前提交附带的文件对象
+user_text = ""               # 当前提交中的用户文本
+uploaded_files = []          # 当前提交中的文件列表
+
+# 先解析提交对象，提前知道本轮是否附加了文件，后面的 RAG 空状态提示需要依赖这个结果
+if chat_submission:
+    # accept_file=True 时，chat_input 返回 dict-like 对象，包含 text 和 files
+    if mode in UPLOAD_ENABLED_MODES:
+        user_text = (chat_submission.text or "").strip()
+        uploaded_files = chat_submission["files"]
+    else:
+        user_text = str(chat_submission).strip()
+        uploaded_files = []
+
+    # 当前阶段只处理单文件，因此只取第一个文件
+    uploaded_file = uploaded_files[0] if uploaded_files else None
+
+# -----------------------------
 # RAG 文档状态提示
 # 放在侧边栏设置之后，保证提示读取的是最新 RAG 开关状态
 # -----------------------------
@@ -952,49 +987,16 @@ if mode in RAG_ENABLED_MODES:
             # 如果数据库有文档但用户手动关闭 RAG，则提示文档仍在，但本次不会用于检索
             st.info(f"当前会话已保存文档：{file_name}{chunk_count_text}。在左侧对话设置中开启 RAG 后，可以继续基于该文档提问。")
 
-    # 当前没有数据库文档但用户手动开启了 RAG 时，用 warning 提醒需要上传文件。
-    # 该提示只说明当前会话在本轮提交前还没有已保存文档，不属于索引完成提示，因此可以和后续索引状态共存。
-    elif use_rag:
-        st.warning("当前会话暂无可检索文档。请上传文件后使用 RAG，或关闭 RAG 后直接提问。")
-
-# -----------------------------
-# 统一输入入口
-# 使用 st.chat_input 同时支持:
-# 1. 纯文本输入
-# 2. 文本 + 文件附件
-# 3. 仅上传文件
-# -----------------------------
-chat_submission = st.chat_input(
-    "请输入内容，或直接附加文件后发送...",
-    accept_file=(mode in UPLOAD_ENABLED_MODES), # 当前模式支持文件上传时，才允许附加文件
-    file_type=CHAT_INPUT_FILE_TYPES if mode in UPLOAD_ENABLED_MODES else None, # 如果支持上传文件，只允许 txt / md / pdf
-    key=f"chat_input_{mode}" # 不同模式使用不同 key，避免输入框状态冲突
-)
-
-submit_display_text = None   # 显示给前端聊天区看的文本
-submit_raw_text = None       # 真正发给后端处理的文本
-uploaded_file_name = None    # 上传文件名
-uploaded_file_text = None    # 提取出来的文件全文文本
+    # 当前没有数据库文档时，不在主界面常驻提示。
+    # 原因：用户在 chat_input 中选中文件但尚未发送时，Streamlit 还不会把文件交给脚本；
+    # 如果此时常驻展示“暂无可检索文档”，会和用户已经选择文件的视觉状态冲突。
+    # 真正提交且缺少文档的场景，会在提交校验或 Agent 无依据回答中处理。
 
 # 只有当用户真的提交了输入，才进入后续处理
 if chat_submission:
-    # -----------------------------
-    # 第一步：统一解析 chat_input 返回值
-    # accept_file=True 时，chat_input 返回 dict-like 对象，包含 text 和 files
-    # 非上传模式下，返回的是普通字符串
-    # -----------------------------
-    if mode in UPLOAD_ENABLED_MODES:
-        user_text = (chat_submission.text or "").strip()
-        uploaded_files = chat_submission["files"]
-    else:
-        user_text = str(chat_submission).strip()
-        uploaded_files = []
-
-    # 当前阶段只处理单文件，因此只取第一个文件
-    uploaded_file = uploaded_files[0] if uploaded_files else None
 
     # -----------------------------
-    # 第二步：如果附加了文件，先提取文本
+    # 第一步：如果附加了文件，先提取文本
     # -----------------------------
     if uploaded_file is not None:
         uploaded_file_name = uploaded_file.name
@@ -1044,12 +1046,12 @@ if chat_submission:
         submit_display_text = user_text
         submit_raw_text = user_text
 
-    # 如果非 Agent 模式开启了 RAG，但既没有上传新文件，数据库里也没有历史文档，则停止本次提交。
-    # Agent 模式允许继续进入后端决策：普通问题会跳过检索，知识库问题会得到“没有依据”的明确结果。
+    # 如果开启了 RAG，但既没有上传新文件，数据库里也没有历史文档，则停止本次提交。
+    # 这样可以避免用户以为本轮会检索知识库，实际却没有任何可检索文档。
+    # 如果用户只是想普通对话，可以关闭 RAG 后再发送；如果需要知识库问答，应先上传文件。
     if (
         use_rag
         and mode in RAG_ENABLED_MODES
-        and task_type != "agent"
         and not uploaded_file_text
         and not has_persisted_rag_document
     ):
