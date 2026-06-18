@@ -2,7 +2,7 @@
 企业知识库问答 Agent 服务模块。
 
 职责：
-1. 通过模型意图分类、query rewrite 和规则兜底，判断用户问题是否需要查询企业知识库。
+1. 通过模型意图分类和 query rewrite，判断用户问题是否需要查询企业知识库。
 2. 需要知识库时使用改写后的检索 query 执行 RAG 检索，并根据证据是否充分决定是否生成引用答案。
 3. 不需要知识库时走普通对话流程，避免所有问题都盲目 RAG。
 4. 将 Agent 决策、检索证据、生成回答三个阶段转换为 SSE 步骤事件返回前端。
@@ -10,7 +10,7 @@
 
 说明：
 - 当前模块是轻量 Agent / Workflow 改造，不引入 LangChain 或复杂多 Agent。
-- Agent 判断阶段优先使用模型做意图分类和检索 query 改写，模型不可用时回退到规则判断。
+- Agent 判断阶段使用模型做意图分类和检索 query 改写，不再维护关键词判断规则。
 - Agent 流程固定为：判断是否需要知识库 -> 检索证据 -> 生成回答。
 - 如果知识库证据不足，Agent 不会强行回答，而是明确说明缺少依据。
 - 如果问题不依赖企业知识库，Agent 会跳过检索，直接按普通对话回答。
@@ -70,80 +70,6 @@ AGENT_STEP_KEYS = (
     STEP_GENERATE_ANSWER,
 )
 
-# 明确属于企业知识库、制度、文档、规则类问题的关键词
-KNOWLEDGE_REQUIRED_KEYWORDS = {
-    "公司",
-    "员工",
-    "手册",
-    "制度",
-    "政策",
-    "规定",
-    "流程",
-    "审批",
-    "申请",
-    "报销",
-    "发票",
-    "试用期",
-    "年假",
-    "晚餐",
-    "远程办公",
-    "加班",
-    "考勤",
-    "请假",
-    "合同",
-    "采购",
-    "账号",
-    "权限",
-    "客户",
-    "工单",
-    "知识库",
-    "文档",
-    "根据",
-    "依据",
-}
-
-# 明确属于寒暄、身份询问或普通闲聊的关键词
-GENERAL_CHAT_KEYWORDS = {
-    "你好",
-    "您好",
-    "你是谁",
-    "谢谢",
-    "早上好",
-    "下午好",
-    "晚上好",
-}
-
-# 明确属于通用写作、改写或文本处理的关键词
-GENERAL_TEXT_TASK_KEYWORDS = {
-    "写",
-    "写一封",
-    "生成",
-    "模板",
-    "改写",
-    "润色",
-    "翻译",
-    "总结",
-    "扩写",
-    "缩写",
-}
-
-# 出现这些词时，通常表示用户需要企业制度、流程或文档依据
-KNOWLEDGE_POLICY_ANCHOR_KEYWORDS = {
-    "公司",
-    "制度",
-    "政策",
-    "规定",
-    "流程",
-    "审批",
-    "员工手册",
-    "手册",
-    "依据",
-    "根据",
-    "规则",
-    "标准",
-}
-
-
 def _extract_json_object(text: str) -> dict[str, Any] | None:
     """
     从模型输出中提取 JSON 对象。
@@ -151,7 +77,7 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     函数说明：
     1. 优先直接按 JSON 解析模型输出。
     2. 如果模型额外包了 Markdown 或说明文字，则截取第一个 {...} 再解析。
-    3. 解析失败时返回 None，让外层回退到规则判断。
+    3. 解析失败时返回 None，让外层使用保守兜底。
 
     :param text: 模型返回的原始文本
     :return: 解析得到的 JSON 字典；解析失败时返回 None
@@ -177,7 +103,7 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
             # 解析截取出来的 JSON 对象
             parsed_result = json.loads(normalized_text[start_index:end_index + 1])
         except json.JSONDecodeError:
-            # 截取后仍然无法解析，交给外层规则兜底
+            # 截取后仍然无法解析，交给外层保守兜底
             return None
 
     # 只有字典结构才符合当前决策协议
@@ -186,33 +112,6 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
 
     # 返回解析出的字典
     return parsed_result
-
-
-def _is_general_text_task_without_policy_anchor(question: str) -> bool:
-    """
-    判断当前问题是否是无需知识库的通用文本处理任务。
-
-    函数说明：
-    1. 识别写邮件、写文案、改写、翻译、总结等通用文本任务。
-    2. 如果同时出现公司制度、流程、员工手册等依据词，则不按通用任务处理。
-    3. 用于避免“帮我写一封请假邮件”被误判成必须查询企业知识库。
-
-    :param question: 用户当前输入的问题
-    :return: 如果是无需知识库的通用文本任务则返回 True，否则返回 False
-    """
-    # 去掉首尾空白，统一后续关键词判断
-    normalized_question = question.strip()
-    # 空问题不是有效文本任务
-    if not normalized_question:
-        return False
-
-    # 判断是否包含写作、改写、翻译、总结等通用任务动作
-    has_general_text_action = any(keyword in normalized_question for keyword in GENERAL_TEXT_TASK_KEYWORDS)
-    # 判断是否包含公司制度、流程、员工手册等知识库依据信号
-    has_policy_anchor = any(keyword in normalized_question for keyword in KNOWLEDGE_POLICY_ANCHOR_KEYWORDS)
-
-    # 有通用文本处理动作，且没有明确制度依据时，按普通对话处理
-    return has_general_text_action and not has_policy_anchor
 
 
 def _normalize_rewritten_query(question: str, rewritten_query: Any) -> str:
@@ -271,7 +170,7 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
     函数说明：
     1. 让模型只做轻量路由决策和检索 query 改写，不生成最终答案。
     2. 要求模型返回固定 JSON，包含 need_knowledge_base、reason 和 rewritten_query。
-    3. 如果模型输出不合规或调用失败，则返回 None，让外层规则判断兜底。
+    3. 如果模型输出不合规或调用失败，则返回 None，让外层保守兜底。
 
     :param question: 用户当前输入的问题
     :param client: OpenAI 兼容客户端
@@ -290,10 +189,10 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
                     "role": "system",
                     "content": (
                         "你是企业知识库问答系统的意图分类与检索改写 Agent，只负责判断用户问题是否需要查询企业知识库，并在需要时改写检索 query。"
-                        "如果问题涉及公司制度、员工手册、流程、报销、请假、年假、试用期、远程办公、权限、合同、采购、内部规则或需要基于上传文档回答，则 need_knowledge_base=true。"
-                        "如果问题只是让你写请假邮件、写通知、写文案、翻译、改写、总结、开放闲聊、代码问题或不依赖企业内部文档的常识问题，则 need_knowledge_base=false。"
-                        "只有当用户明确要求按照公司制度、请假流程、员工手册、内部规定或已有文档依据来回答时，才把请假类问题判断为 need_knowledge_base=true。"
-                        "当 need_knowledge_base=true 时，rewritten_query 必须是适合向量检索的短查询，保留核心实体、制度词和约束词，去掉寒暄、附件说明和无关口语。"
+                        "当问题明确依赖已有知识库、上传资料、企业内部文档、制度规则、流程标准、可追溯来源或特定上下文证据时，need_knowledge_base=true。"
+                        "当问题是普通对话、开放写作、通用文本处理、常识问答、代码问题，且没有要求基于特定资料或内部规则回答时，need_knowledge_base=false。"
+                        "如果问题同时包含通用任务和资料依据要求，请优先判断是否需要外部证据；只有需要外部证据时才查询知识库。"
+                        "当 need_knowledge_base=true 时，rewritten_query 必须是适合向量检索的短查询，保留核心实体、规则类型、资料范围和约束词，去掉寒暄、附件说明和无关口语。"
                         "当 need_knowledge_base=false 时，rewritten_query 必须为空字符串。"
                         "只返回 JSON，不要返回 Markdown，不要补充解释。"
                         "JSON 格式必须是：{\"need_knowledge_base\": true, \"reason\": \"简短中文理由\", \"rewritten_query\": \"适合检索的中文短查询\"}"
@@ -304,21 +203,21 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
                     "content": f"用户问题：{question}",
                 },
             ],
-            temperature=0, # 控制模型的随机性，0为最稳定。尽量不要发挥，严格按规则判断
+            temperature=0, # 控制模型的随机性，0 为最稳定，尽量让意图判断结果可复现
         )
     except Exception:
-        # 模型决策失败不能中断 Agent 主流程，后续交给规则判断
+        # 模型决策失败不能中断 Agent 主流程，后续交给保守兜底
         return None
 
     try:
         # 读取模型返回文本
         decision_text = response.choices[0].message.content or ""
     except (AttributeError, IndexError):
-        # 如果模型响应结构异常，则交给规则判断兜底
+        # 如果模型响应结构异常，则交给保守兜底
         return None
     # 从模型输出中解析 JSON
     decision_json = _extract_json_object(decision_text)
-    # 如果解析失败，则交给规则判断兜底
+    # 如果解析失败，则交给保守兜底
     if not decision_json:
         return None
 
@@ -345,44 +244,32 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
     return need_knowledge_base, f"Agent 判断：{reason}", rewritten_query
 
 
-def _decide_need_knowledge_base_by_rule(question: str, use_rag: bool) -> tuple[bool, str, str]:
+def _build_intent_decision_fallback(question: str, use_rag: bool) -> tuple[bool, str, str]:
     """
-    使用规则兜底判断当前问题是否需要查询企业知识库。
+    构造意图分类失败时的保守兜底结果。
 
     函数说明：
-    1. 当模型决策不可用或输出异常时，保证 Agent 仍能稳定工作。
-    2. 对空问题、寒暄问题和明显企业制度问题进行确定性判断。
-    3. 对没有明显知识库信号的问题默认走普通对话，避免所有问题都盲目 RAG。
+    1. 只处理 RAG 关闭、空问题和模型判断失败这类系统状态。
+    2. 不再通过关键词判断用户意图，避免规则系统覆盖 Agent 判断。
+    3. 模型无法完成意图分类时，保守跳过知识库检索，避免盲目 RAG。
 
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
     :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
     """
-    # 去掉首尾空白，避免空格影响关键词判断
+    # 去掉首尾空白，只用于判断是否为空问题
     normalized_question = question.strip()
 
     # 如果前端没有开启 RAG，则尊重用户设置，走普通对话
     if not use_rag:
         return False, "当前未开启 RAG，按普通对话处理。", ""
 
-    # 空问题没有检索价值，直接走普通对话兜底
+    # 空问题没有检索价值，直接跳过知识库检索
     if not normalized_question:
         return False, "当前问题为空，跳过知识库检索。", ""
 
-    # 短寒暄或身份询问通常不需要企业知识库
-    if len(normalized_question) <= 12 and any(keyword in normalized_question for keyword in GENERAL_CHAT_KEYWORDS):
-        return False, "当前问题属于寒暄或普通对话，不需要查询企业知识库。", ""
-
-    # 通用写作任务如果没有明确要求公司制度或文档依据，则不查询知识库
-    if _is_general_text_task_without_policy_anchor(normalized_question):
-        return False, "当前问题属于通用文本生成任务，不需要查询企业知识库。", ""
-
-    # 只要命中企业知识库相关关键词，就认为需要检索文档证据
-    if any(keyword in normalized_question for keyword in KNOWLEDGE_REQUIRED_KEYWORDS):
-        return True, "当前问题涉及企业制度、流程、文档或规则，需要查询知识库。", normalized_question
-
-    # 没有明确知识库信号时，不强行检索
-    return False, "当前问题没有明显企业知识库信号，按普通对话处理。", ""
+    # 没有模型判断结果时，不再用关键词猜测用户意图，避免规则误伤真实需求
+    return False, "Agent 意图分类暂不可用，本轮按普通对话处理。", ""
 
 
 def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tuple[bool, str, str]:
@@ -391,16 +278,15 @@ def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tup
 
     函数说明：
     1. 如果前端没有开启 RAG，直接判定为不需要知识库。
-    2. 如果问题是短寒暄或普通身份询问，跳过知识库检索。
-    3. 对其余问题优先使用大模型做意图分类和 query rewrite。
-    4. 如果模型决策失败，则回退到规则判断，保证流程稳定。
+    2. 优先使用大模型做意图分类和 query rewrite。
+    3. 如果模型决策失败，则使用保守兜底，保证流程稳定。
 
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
     :param client: OpenAI 兼容客户端，用于执行轻量 Agent 意图分类和 query rewrite
     :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
     """
-    # 去掉首尾空白，避免空格影响关键词判断
+    # 去掉首尾空白，只用于基础空值判断和传给模型
     normalized_question = question.strip()
 
     # 如果前端没有开启 RAG，则尊重用户设置，走普通对话
@@ -410,14 +296,6 @@ def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tup
     # 空问题没有检索价值，直接走普通对话兜底
     if not normalized_question:
         return False, "当前问题为空，跳过知识库检索。", ""
-
-    # 短寒暄或身份询问通常不需要企业知识库
-    if len(normalized_question) <= 12 and any(keyword in normalized_question for keyword in GENERAL_CHAT_KEYWORDS):
-        return False, "当前问题属于寒暄或普通对话，不需要查询企业知识库。", ""
-
-    # 通用写作任务不需要先查知识库，避免“写请假邮件”被误判成公司制度问答
-    if _is_general_text_task_without_policy_anchor(normalized_question):
-        return False, "当前问题属于通用文本生成任务，不需要查询企业知识库。", ""
 
     # 优先让模型做一次轻量意图分类和 query rewrite，增强 Agent 自主决策能力
     llm_decision = _decide_need_knowledge_base_by_llm(
@@ -428,8 +306,8 @@ def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tup
     if llm_decision is not None:
         return llm_decision
 
-    # 模型决策失败时回退到规则判断，保证 Agent 主流程不被模型路由失败打断
-    return _decide_need_knowledge_base_by_rule(
+    # 模型决策失败时使用保守兜底，保证 Agent 主流程不被意图分类失败打断
+    return _build_intent_decision_fallback(
         question=normalized_question,
         use_rag=use_rag,
     )
@@ -470,7 +348,7 @@ def _build_agent_answer_system_prompt(has_rag_evidence: bool) -> str:
         f"{base_prompt}"
         "当前问题已判断为不需要查询知识库，请按普通对话直接回答。"
         "如果用户询问你是谁，请说明你是企业知识库问答 Agent，"
-        "可以基于企业文档回答问题，也可以处理请假邮件、改写、总结等轻量文本任务。"
+        "可以基于企业文档回答问题，也可以处理轻量文本生成、改写、总结等任务。"
     )
 
 
