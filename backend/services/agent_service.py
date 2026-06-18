@@ -560,6 +560,77 @@ def _build_agent_rag_metadata(
     }
 
 
+def _retrieve_agent_rag_chunks(
+    session_id: str | None,
+    rewritten_query: str,
+    original_question: str,
+    top_k: int,
+) -> tuple[list[dict[str, Any]], str, str, str]:
+    """
+    执行 Agent RAG 检索，并在改写 query 未命中时回退原始问题。
+
+    函数说明：
+    1. 优先使用模型改写后的 query 检索，提高语义检索命中质量。
+    2. 如果改写 query 没有可靠命中，则使用用户原始问题再检索一次。
+    3. 返回最终命中的片段、检索方式、实际生效 query 和检索说明。
+
+    :param session_id: 当前会话 ID
+    :param rewritten_query: Agent 改写后的检索问题
+    :param original_question: 用户原始问题
+    :param top_k: 最多返回的检索片段数量
+    :return: 四元组，依次为命中片段、检索方式、实际检索 query、补充说明
+    """
+    # 清理改写 query，避免空白影响检索
+    normalized_rewritten_query = rewritten_query.strip()
+    # 清理原始问题，作为改写失败后的兜底检索输入
+    normalized_original_question = original_question.strip()
+    # 优先使用改写 query；如果模型没有给出 query，则直接使用原始问题
+    primary_query = normalized_rewritten_query or normalized_original_question
+
+    # 如果两个 query 都为空，则直接返回无命中
+    if not primary_query:
+        return [], NO_HIT_RETRIEVAL_MODE, "", ""
+
+    # 第一次检索使用模型改写后的 query
+    matched_chunks, retrieval_mode = retrieve_rag_chunks_with_mode(
+        session_id=session_id,
+        query=primary_query,
+        top_k=top_k,
+    )
+    # 如果改写 query 已经命中，直接返回结果
+    if matched_chunks:
+        return matched_chunks, retrieval_mode, primary_query, ""
+
+    # 如果原始问题为空，或者和主检索 query 完全一致，就没有必要重复检索
+    if not normalized_original_question or normalized_original_question == primary_query:
+        return matched_chunks, retrieval_mode, primary_query, ""
+
+    # 改写 query 没命中时，用用户原始问题再检索一次，避免 query rewrite 丢失原句关键词
+    fallback_chunks, fallback_mode = retrieve_rag_chunks_with_mode(
+        session_id=session_id,
+        query=normalized_original_question,
+        top_k=top_k,
+    )
+    # 如果原始问题命中，则返回 fallback 结果，并给前端展示一条说明
+    if fallback_chunks:
+        return (
+            fallback_chunks,
+            fallback_mode,
+            normalized_original_question,
+            "改写后的检索问题未命中，已使用原始问题重新检索。",
+        )
+
+    # 两次检索都没有命中时，fallback_chunks 此时为空列表；
+    # 返回空列表给调用方，表示没有可用证据；
+    # 同时保留 primary_query 作为检索日志中的主 query。
+    return (
+        fallback_chunks,
+        fallback_mode,
+        primary_query,
+        "已尝试改写后的检索问题和原始问题，均未命中可靠依据。",
+    )
+
+
 def _stream_model_answer(
     client,
     messages: list[dict[str, str]],
@@ -713,18 +784,23 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
 
             # 默认检索状态为 no_hit，后续根据实际结果更新
             retrieval_mode = NO_HIT_RETRIEVAL_MODE
+            # 默认实际检索 query 为 Agent 改写后的 query；如果 fallback 命中，后续会替换成原始问题
+            effective_retrieval_query = retrieval_query
+            # 默认没有额外检索说明；只有发生 query fallback 时才展示
+            retrieval_note = ""
             # 如果判断需要知识库，则执行 RAG 检索
             if need_knowledge_base:
-                # 调用 RAG 检索链路，使用改写后的 query 返回命中片段和实际检索方式
-                matched_chunks, retrieval_mode = retrieve_rag_chunks_with_mode(
+                # 调用 Agent 检索链路，优先使用改写 query，改写无命中时回退原始问题
+                matched_chunks, retrieval_mode, effective_retrieval_query, retrieval_note = _retrieve_agent_rag_chunks(
                     session_id=request.session_id,
-                    query=retrieval_query,
+                    rewritten_query=retrieval_query,
+                    original_question=request.input_text,
                     top_k=request.rag_top_k,
                 )
                 # 保存本次检索记录，便于第 10 天可解释面板和数据库追踪继续生效
                 save_rag_query_with_hits(
                     session_id=request.session_id,
-                    query_text=retrieval_query,
+                    query_text=effective_retrieval_query,
                     top_k=request.rag_top_k,
                     matched_chunks=matched_chunks,
                     retrieval_mode=retrieval_mode,
@@ -737,16 +813,19 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     first_source = build_source_label(matched_chunks[0])
                     retrieve_text = (
                         f"已命中 {len(matched_chunks)} 个知识库片段。\n\n"
-                        f"检索问题：{retrieval_query}\n\n"
+                        f"检索问题：{effective_retrieval_query}\n\n"
                         f"检索方式：{retrieval_mode_display}\n\n"
                         f"优先证据：{first_source}"
                     )
                 else:
                     retrieve_text = (
                         f"{NO_RAG_EVIDENCE_MESSAGE}。\n\n"
-                        f"检索问题：{retrieval_query}\n\n"
+                        f"检索问题：{effective_retrieval_query}\n\n"
                         f"检索方式：{retrieval_mode_display}"
                     )
+                # 如果发生了 query fallback，则把说明追加到检索步骤中，方便用户理解为什么检索问题变化
+                if retrieval_note:
+                    retrieve_text += f"\n\n说明：{retrieval_note}"
             else:
                 # 不需要知识库时明确告诉用户本轮跳过检索
                 retrieve_text = "已跳过知识库检索，本轮将按普通对话生成回答。"
@@ -820,7 +899,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     user_prompt = (
                         "请基于上方知识库证据回答下面的问题。"
                         "涉及事实、规则、数字或结论时，句末必须附引用。\n\n"
-                        f"【检索改写问题】\n{retrieval_query}\n\n"
+                        f"【实际检索问题】\n{effective_retrieval_query}\n\n"
                         f"【用户问题】\n{request.input_text}"
                     )
                 else:

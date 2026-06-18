@@ -83,7 +83,7 @@ class IndexDocumentRequest(BaseModel):
     """
     文档索引请求模型。
 
-    用于接收前端上传并提取后的完整文本，交给后端切块并建立临时索引。
+    用于接收前端上传并提取后的完整文本，交给后端切块并追加到当前会话索引。
     """
     session_id: str  # 当前会话 ID
     document_text: str  # 完整文档文本
@@ -139,8 +139,10 @@ class RagStatusResponse(BaseModel):
     """
     session_id: str  # 当前会话 ID
     has_document: bool  # 当前会话是否已有索引文档
-    file_name: Optional[str] = None  # 当前文档文件名
-    chunk_count: int = 0  # 当前文档块数量
+    file_names: List[str] = Field(default_factory=list)  # 当前会话已索引的全部文档文件名
+    document_count: int = 0  # 当前会话已索引的文档数量
+    chunk_count: int = 0  # 当前会话全部文档的文本块总数量
+    documents: List[Dict[str, Any]] = Field(default_factory=list)  # 当前会话每份文档的状态明细
     expires_in_seconds: int = 0  # 数据库持久化后默认不过期，保留该字段兼容前端展示
 
 

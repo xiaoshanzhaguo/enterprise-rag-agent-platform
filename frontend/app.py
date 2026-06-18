@@ -594,7 +594,7 @@ st.session_state.mode_sessions = ensure_mode_sessions(
 
 # -----------------------------
 # 初始化前端文件指纹缓存
-# 用于记录当前页面运行期间上传文件的指纹，避免同一 session 重复索引同一份文件
+# 用于记录当前页面运行期间上传文件的指纹，避免同一 session 重复索引同一批文件
 # 当前 RAG 文档状态以数据库 /rag_status 返回结果为准
 # -----------------------------
 if "rag_index_state" not in st.session_state:
@@ -944,16 +944,16 @@ for idx, message in enumerate(current_messages):
 # -----------------------------
 chat_submission = st.chat_input(
     "请输入内容，或直接附加文件后发送...",
-    accept_file=(mode in UPLOAD_ENABLED_MODES), # 当前模式支持文件上传时，才允许附加文件
+    accept_file=("multiple" if mode in UPLOAD_ENABLED_MODES else False), # 当前模式支持文件上传时，允许一次附加多份文件
     file_type=CHAT_INPUT_FILE_TYPES if mode in UPLOAD_ENABLED_MODES else None, # 如果支持上传文件，只允许 txt / md / pdf
     key=f"chat_input_{mode}" # 不同模式使用不同 key，避免输入框状态冲突
 )
 
 submit_display_text = None   # 显示给前端聊天区看的文本
 submit_raw_text = None       # 真正发给后端处理的文本
-uploaded_file_name = None    # 上传文件名
-uploaded_file_text = None    # 提取出来的文件全文文本
-uploaded_file = None         # 当前提交附带的文件对象
+uploaded_file_names = []     # 当前提交附带的全部文件名
+uploaded_file_text = None    # 提取出来的文件全文文本摘要；多文件时为合并后的全文
+uploaded_file_payloads = []  # 当前提交中已解析完成的文件数据，包含文件名和正文
 user_text = ""               # 当前提交中的用户文本
 uploaded_files = []          # 当前提交中的文件列表
 
@@ -967,9 +967,6 @@ if chat_submission:
         user_text = str(chat_submission).strip()
         uploaded_files = []
 
-    # 当前阶段只处理单文件，因此只取第一个文件
-    uploaded_file = uploaded_files[0] if uploaded_files else None
-
 # -----------------------------
 # RAG 文档状态提示
 # 放在侧边栏设置之后，保证提示读取的是最新 RAG 开关状态
@@ -977,10 +974,18 @@ if chat_submission:
 if mode in RAG_ENABLED_MODES:
     # 当前数据库已保存文档时，在对话输入前展示更醒目的状态提示
     if has_persisted_rag_document:
-        # 从 /rag_status 返回结果中读取当前会话已保存的文档名
-        file_name = rag_status_info.get("file_name") or "未命名文件"
-        # 从 /rag_status 返回结果中读取当前文档已切分出的文本块数量
+        # 从 /rag_status 返回结果中读取当前会话已保存的全部文档名
+        file_names = rag_status_info.get("file_names") or []
+        # 从 /rag_status 返回结果中读取当前会话已保存的文档数量
+        document_count = rag_status_info.get("document_count", len(file_names))
+        # 从 /rag_status 返回结果中读取当前会话全部文档已切分出的文本块数量
         chunk_count = rag_status_info.get("chunk_count", 0)
+        # 多文档时展示数量摘要，单文档时展示具体文件名
+        file_name = (
+            file_names[0]
+            if isinstance(file_names, list) and len(file_names) == 1
+            else f"{document_count} 份文档"
+        )
         # chunk 数量用于告诉用户文档已经完成可检索切块；异常结构时不展示数量，避免提示误导
         chunk_count_text = f"，共 {chunk_count} 个文本块" if isinstance(chunk_count, int) and chunk_count > 0 else ""
 
@@ -1000,19 +1005,44 @@ if mode in RAG_ENABLED_MODES:
 if chat_submission:
 
     # -----------------------------
-    # 第一步：如果附加了文件，先提取文本
+    # 第一步：如果附加了文件，先逐个提取文本
     # -----------------------------
-    if uploaded_file is not None:
-        uploaded_file_name = uploaded_file.name
-        uploaded_file_text, uploaded_file_error = extract_text_from_uploaded_file(uploaded_file)
+    if uploaded_files:
+        # 遍历本轮提交的全部附件，逐个解析文本
+        for uploaded_file in uploaded_files:
+            # 读取当前附件文件名
+            current_file_name = uploaded_file.name
+            # 提取当前附件正文
+            current_file_text, uploaded_file_error = extract_text_from_uploaded_file(uploaded_file)
 
-        if uploaded_file_error:
-            st.error(uploaded_file_error)
-            # 立刻停止本次 Streamlit 脚本的继续执行
-            st.stop()
+            if uploaded_file_error:
+                st.error(uploaded_file_error)
+                # 立刻停止本次 Streamlit 脚本的继续执行
+                st.stop()
 
-    # 如果用户既没输入文字，也没附加文件，则停止本次执行
-    if not user_text and uploaded_file is None:
+            # 如果文件内容为空，则跳过，避免空文档进入索引
+            if not current_file_text:
+                continue
+
+            # 保存解析后的文件名和正文，后续用于展示、RAG 索引和非 RAG 拼接输入
+            uploaded_file_payloads.append({
+                "file_name": current_file_name,
+                "document_text": current_file_text
+            })
+
+        # 收集本轮成功解析的全部文件名
+        uploaded_file_names = [
+            file_payload["file_name"]
+            for file_payload in uploaded_file_payloads
+        ]
+        # 多文件正文合并时加上文件标题，避免模型在非 RAG 模式下混淆来源
+        uploaded_file_text = "\n\n".join(
+            f"【文档：{file_payload['file_name']}】\n{file_payload['document_text']}"
+            for file_payload in uploaded_file_payloads
+        ) or None
+
+    # 如果用户既没输入文字，也没有成功解析出的附件，则停止本次执行
+    if not user_text and not uploaded_file_payloads:
         st.stop()
 
     # 将当前模式名映射成后端任务类型，后续用于选择接口和判断是否属于分步骤输出
@@ -1033,7 +1063,7 @@ if chat_submission:
         # 展示给聊天区看的文本：通常是“用户输入 + 附件名”
         submit_display_text = build_user_display_text(
             user_text=user_text,
-            uploaded_file_name=uploaded_file_name
+            uploaded_file_name=uploaded_file_names
         )
 
         # 启用 RAG 时，提交给后端的是 query，不直接塞全文
@@ -1066,15 +1096,20 @@ if chat_submission:
     # 第四步：如果当前附加了文件并启用 RAG, 则判断是否需要重新索引
     # -----------------------------
     if uploaded_file_text and use_rag and mode in RAG_ENABLED_MODES:
-        # 给当前文件文本生成一个指纹，用来判断”这份文档是不是和之前同一份“
-        text_fingerprint = build_text_fingerprint(uploaded_file_text)
+        # 给当前批次文件生成一个指纹，用来判断”这一批文档是不是和之前同一批“
+        text_fingerprint = build_text_fingerprint(
+            "\n\n".join(
+                f"{file_payload['file_name']}::{file_payload['document_text']}"
+                for file_payload in uploaded_file_payloads
+            )
+        )
         # 取出当前模式已有的索引状态记录
         current_index_state = st.session_state.rag_index_state.get(mode)
 
         # 判断是否需要重新索引。只要满足以下任意条件，就重新索引：
         # - 当前模式还没有索引记录
         # - 当前记录不属于这个会话
-        # - 当前文件文本和之前索引过的不一样
+        # - 当前批次文件文本和之前索引过的不一样
         need_reindex = (
             not current_index_state
             or current_index_state.get("session_id") != current_session_id
@@ -1088,13 +1123,26 @@ if chat_submission:
                 st.write("正在解析文档并切分为可检索文本块。")
                 # 提示用户向量模式下会调用当前配置的 embedding 服务并写入向量库
                 st.write("正在调用已配置的 Embedding 服务生成向量，并写入本地向量库。")
-                # 调用后端 /index_document 接口，让后端为当前会话建立文档索引
-                success, message = index_uploaded_document(
-                    session_id=current_session_id,
-                    file_name=uploaded_file_name,
-                    document_text=uploaded_file_text
-                )
+                # 记录本轮成功索引的文档数量，用于最终状态提示
+                indexed_document_count = 0
+                # 逐个文件调用后端 /index_document 接口，确保每份文档在数据库里保留独立 file_name
+                for file_payload in uploaded_file_payloads:
+                    # 读取当前文件名
+                    current_file_name = file_payload["file_name"]
+                    # 读取当前文件正文
+                    current_file_text = file_payload["document_text"]
+                    # 调用后端索引当前文件
+                    success, message = index_uploaded_document(
+                        session_id=current_session_id,
+                        file_name=current_file_name,
+                        document_text=current_file_text
+                    )
+                    # 如果任意文件索引失败，跳出循环并交给下面的错误处理
+                    if not success:
+                        break
 
+                    # 成功索引一个文件后累计文档数量
+                    indexed_document_count += 1
             # 如果索引失败，显示错误并停止
             if not success:
                 # 将状态标记为失败，便于用户确认不是界面静默卡住
@@ -1103,12 +1151,12 @@ if chat_submission:
                 st.stop()
 
             # 将状态标记为完成，明确告诉用户索引阶段已经结束
-            index_status.update(label=message, state="complete")
+            index_status.update(label=f"文档索引已完成，本轮已处理 {indexed_document_count} 份文档。", state="complete")
 
-            # 记录当前模式当前会话已索引过这份文档
+            # 记录当前模式当前会话已索引过这批文档
             st.session_state.rag_index_state[mode] = {
                 "session_id": current_session_id,
-                "file_name": uploaded_file_name,
+                "file_names": uploaded_file_names,
                 "text_fingerprint": text_fingerprint
             }
             # 索引成功后更新本次运行中的数据库文档状态

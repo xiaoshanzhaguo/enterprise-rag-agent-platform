@@ -206,7 +206,7 @@ def clear_chat_session(session_id: str) -> None:
 
 def index_uploaded_document(session_id: str, file_name: str, document_text: str) -> tuple[bool, str]:
     """
-    调用后端 /index_document 接口，为当前会话建立临时文档索引。
+    调用后端 /index_document 接口，为当前会话追加建立文档索引。
 
     :param session_id: 当前会话 ID
     :param file_name: 上传文件名
@@ -230,7 +230,7 @@ def index_uploaded_document(session_id: str, file_name: str, document_text: str)
 
     # 把后端返回的 JSON 响应解析成 Python 字典
     result = response.json()
-    # 如果成功，就返回成功标记和一条提示文案。
+    # 如果成功，就返回成功标记和一条中性提示文案；多文档总提示由 app.py 统一展示
     return True, f"文档索引已完成，已生成 {result['chunk_count']} 个可检索文本块。"
 
 
@@ -337,7 +337,7 @@ def get_rag_status(session_id: str) -> dict:
 
     函数说明：
     - 调用后端 /rag_status/{session_id} 接口
-    - 查询当前会话是否已有索引文档、文档名、chunk 数量和过期时间
+    - 查询当前会话是否已有索引文档、文档名列表、文档数量、chunk 总数和过期时间
 
     :param session_id: 当前会话ID
     :return: 成功时返回 RAG 状态字典；请求失败时返回空字典

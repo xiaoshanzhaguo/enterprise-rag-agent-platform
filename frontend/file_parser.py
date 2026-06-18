@@ -69,20 +69,29 @@ def build_text_fingerprint(text: str) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
-def build_user_display_text(user_text: str, uploaded_file_name: str | None) -> str:
+def build_user_display_text(user_text: str, uploaded_file_name: str | list[str] | None) -> str:
     """
     构造聊天区展示给用户看的输入文本。
 
     说明:
-    - 如果用户既输入了问题，又附加了文件，则两者都显示
-    - 如果用户只附加文件，则显示附件名称
+    - 如果用户既输入了问题，又附加了文件，则两者都显示。
+    - 如果用户上传了多份文件，则逐行展示附件名称。
+    - 如果用户只附加文件，则显示附件名称。
     """
     parts = []
 
     if user_text.strip():
         parts.append(user_text.strip())
 
-    if uploaded_file_name:
+    # 兼容单文件字符串和多文件列表两种调用方式
+    if isinstance(uploaded_file_name, list):
+        # 过滤空文件名，避免展示空附件行
+        file_names = [file_name for file_name in uploaded_file_name if file_name]
+        # 多文件时逐行展示，用户能清楚看到本轮提交了哪些资料
+        if file_names:
+            parts.extend(f"【附件】 {file_name}" for file_name in file_names)
+    elif uploaded_file_name:
+        # 单文件时保持原有展示格式
         parts.append(f"【附件】 {uploaded_file_name}")
 
     # 如果前面的结果不是空字符串，就返回前面的；如果是空字符串，就返回后面的默认值。

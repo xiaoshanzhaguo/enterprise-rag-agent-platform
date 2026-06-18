@@ -278,8 +278,18 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
 
     # 如果 status 为 None，则退回为空字典。这样后面 .get(...) 不会报错
     status = status or {}
-    # 优先展示当前文件名；如果没有则显示默认文案
-    file_name = status.get("file_name") or "当前文档"
+    # 优先读取当前会话的多文档文件名列表
+    file_names = status.get("file_names") or []
+    # 读取当前会话文档数量，用于多文档摘要展示
+    document_count = status.get("document_count", len(file_names))
+    # 单文档时展示文件名，多文档时展示文档数量，避免顶部说明误导成只引用了一份文档
+    file_name = (
+        file_names[0]
+        if isinstance(file_names, list) and len(file_names) == 1
+        else "当前文档"
+    )
+    # 多文档状态下，引用面板顶部展示“知识库：N 份文档”
+    document_caption = f"知识库：{document_count} 份文档" if isinstance(file_names, list) and len(file_names) > 1 else f"文档：{file_name}"
     # 取出当前索引距离过期还剩多少秒
     expires_in_seconds = status.get("expires_in_seconds")
 
@@ -287,7 +297,7 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
     retrieval_mode = chunks[0].get("retrieval_mode", "unknown")
 
     # 构造顶部摘要说明，先说明本次回答参考了哪个文档、多少个片段以及使用的检索方式
-    caption_parts = [f"文档：{file_name}", f"top_k 命中：{len(chunks)}", f"检索方式：{retrieval_mode}"]
+    caption_parts = [document_caption, f"top_k 命中：{len(chunks)}", f"检索方式：{retrieval_mode}"]
     # 如果过期时间有效且大于 0，就追加一条：索引大约多少分钟后过期
     if isinstance(expires_in_seconds, int) and expires_in_seconds > 0:
         caption_parts.append(f"索引约 {expires_in_seconds // 60} 分钟后过期")

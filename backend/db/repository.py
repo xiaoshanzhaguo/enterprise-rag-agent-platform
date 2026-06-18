@@ -497,8 +497,8 @@ def save_document_with_chunks(
     1. 如果 session_id 或 chunks 为空，直接返回空列表。
     2. 确保当前聊天会话存在。
     3. 生成文档内容哈希值，便于后续识别文档内容。
-    4. 删除当前 session 旧的 RAG 文档，保持“一个会话当前索引一份文档”的交互语义。
-    5. 将文档基础信息写入 documents 表。
+    4. 如果同一会话下已经存在同名同内容文档，则复用已有 chunk。
+    5. 如果不存在重复文档，则将文档基础信息追加写入 documents 表。
     6. 将每个文本块写入 document_chunks 表。
     7. 返回带数据库主键和展示信息的 chunk 元数据。
 
@@ -522,10 +522,65 @@ def save_document_with_chunks(
 
     # 打开数据库连接，保存文档和文本块
     with get_connection() as connection:
-        # 当前前端交互语义是“一个会话当前索引一份文档”，新上传文档会替换旧文档
-        connection.execute("DELETE FROM documents WHERE session_id = ?", (session_id,))
+        # 查询当前会话是否已经保存过同名同内容文档，避免刷新后重复上传造成重复索引
+        existing_document = connection.execute(
+            """
+            SELECT id
+            FROM documents
+            WHERE session_id = ?
+              AND content_hash = ?
+              AND (
+                  file_name = ?
+                  OR (file_name IS NULL AND ? IS NULL)
+              )
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (session_id, content_hash, file_name, file_name),
+        ).fetchone()
 
-        # 先保存文档主记录，后续 chunk 通过 document_id 关联到这条文档
+        # 如果已经存在同名同内容文档，则直接复用已有 chunk 元数据
+        if existing_document:
+            # 读取已有文本块，返回给向量库 upsert，确保 ChromaDB 缺失时也能补写
+            existing_chunks = connection.execute(
+                """
+                SELECT
+                    id AS db_chunk_id,
+                    document_id,
+                    file_name,
+                    chunk_index AS chunk_id,
+                    chunk_text AS text,
+                    text_length,
+                    created_at
+                FROM document_chunks
+                WHERE document_id = ?
+                ORDER BY chunk_index ASC
+                """,
+                (existing_document["id"],),
+            ).fetchall()
+
+            # 更新会话时间，表示用户刚刚使用过这份文档
+            connection.execute(
+                "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+                (now, session_id),
+            )
+            # 提交更新时间
+            connection.commit()
+            # 将已有 sqlite3.Row 转为普通字典，保持返回结构和新插入分支一致
+            return [
+                {
+                    "chunk_id": row["chunk_id"],
+                    "db_chunk_id": row["db_chunk_id"],
+                    "document_id": row["document_id"],
+                    "file_name": row["file_name"],
+                    "text": row["text"],
+                    "text_length": row["text_length"],
+                    "created_at": row["created_at"],
+                }
+                for row in existing_chunks
+            ]
+
+        # 先保存文档主记录，后续 chunk 通过 document_id 关联到这条文档；同一会话允许累计多份文档
         document_cursor = connection.execute(
             """
             INSERT INTO documents (session_id, file_name, content_hash, source_type, created_at)
@@ -605,7 +660,7 @@ def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
             FROM document_chunks
             INNER JOIN documents ON documents.id = document_chunks.document_id
             WHERE documents.session_id = ?
-            ORDER BY documents.created_at DESC, document_chunks.chunk_index ASC
+            ORDER BY documents.created_at DESC, documents.id DESC, document_chunks.chunk_index ASC
             """,
             (session_id,),
         ).fetchall()
@@ -631,9 +686,9 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
 
     函数说明：
     1. 如果 session_id 为空，返回无文档状态。
-    2. 查询当前会话最近一次上传的文档。
-    3. 统计该文档对应的 chunk 数量。
-    4. 返回前端 /rag_status 接口需要的状态结构。
+    2. 查询当前会话已上传的全部文档。
+    3. 统计每份文档对应的 chunk 数量。
+    4. 返回前端 /rag_status 接口需要的聚合状态结构。
 
     :param session_id: 当前会话ID
     :return: RAG 文档状态
@@ -643,51 +698,73 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
         return {
             "session_id": session_id or "",
             "has_document": False,
-            "file_name": None,
+            "file_names": [],
+            "document_count": 0,
             "chunk_count": 0,
+            "documents": [],
             "expires_in_seconds": 0,
         }
 
     # 打开数据库连接，查询当前 session 的文档状态
     with get_connection() as connection:
-        # 当前交互只展示最近一次上传的文档状态
-        document = connection.execute(
+        # 查询当前会话下的全部文档，并按上传时间倒序展示
+        rows = connection.execute(
             """
-            SELECT id, file_name
+            SELECT
+                documents.id AS document_id,
+                documents.file_name AS file_name,
+                documents.created_at AS created_at,
+                COUNT(document_chunks.id) AS chunk_count
             FROM documents
-            WHERE session_id = ?
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
+            LEFT JOIN document_chunks ON document_chunks.document_id = documents.id
+            WHERE documents.session_id = ?
+            GROUP BY documents.id, documents.file_name, documents.created_at
+            ORDER BY documents.created_at DESC, documents.id DESC
             """,
             (session_id,),
-        ).fetchone()
+        ).fetchall()
 
         # 如果当前会话没有文档记录，就返回无文档状态
-        if not document:
+        if not rows:
             return {
                 "session_id": session_id,
                 "has_document": False,
-                "file_name": None,
+                "file_names": [],
+                "document_count": 0,
                 "chunk_count": 0,
+                "documents": [],
                 "expires_in_seconds": 0,
             }
 
-        # 统计当前文档下的文本块数量，用于前端展示
-        chunk_count = connection.execute(
-            """
-            SELECT COUNT(*) AS chunk_count
-            FROM document_chunks
-            WHERE document_id = ?
-            """,
-            (document["id"],),
-        ).fetchone()["chunk_count"]
+    # 整理每份文档的状态，前端可用于展示多文档列表
+    documents = [
+        {
+            "document_id": row["document_id"],
+            "file_name": row["file_name"],
+            "chunk_count": int(row["chunk_count"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+    # 统计当前会话累计文档数量
+    document_count = len(documents)
+    # 统计当前会话累计文本块数量
+    total_chunk_count = sum(document["chunk_count"] for document in documents)
+    # 收集全部文件名，供前端展示多文档摘要
+    file_names = [
+        document["file_name"]
+        for document in documents
+        if document.get("file_name")
+    ]
 
     # 返回和 RagStatusResponse 对齐的状态字段
     return {
         "session_id": session_id,
-        "has_document": chunk_count > 0,
-        "file_name": document["file_name"],
-        "chunk_count": int(chunk_count),
+        "has_document": total_chunk_count > 0,
+        "file_names": file_names,
+        "document_count": document_count,
+        "chunk_count": total_chunk_count,
+        "documents": documents,
         "expires_in_seconds": 0,
     }
 

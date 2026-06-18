@@ -11,6 +11,7 @@ RAG 检索器模块。
 - 分数只表示关键词匹配强度，用于快速落地、调试和解释检索结果。
 - 当问题没有有效 token 或文本块没有命中时，返回空列表，让上层明确处理“没有依据”的场景。
 - 中文检索会优先使用连续双字 token，并通过命中数量和覆盖率过滤弱相关结果。
+- 对“年假几天”“晚餐有吗”这类短中文问题，会放宽一次核心双字命中的门槛，避免短问句被过度过滤。
 """
 
 #  导入正则表达式模块，用于re.findall(...)进行分词
@@ -24,6 +25,44 @@ from typing import Any
 MIN_TOKEN_OVERLAP = 2
 # 关键词兜底检索的最低问题覆盖率。命中 token 数 / query token 数低于该值时，视为弱相关。
 MIN_QUERY_COVERAGE = 0.25
+# 短中文问题的最大汉字长度。短问题 token 数少，不能完全套用长问题的最小命中数量。
+MAX_SHORT_CHINESE_QUERY_LENGTH = 4
+# 短中文问题的最低覆盖率。至少覆盖约三分之一 token 时，才允许单个核心双字命中通过。
+MIN_SHORT_QUERY_COVERAGE = 1 / 3
+
+
+def count_chinese_chars(text: str) -> int:
+    """
+    统计文本中的中文字符数量。
+
+    函数说明：
+    1. 只统计中文字符，不把标点、空格和英文数字计入短问句长度。
+    2. 用于识别“年假几天”这类短中文问题。
+    3. 不依赖具体业务关键词，避免检索器变成场景定制规则。
+
+    :param text: 原始输入文本
+    :return: 中文字符数量
+    """
+    # 使用正则找出所有中文字符，再统计数量
+    return len(re.findall(r"[\u4e00-\u9fff]", text))
+
+
+def is_short_chinese_query(text: str) -> bool:
+    """
+    判断当前 query 是否属于短中文问题。
+
+    函数说明：
+    1. 短中文问题通常只有一个核心实体和一个疑问成分。
+    2. 这类问题的有效 token 较少，容易因为最小命中数量过高而 no_hit。
+    3. 只基于长度判断，不引入业务关键词。
+
+    :param text: 当前检索 query
+    :return: 如果属于短中文问题则返回 True，否则返回 False
+    """
+    # 统计中文字符数量
+    chinese_char_count = count_chinese_chars(text)
+    # 中文字符数量在合理短问句范围内时，认为是短中文问题
+    return 0 < chinese_char_count <= MAX_SHORT_CHINESE_QUERY_LENGTH
 
 
 def tokenize(text: str) -> list[str]:
@@ -68,29 +107,40 @@ def tokenize(text: str) -> list[str]:
     ]
 
 
-def is_reliable_keyword_match(overlap_score: int, query_token_count: int) -> bool:
+def is_reliable_keyword_match(overlap_score: int, query_token_count: int, query: str) -> bool:
     """
     判断关键词命中是否足够可靠。
 
     函数说明：
     1. 使用最小命中数量过滤只有一个泛词命中的弱相关结果。
     2. 使用 query 覆盖率过滤长问题中零散命中的弱相关结果。
-    3. 不依赖手工维护的停用词表，避免后续不断补关键词。
+    3. 对短中文问题允许较少命中，避免“年假几天”这类短问句被误判为无依据。
+    4. 不依赖业务关键词，避免后续不断补特定场景规则。
 
     :param overlap_score: query 与 chunk 的重叠 token 数
     :param query_token_count: query 的 token 总数
+    :param query: 当前用户问题或检索 query
     :return: 是否属于可靠关键词命中
     """
     # 没有 query token 时，不能判断为可靠命中
     if query_token_count <= 0:
         return False
 
+    # 计算 query 覆盖率，用于判断 chunk 是否覆盖了用户问题的足够部分
+    coverage = overlap_score / query_token_count
+
+    # 短中文问题通常只有一个核心双字词，允许一个命中通过，但仍要求覆盖率达标
+    if (
+        is_short_chinese_query(query)
+        and overlap_score >= 1
+        and coverage >= MIN_SHORT_QUERY_COVERAGE
+    ):
+        return True
+
     # 命中 token 数太少时，容易只是偶然重合
     if overlap_score < MIN_TOKEN_OVERLAP:
         return False
 
-    # 计算 query 覆盖率，用于判断 chunk 是否覆盖了用户问题的足够部分
-    coverage = overlap_score / query_token_count
     # 覆盖率达标时，才认为这个 chunk 可以作为关键词兜底命中
     return coverage >= MIN_QUERY_COVERAGE
 
@@ -142,7 +192,8 @@ def retrieve_top_chunks(query: str, chunks: list[dict[str, Any]], top_k: int = 3
         # 只有命中数量和覆盖率都达标时，才把 chunk 作为可靠关键词兜底结果
         if is_reliable_keyword_match(
             overlap_score=overlap_score,
-            query_token_count=sum(query_tokens.values())
+            query_token_count=sum(query_tokens.values()),
+            query=query,
         ):
             scored_chunks.append({
                 **chunk,

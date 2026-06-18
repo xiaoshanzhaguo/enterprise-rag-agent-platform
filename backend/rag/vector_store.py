@@ -5,7 +5,7 @@ RAG 向量库模块。
 1. 使用本地 ChromaDB 作为向量库。
 2. 将文档 chunk 的 embedding、正文和 metadata 持久化到 data/chroma/。
 3. 根据 query embedding 从向量库中按相似度取回当前 session 的 chunk。
-4. 支持按 session 删除旧向量，保持“一个会话当前索引一份文档”的语义。
+4. 支持按 session 删除向量，保持清空会话时 SQLite 与 ChromaDB 状态一致。
 
 说明：
 - 当前模块只负责向量库读写，不负责 SQLite 文档持久化。
@@ -104,7 +104,7 @@ def delete_session_vectors(session_id: str | None) -> None:
     函数说明：
     1. 如果 session_id 为空，直接返回。
     2. 根据 metadata.session_id 删除 ChromaDB 中的旧向量。
-    3. 用于重新上传文档或清空会话时保持向量库状态一致。
+    3. 用于清空会话时保持向量库状态一致。
 
     :param session_id: 当前会话 ID
     :return: None
@@ -137,9 +137,6 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
     # 如果没有会话 ID 或没有 chunk，就无需写入向量库
     if not session_id or not chunks:
         return
-
-    # 写入前先删除当前 session 的旧向量，保持一个 session 当前只对应一份文档
-    delete_session_vectors(session_id)
 
     # 提取 chunk 正文
     documents = [chunk.get("text", "") for chunk in chunks]

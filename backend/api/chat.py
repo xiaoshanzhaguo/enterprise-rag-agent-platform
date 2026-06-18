@@ -203,7 +203,7 @@ def index_document(request: IndexDocumentRequest):
     作用：
     1. 接收前端上传并提取后的完整文本
     2. 做文本切块
-    3. 存入当前 session 对应的数据库文档表和文本块表
+    3. 追加存入当前 session 对应的数据库文档表和文本块表
     """
     cleaned_text = request.document_text.strip()  # 去掉首尾空白，避免无效输入
     # 如果清理后发现文档内容是空的，就抛出一个 400 错误。阻止无效文档进入 RAG 索引流程。
@@ -215,7 +215,7 @@ def index_document(request: IndexDocumentRequest):
     if not chunks:
         raise HTTPException(status_code=400, detail="文档切块后为空，请检查输入内容。")
 
-    # 把切好的块保存到当前会话对应的数据库 RAG store。这样后面同一会话里就能基于这份文档做检索。
+    # 把切好的块追加保存到当前会话对应的数据库 RAG store。这样后面同一会话里就能基于多份文档做检索。
     save_document_chunks(
         session_id=request.session_id,
         file_name=request.file_name,
