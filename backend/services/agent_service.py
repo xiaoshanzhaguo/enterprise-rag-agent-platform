@@ -29,8 +29,8 @@ from fastapi.responses import StreamingResponse
 
 # 项目配置对象，用于读取模型名称和引用预览长度
 from backend.config import settings
-# 数据库持久化函数，用于保存聊天会话、消息和 RAG 查询日志
-from backend.db.repository import ensure_chat_session, save_chat_message, save_rag_query_with_hits
+# 数据库持久化函数，用于保存聊天会话、读取标题、保存消息和 RAG 查询日志
+from backend.db.repository import ensure_chat_session, get_chat_session_title, save_chat_message, save_rag_query_with_hits
 # 数据库文档状态查询函数，用于保存历史消息中的引用模块状态
 from backend.rag.store import get_document_status
 # RAG 服务函数，用于检索、组装引用上下文和生成来源标识
@@ -43,6 +43,8 @@ from backend.rag.service import (
 )
 # 请求模型和流式事件模型
 from backend.schema.chat_schema import ChatRequest, StreamEvent
+# 生成侧边栏历史会话标题
+from backend.services.session_title import generate_session_title
 # SSE 格式化工具
 from backend.utils.stream_helper import to_sse
 
@@ -751,11 +753,17 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
         try:
             # 优先使用前端传入的展示文本，避免上传文件场景把全文展示进聊天气泡
             display_text = request.user_options.get("display_text", request.input_text)
+            # 已有标题的会话不重复生成；新会话才调用模型生成侧边栏主题
+            session_title = get_chat_session_title(request.session_id) or generate_session_title(
+                user_text=display_text,
+                mode=request.mode,
+                client=client
+            )
             # 确保当前会话存在，并用用户问题作为会话标题
             ensure_chat_session(
                 session_id=request.session_id,
                 mode=request.mode,
-                title=display_text[:80],
+                title=session_title,
             )
             # 保存用户消息
             save_chat_message(

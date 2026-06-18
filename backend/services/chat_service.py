@@ -27,12 +27,14 @@ from fastapi.responses import StreamingResponse
 
 # 项目配置对象
 from backend.config import settings
-# 确保会话存在、保存聊天记录
-from backend.db.repository import ensure_chat_session, save_chat_message
+# 确保会话存在、保存聊天记录、读取会话标题
+from backend.db.repository import ensure_chat_session, get_chat_session_title, save_chat_message
 # 构造 RAG 参考内容
 from backend.rag.service import build_rag_context
 # 构造 assistant 消息展示元数据
 from backend.services.message_metadata import build_assistant_message_metadata
+# 生成侧边栏历史会话标题
+from backend.services.session_title import generate_session_title
 # 生成系统提示词
 from backend.prompt.prompt_builder import build_system_prompt
 # 请求模型、流式事件模型
@@ -146,10 +148,16 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
             model_input_text = _build_model_input_text(request)
             # 优先使用前端传入的展示文本；如果没有传 display_text，则默认使用实际输入文本
             display_text = request.user_options.get("display_text", request.input_text)
+            # 已有标题的会话不重复生成；新会话才调用模型生成侧边栏主题
+            session_title = get_chat_session_title(request.session_id) or generate_session_title(
+                user_text=display_text,
+                mode=request.mode,
+                client=client
+            )
             ensure_chat_session(
                 session_id=request.session_id,
                 mode=request.mode,
-                title=display_text[:80] # 最多取前80个字符作为标题
+                title=session_title
             )
             save_chat_message(
                 session_id=request.session_id,

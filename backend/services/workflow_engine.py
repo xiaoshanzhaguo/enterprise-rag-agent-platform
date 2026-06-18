@@ -28,14 +28,16 @@ from fastapi.responses import StreamingResponse
 
 # 导入项目配置对象，用于读取模型名称等运行配置
 from backend.config import settings
-# 导入数据库持久化函数，用于确保会话存在并保存聊天信息
-from backend.db.repository import ensure_chat_session, save_chat_message
+# 导入数据库持久化函数，用于确保会话存在、读取标题并保存聊天信息
+from backend.db.repository import ensure_chat_session, get_chat_session_title, save_chat_message
 # 导入系统提示词构造函数，根据当前模式生成 system prompt
 from backend.prompt.prompt_builder import build_system_prompt
 # 导入请求模型和流式事件模型，用于约束请求结构和 SSE 事件结构
 from backend.schema.chat_schema import ChatRequest, StreamEvent
 # 导入 assistant 消息展示元数据构造函数，用于保存当前回答对应的引用模块
 from backend.services.message_metadata import build_assistant_message_metadata
+# 导入会话标题生成函数，用于侧边栏历史会话主题展示
+from backend.services.session_title import generate_session_title
 # 导入 SSE 格式化工具，将 StreamEvent 转换为 text/event-stream 格式
 from backend.utils.stream_helper import to_sse
 # 导入 RAG 上下文构造函数，用于为当前请求生成检索增强参考内容
@@ -128,10 +130,16 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
         try:
             # 优先使用前端传入的展示文本；如果没有传 display_text，则默认使用实际输入文本
             display_text = request.user_options.get("display_text", request.input_text)
+            # 已有标题的会话不重复生成；新会话才调用模型生成侧边栏主题
+            session_title = get_chat_session_title(request.session_id) or generate_session_title(
+                user_text=display_text,
+                mode=request.mode,
+                client=client
+            )
             ensure_chat_session(
                 session_id=request.session_id,
                 mode=request.mode,
-                title=display_text[:80]
+                title=session_title
             )
             save_chat_message(
                 session_id=request.session_id,

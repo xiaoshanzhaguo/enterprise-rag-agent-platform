@@ -331,14 +331,20 @@ def build_history_session_label(session: dict) -> str:
     构造侧边栏历史会话展示文案。
 
     函数说明：
-    1. 优先使用 updated_at 作为会话历史名称。
-    2. 如果 updated_at 不存在，则使用 created_at 兜底。
-    3. 时间统一格式化为 YYYY-MM-DD_HH-MM-SS，让左侧会话历史更简洁。
-    4. 如果时间字段异常，再使用原始 title 兜底。
+    1. 优先使用后端保存的会话标题，让历史列表更像真实对话产品。
+    2. 如果标题为空，则使用 updated_at 作为兜底名称。
+    3. 如果 updated_at 不存在，则使用 created_at 兜底。
+    4. 时间统一格式化为 YYYY-MM-DD_HH-MM-SS，保证异常数据仍能展示。
 
     :param session: 后端返回的会话摘要字典
     :return: 适合侧边栏展示的会话文案
     """
+    # 优先使用后端生成或保存的标题
+    session_title = " ".join(str(session.get("title") or "").split())
+    # 标题存在时直接展示，最多保留 16 个字符，避免侧边栏按钮过宽
+    if session_title:
+        return session_title[:16]
+
     # 优先使用 updated_at，表示这个会话最近一次发生变化的时间
     formatted_updated_time = format_history_session_time(session.get("updated_at"))
     # 如果 updated_at 可以解析，则直接作为会话历史名称
@@ -351,10 +357,8 @@ def build_history_session_label(session: dict) -> str:
     if formatted_created_time:
         return formatted_created_time
 
-    # 如果时间字段都异常，则保留原始标题兜底，避免按钮为空
-    fallback_title = " ".join(str(session.get("title") or "未命名会话").split())
-    # 返回兜底标题
-    return fallback_title or "未命名会话"
+    # 如果时间字段都异常，则返回固定兜底标题，避免按钮为空
+    return "未命名会话"
 
 
 def restore_history_session(session: dict) -> bool:

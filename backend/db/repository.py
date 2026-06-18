@@ -8,7 +8,8 @@
 4. 管理 RAG 查询记录(rag_queries)及命中记录(rag_hits)的数据写入
 5. 提供历史会话恢复能力，并支持最近会话列表与指定会话详情读取
 6. 提供会话删除能力
-7. 将数据库记录转换为前端可直接使用的数据结构
+7. 提供会话标题读取能力，便于 Service 层只在新会话时生成智能标题
+8. 将数据库记录转换为前端可直接使用的数据结构
 
 说明：
 - 当前模块属于 Repository 层
@@ -172,6 +173,44 @@ def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: st
             (session_id, session_mode, title, now, now),
         )
         connection.commit()
+
+
+def get_chat_session_title(session_id: str | None) -> str | None:
+    """
+    读取指定会话当前标题。
+
+    函数说明：
+    1. 如果 session_id 为空，直接返回 None。
+    2. 如果会话不存在，返回 None。
+    3. 如果标题为空字符串，返回 None。
+    4. Service 层可据此判断是否需要为新会话生成智能标题。
+
+    :param session_id: 当前会话 ID
+    :return: 已存在的会话标题；没有标题时返回 None
+    """
+    # 没有会话 ID 时无法查询标题
+    if not session_id:
+        return None
+
+    # 打开数据库连接，按主键读取标题
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT title
+            FROM chat_sessions
+            WHERE id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+
+    # 会话不存在时返回 None
+    if not row:
+        return None
+
+    # 清理标题空白，避免只有空格的标题被当作有效标题
+    title = str(row["title"] or "").strip()
+    # 有内容则返回标题，否则返回 None
+    return title or None
 
 
 def get_session_messages(session_id: str | None) -> list[dict[str, Any]]:
