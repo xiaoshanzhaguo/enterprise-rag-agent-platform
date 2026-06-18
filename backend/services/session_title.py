@@ -10,25 +10,45 @@
 - 当前模块只负责标题生成，不负责数据库读写。
 - Service 层会在新会话第一次保存消息前调用本模块。
 - 标题只用于历史会话列表展示，不参与模型上下文和 RAG 检索。
+- 本地兜底逻辑不维护业务关键词表，只从用户首条输入中提炼通用短标题。
 """
 
 # 导入项目配置对象，用于读取当前大模型名称
 from backend.config import settings
 
 
-TITLE_KEYWORD_FALLBACKS = (
-    ("试用期", "试用期政策咨询"),
-    ("年假", "年假政策咨询"),
-    ("带薪年假", "年假政策咨询"),
-    ("远程办公", "远程办公申请"),
-    ("报销", "报销政策咨询"),
-    ("健身卡", "健身卡报销咨询"),
-    ("晚餐", "晚餐福利咨询"),
-    ("请假", "请假流程咨询"),
-    ("加班", "加班制度咨询"),
-    ("权限", "权限申请咨询"),
-    ("合同", "合同规则咨询"),
-    ("采购", "采购流程咨询"),
+# 本地标题兜底时需要移除的常见开头表达，避免侧边栏标题像完整口语请求
+TITLE_LEADING_PHRASES = (
+    "请帮我",
+    "帮我",
+    "请问",
+    "麻烦",
+    "能不能",
+    "可以",
+    "写一封",
+    "写一份",
+    "写一个",
+    "生成一份",
+    "生成一个",
+)
+
+# 本地标题兜底时需要移除的轻量语气词和标点
+TITLE_NOISE_TOKENS = (
+    "一下",
+    "一下子",
+    "吗",
+    "呢",
+    "呀",
+    "啊",
+    "？",
+    "?",
+    "。",
+    "，",
+    ",",
+    "！",
+    "!",
+    "：",
+    ":",
 )
 
 
@@ -59,6 +79,41 @@ def _clean_title_text(text: str, max_length: int = 16) -> str:
     return title[:max_length]
 
 
+def _strip_fallback_title_noise(text: str) -> str:
+    """
+    清理本地兜底标题中的口语噪声。
+
+    函数说明：
+    1. 移除常见请求开头，让标题更像主题而不是完整句子。
+    2. 移除轻量语气词和标点，让侧边栏展示更紧凑。
+    3. 不使用业务关键词表，避免标题兜底逻辑过度定制。
+
+    :param text: 候选标题文本
+    :return: 清理后的候选标题
+    """
+    # 先去掉首尾空白，避免后续 startswith 判断受空格影响
+    title = str(text or "").strip()
+    # 连续移除常见开头表达，例如“帮我写一封”会先去掉“帮我”，再去掉“写一封”
+    # 用一个开关控制循环：只要本轮成功删掉了开头短语，就再检查一轮
+    has_removed_phrase = True
+    while has_removed_phrase:
+        # 每轮先假设没有移除任何内容
+        # 如果这一轮没有删掉任何短语，循环就会自然结束
+        has_removed_phrase = False
+        # 遍历常见开头表达
+        for phrase in TITLE_LEADING_PHRASES:
+            if title.startswith(phrase):
+                title = title[len(phrase):].strip()
+                # 本轮删掉了一个短语，说明标题开头可能还有其他噪声，需要继续下一轮
+                has_removed_phrase = True
+                break
+    # 移除标题里常见的轻量语气词和标点
+    for token in TITLE_NOISE_TOKENS:
+        title = title.replace(token, "")
+    # 压缩多余空白
+    return " ".join(title.split())
+
+
 def build_fallback_session_title(user_text: str, mode: str) -> str:
     """
     构造本地兜底会话标题。
@@ -66,7 +121,8 @@ def build_fallback_session_title(user_text: str, mode: str) -> str:
     函数说明：
     1. 优先使用用户输入的第一行作为标题来源。
     2. 文件上传场景下跳过附件标记，尽量保留真实问题。
-    3. 如果用户输入为空，则使用当前模式名兜底。
+    3. 通过通用文本清理生成短标题，不维护企业制度关键词表。
+    4. 如果用户输入为空，则使用当前模式名兜底。
 
     :param user_text: 用户首条展示文本
     :param mode: 当前功能模式
@@ -80,16 +136,8 @@ def build_fallback_session_title(user_text: str, mode: str) -> str:
     ]
     # 优先使用第一条有效用户文本
     candidate_title = candidate_lines[0] if candidate_lines else mode
-    # 如果命中常见企业知识库关键词，则生成更像主题的兜底标题
-    for keyword, fallback_title in TITLE_KEYWORD_FALLBACKS:
-        if keyword in candidate_title:
-            return fallback_title
-
-    # 去掉常见提问口头语，让兜底标题更像主题而不是整句问题
-    for token in ("请问", "帮我", "一下", "呀", "呢", "吗", "？", "?", "。", "，", ","):
-        candidate_title = candidate_title.replace(token, "")
-    # 压缩多余空白
-    candidate_title = " ".join(candidate_title.split())
+    # 去掉常见提问口头语和标点，让兜底标题更像主题而不是整句问题
+    candidate_title = _strip_fallback_title_noise(candidate_title)
     # 清理并截断兜底标题
     return _clean_title_text(candidate_title) or "未命名会话"
 
