@@ -438,6 +438,62 @@ def reset_mode_to_empty_session(session_mode: str) -> None:
     st.session_state.rag_index_state.pop(session_mode, None)
 
 
+def load_latest_session_after_delete(deleted_session_id: str) -> dict | None:
+    """
+    删除会话后加载最近一条可恢复的历史会话。
+
+    函数说明：
+    1. 删除任意会话后重新读取最近历史列表。
+    2. 跳过刚刚删除的 session_id，避免后端删除失败或列表缓存导致误恢复。
+    3. 找到第一条可加载的会话详情后返回，供 pending_history_session 在下一轮恢复。
+    4. 如果没有剩余历史会话或加载失败，则返回 None。
+
+    :param deleted_session_id: 刚刚删除的会话 ID
+    :return: 最近一条可恢复的会话详情；没有可恢复会话时返回 None
+    """
+    # 重新从后端读取最近历史会话，确保删除后列表是最新状态
+    recent_sessions_after_delete = list_recent_chat_sessions(limit=10)
+
+    # 遍历最近会话，优先选择更新时间最新的一条
+    for session in recent_sessions_after_delete:
+        # 读取候选会话 ID
+        candidate_session_id = str(session.get("session_id") or "")
+        # 跳过空 ID 和刚刚删除的会话
+        if not candidate_session_id or candidate_session_id == deleted_session_id:
+            continue
+
+        # 读取完整会话详情，包含 mode 和 messages
+        candidate_session = load_chat_session(candidate_session_id)
+        # 只有成功读取到字典结构时才返回
+        if isinstance(candidate_session, dict):
+            return candidate_session
+
+    # 没有可恢复的历史会话
+    return None
+
+
+def reset_deleted_session_cache(deleted_session_id: str) -> None:
+    """
+    清理前端中仍指向已删除会话的模式缓存。
+
+    函数说明：
+    1. 遍历所有模式的前端会话状态。
+    2. 如果某个模式当前缓存的 session_id 等于已删除会话，则重置为空会话。
+    3. 避免后续切换模式时看到已经从数据库删除的旧会话。
+
+    :param deleted_session_id: 刚刚删除的会话 ID
+    :return: None
+    """
+    # 遍历当前所有模式缓存；转成 list 后再处理，避免重置状态时影响当前遍历
+    for session_mode, mode_session in list(st.session_state.mode_sessions.items()):
+        # 只处理字典结构，避免异常状态影响页面
+        if not isinstance(mode_session, dict):
+            continue
+        # 如果该模式缓存仍指向已删除会话，则重置这个模式
+        if mode_session.get("session_id") == deleted_session_id:
+            reset_mode_to_empty_session(session_mode)
+
+
 def render_sidebar_session_area(active_mode: str) -> None:
     """
     渲染侧边栏会话入口区域。
@@ -446,7 +502,8 @@ def render_sidebar_session_area(active_mode: str) -> None:
     1. 在项目标题下方展示“新建会话”和最近会话列表。
     2. 点击历史会话时，把待恢复会话写入 pending_history_session，下一轮页面重跑时再恢复。
     3. 删除历史会话时，同步清理数据库记录和前端缓存状态。
-    4. 该区域放在功能选择之前，让用户先看到当前项目的会话上下文。
+    4. 删除任意会话后，自动恢复最近一条剩余历史会话。
+    5. 该区域放在功能选择之前，让用户先看到当前项目的会话上下文。
 
     :param active_mode: 当前前端正在使用的模式名称
     :return: None
@@ -551,16 +608,17 @@ def render_sidebar_session_area(active_mode: str) -> None:
                 ):
                     # 删除数据库中的会话及其关联消息、文档和 RAG 记录
                     clear_chat_session(history_session_id)
+                    # 清理前端所有模式里仍指向该会话的缓存，避免删除后切换模式看到旧内容
+                    reset_deleted_session_cache(history_session_id)
 
-                    # 如果删除的是当前正在展示的会话，则把该模式重置为空会话
-                    if is_current_history_session:
+                    # 删除后统一切换到剩余历史里最近的一条，让侧边栏高亮和主内容保持连续
+                    latest_session = load_latest_session_after_delete(history_session_id)
+                    # 找到可恢复会话时，下一轮页面会在控件渲染前恢复它，并同步模式选择
+                    if latest_session:
+                        st.session_state.pending_history_session = latest_session
+                    else:
+                        # 如果已经没有历史会话，则把当前模式重置为空会话
                         reset_mode_to_empty_session(active_mode)
-                    # 如果删除的是其他模式当前缓存的会话，也同步清理该模式的前端状态
-                    elif (
-                        history_session_mode in st.session_state.mode_sessions
-                        and st.session_state.mode_sessions[history_session_mode]["session_id"] == history_session_id
-                    ):
-                        reset_mode_to_empty_session(history_session_mode)
 
                     # 删除完成后刷新页面，更新侧边栏历史列表
                     st.rerun()
