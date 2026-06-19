@@ -472,6 +472,47 @@ def load_latest_session_after_delete(deleted_session_id: str) -> dict | None:
     return None
 
 
+def restore_latest_history_session_on_startup() -> bool:
+    """
+    页面首次进入时恢复最近一条历史会话。
+
+    函数说明：
+    1. 只在当前 Streamlit 会话启动阶段执行一次，避免每次页面重跑都覆盖用户当前选择。
+    2. 从后端最近会话列表中读取更新时间最新的一条历史会话。
+    3. 加载完整会话详情后复用 restore_history_session，同步消息、功能类型和当前模式。
+    4. 如果没有历史会话或恢复失败，则保持默认企业知识库问答入口。
+
+    :return: True 表示成功恢复最近历史会话；False 表示保持默认入口
+    """
+    # 如果本次 Streamlit 会话已经检查过启动恢复，则不重复覆盖用户当前上下文
+    if st.session_state.get("startup_latest_history_checked"):
+        return False
+
+    # 标记已经执行过启动恢复检查，后续 rerun 不再重复进入
+    st.session_state.startup_latest_history_checked = True
+
+    # 读取最近一条非空历史会话；后端会按 updated_at 倒序返回
+    recent_sessions = list_recent_chat_sessions(limit=1)
+    # 没有历史会话时保持默认核心功能入口
+    if not recent_sessions:
+        return False
+
+    # 读取最近历史会话的 session_id
+    latest_session_id = str(recent_sessions[0].get("session_id") or "")
+    # session_id 异常时保持默认入口
+    if not latest_session_id:
+        return False
+
+    # 加载最近历史会话详情，包含所属模式和完整消息
+    latest_session = load_chat_session(latest_session_id)
+    # 会话详情结构异常时保持默认入口
+    if not isinstance(latest_session, dict):
+        return False
+
+    # 复用历史会话恢复逻辑，同步 mode_group、auxiliary_mode 和 selected_mode
+    return restore_history_session(latest_session)
+
+
 def reset_deleted_session_cache(deleted_session_id: str) -> None:
     """
     清理前端中仍指向已删除会话的模式缓存。
@@ -659,7 +700,9 @@ if "rag_index_state" not in st.session_state:
     st.session_state.rag_index_state = {}
 
 
-# 初始化功能类型和当前模式，保证首次进入页面默认展示企业知识库问答
+# 初始化功能类型和当前模式：
+# - 没有历史会话时，默认展示企业知识库问答，保证项目主定位清晰
+# - 有历史会话时，后面会在控件渲染前恢复最近一条历史上下文
 if "selected_mode" not in st.session_state:
     st.session_state.selected_mode = CORE_MODES[0]
 
@@ -675,6 +718,9 @@ pending_history_session = st.session_state.pop("pending_history_session", None)
 # 只有字典结构才尝试恢复，避免异常状态影响页面启动
 if isinstance(pending_history_session, dict):
     restore_history_session(pending_history_session)
+else:
+    # 首次进入页面时，如果数据库里已有历史会话，则恢复最近一条历史会话
+    restore_latest_history_session_on_startup()
 
 
 # 先根据当前 session_state 推导一个侧边栏会话区域使用的模式。
