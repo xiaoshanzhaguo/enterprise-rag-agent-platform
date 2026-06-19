@@ -13,6 +13,8 @@
 """
 # 导入 json 模块。后面在 render_copy_button() 里，会用 json.dumps(text) 把 Python 字符串安全地转成 JS 里可用的字符串。
 import json
+# 导入 html 模块。后面渲染引用卡片时，会用 html.escape 防止文件名或原文中的特殊字符破坏 HTML。
+import html
 # 导入时间模块。后面生成导出文件名和导出时间时会用到。
 import time
 # 导入 uuid4()。给复制按钮生成唯一 ID，避免页面上多个按钮的 DOM ID 冲突。
@@ -20,6 +22,132 @@ from uuid import uuid4
 
 # 导入 Streamlit 主模块，并简写成 st。后面所有页面组件都通过 st.xxx() 调用。
 import streamlit as st
+
+
+# RAG 引用面板里默认展示的片段预览长度，避免长 chunk 直接铺满页面。
+RAG_DISPLAY_PREVIEW_LIMIT = 120
+
+
+def escape_html_text(text: str) -> str:
+    """
+    转义即将写入 HTML 的文本。
+
+    函数说明：
+    1. 将用户文件名、来源和原文片段中的特殊字符进行 HTML 转义。
+    2. 避免 `<`、`>`、`&` 等字符破坏页面结构。
+    3. 返回安全的字符串，供 st.markdown(..., unsafe_allow_html=True) 使用。
+
+    :param text: 原始文本
+    :return: HTML 转义后的文本
+    """
+    # 转成字符串后进行 HTML 转义
+    return html.escape(str(text or ""))
+
+
+def render_rag_preview_styles() -> None:
+    """
+    注入 RAG 引用卡片样式。
+
+    函数说明：
+    1. 让引用区域从“调试日志”变成更像产品里的证据卡片。
+    2. 控制卡片边距、边框、字号和预览文本样式。
+    3. 样式作用于当前页面，不影响后端逻辑。
+
+    :return: None
+    """
+    # 注入轻量 CSS；重复注入不会影响展示，Streamlit 会按页面顺序渲染
+    st.markdown(
+        """
+        <style>
+        .rag-evidence-panel {
+            margin: 0.75rem 0 0.35rem 0;
+        }
+        .rag-evidence-title {
+            margin: 0 0 0.35rem 0;
+            color: rgb(38, 39, 48);
+            font-size: 0.95rem;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+        .rag-evidence-summary {
+            margin: 0 0 0.55rem 0;
+            color: rgba(49, 51, 63, 0.62);
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+        .rag-evidence-card {
+            margin: 0.45rem 0;
+            padding: 0.72rem 0.82rem;
+            border: 1px solid rgba(49, 51, 63, 0.14);
+            border-radius: 8px;
+            background: rgba(248, 250, 252, 0.78);
+        }
+        .rag-evidence-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 0.45rem;
+        }
+        .rag-evidence-source {
+            color: rgb(38, 39, 48);
+            font-size: 0.86rem;
+            font-weight: 650;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+        .rag-evidence-score {
+            flex: 0 0 auto;
+            color: rgba(49, 51, 63, 0.66);
+            font-size: 0.78rem;
+            line-height: 1.25;
+        }
+        .rag-evidence-preview {
+            margin: 0;
+            padding-left: 0.65rem;
+            border-left: 3px solid rgba(37, 99, 235, 0.28);
+            color: rgba(49, 51, 63, 0.78);
+            font-size: 0.86rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .rag-evidence-meta {
+            margin-top: 0.45rem;
+            color: rgba(49, 51, 63, 0.52);
+            font-size: 0.76rem;
+            line-height: 1.35;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def build_compact_preview_text(text: str, limit: int = RAG_DISPLAY_PREVIEW_LIMIT) -> str:
+    """
+    构造前端引用面板使用的短预览文本。
+
+    函数说明：
+    1. 清理片段首尾空白，避免预览区域出现多余空行。
+    2. 将过长文本截断到指定长度，保证引用面板默认状态更容易浏览。
+    3. 被截断时追加省略号，提示用户可展开查看完整原文。
+
+    :param text: 原始片段文本
+    :param limit: 预览最大字符数
+    :return: 截断后的预览文本
+    """
+    # 清理首尾空白，保留正文内部换行
+    normalized_text = str(text or "").strip()
+    # 没有内容时返回固定占位文案
+    if not normalized_text:
+        return "（无预览内容）"
+
+    # 文本没有超过限制时直接返回
+    if len(normalized_text) <= limit:
+        return normalized_text
+
+    # 超过限制时截断，并追加省略号提示仍有完整原文
+    return f"{normalized_text[:limit].rstrip()}..."
 
 
 def build_markdown_filename(mode_name: str) -> str:
@@ -216,7 +344,7 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
     函数说明：
     1. 统一读取 rank、score、file_name、chunk_id、retrieval_mode、source 等展示字段。
     2. source 优先使用后端返回值；没有时用 file_name + chunk_id 兜底生成。
-    3. display_text 优先展示完整原文；没有完整原文时退回 text_preview。
+    3. preview_text 默认用于页面展示，full_text 放在可展开区域中核对。
 
     :param chunks: 后端返回的 RAG 命中片段列表
     :param fallback_file_name: 当前文档兜底文件名
@@ -237,10 +365,10 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
         source = chunk.get("source") or f"{chunk_file_name}#chunk-{chunk_id}"
         # 完整原文片段用于引用核对
         text = chunk.get("text", "").strip()
-        # 预览文本作为完整原文缺失时的兜底
+        # 后端预览文本作为前端短预览的优先来源
         text_preview = chunk.get("text_preview", "").strip()
-        # 原文长度用于帮助用户判断片段规模
-        text_length = chunk.get("text_length", 0)
+        # 原文长度用于帮助用户判断片段规模；后端缺失时用前端文本长度兜底
+        text_length = chunk.get("text_length") or len(text or text_preview)
         # 后端返回的检索排序；没有时后续渲染会用前端循环序号兜底
         rank = chunk.get("rank")
         # 后端返回的实际检索方式，用于解释当前命中来自向量检索还是关键词检索
@@ -254,15 +382,15 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
             "source": source,
             "score": score,
             "retrieval_mode": retrieval_mode,
-            "text_preview": text_preview or text[:160] or "（无预览内容）",
+            "text_preview": build_compact_preview_text(text_preview or text),
             "text_length": text_length,
-            "display_text": text or text_preview or "（无原文内容）"
+            "full_text": text or text_preview or "（无原文内容）"
         })
 
     return preview_items
 
 
-def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded: bool = True) -> None:
+def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded: bool = False) -> None:
     """
     展示本次 RAG 检索命中的引用来源和原文片段。
 
@@ -305,36 +433,74 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
     # 统一整理引用来源、检索分数和原文展示文本，避免下面两个展示区域重复解析 chunk 字段
     preview_items = _build_rag_preview_items(chunks, file_name)
 
-    # 用折叠面板展示本次命中的 RAG 引用和原文片段
-    with st.expander("引用来源与命中原文片段", expanded=expanded):
-        # 把顶部说明用 · 拼成一行灰色小字说明
-        st.caption(" · ".join(caption_parts))
+    # 注入引用卡片样式，让证据区域更像产品界面，而不是调试日志
+    render_rag_preview_styles()
 
-        # 先集中展示命中原因，帮助用户快速判断模型答案引用了哪些文档片段
-        st.markdown("**命中原因**")
+    # 参考依据整体默认折叠，避免每次回答后页面被引用区撑长
+    with st.expander(f"参考依据（{len(preview_items)} 条）", expanded=expanded):
+        # 渲染引用区域摘要说明
+        st.markdown(
+            f"""
+            <div class="rag-evidence-panel">
+                <div class="rag-evidence-summary">{escape_html_text(" · ".join(caption_parts))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # 遍历命中片段，展示证据卡片摘要
         for index, item in enumerate(preview_items, start=1):
+            # 使用后端 rank；缺失时用前端顺序兜底
             rank = item["rank"] or index
+            # 渲染单条证据卡片。所有动态内容都先转义，避免文件名或正文中的符号破坏 HTML。
             st.markdown(
-                f"{rank}. "
-                f"检索方式={item['retrieval_mode']} · "
-                f"score={item['score']} · "
-                f"file_name={item['file_name']} · "
-                f"chunk_id={item['chunk_id']}"
+                f"""
+                <div class="rag-evidence-card">
+                    <div class="rag-evidence-card-head">
+                        <div class="rag-evidence-source">{rank}. {escape_html_text(item['source'])}</div>
+                        <div class="rag-evidence-score">score={escape_html_text(item['score'])}</div>
+                    </div>
+                    <div class="rag-evidence-preview">{escape_html_text(item['text_preview'])}</div>
+                    <div class="rag-evidence-meta">
+                        {escape_html_text(item['retrieval_mode'])} · chunk-{escape_html_text(item['chunk_id'])} · {escape_html_text(item['text_length'])} 字
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
             )
-            st.caption(f"text_preview：{item['text_preview']}")
 
+        # 详细解释和完整原文放在同一个折叠区内，避免 Streamlit 嵌套折叠导致展示别扭
         st.markdown("---")
 
-        # 遍历每个命中的检索片段，并从 1 开始编号
+        # 先用表格形式集中展示 rank、来源、检索方式和分数，减少重复文本
+        st.markdown("**检索详情**")
+        detail_rows = [
+            {
+                "rank": item["rank"] or index,
+                "source": item["source"],
+                "retrieval_mode": item["retrieval_mode"],
+                "score": item["score"],
+                "text_length": item["text_length"],
+            }
+            for index, item in enumerate(preview_items, start=1)
+        ]
+        st.dataframe(
+            detail_rows,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # 再展示完整原文，用普通分隔线分组，不再嵌套 expander，避免 Streamlit 展示怪异
+        st.markdown("**完整原文**")
         for index, item in enumerate(preview_items, start=1):
             rank = item["rank"] or index
-            # 渲染片段标题说明行，字段与模型引用格式保持一致
+            # 每条原文先展示来源说明
             st.markdown(
-                f"**原文片段 {rank}** · "
+                f"**片段 {rank}** · "
                 f"[来源: {item['source']}] · "
                 f"检索方式={item['retrieval_mode']} · "
                 f"score={item['score']} · "
                 f"{item['text_length']} 字"
             )
-            # 展示命中的原文片段，方便用户核对模型答案是否有依据
-            st.markdown(item["display_text"])
+            # 用代码块展示完整原文，保持换行和条款结构
+            st.code(item["full_text"], language="markdown")

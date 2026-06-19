@@ -4,14 +4,15 @@ RAG 检索器模块。
 职责：
 1. 将用户问题和文本块内容切成可比较的轻量 token。
 2. 使用关键词重叠和整句命中奖励，为当前会话的文档 chunk 计算相关性分数。
-3. 返回分数最高的若干文本块，供 RAG 服务层组装 prompt 上下文和前端引用预览。
+3. 返回分数最高、命中更集中的若干文本块，供 RAG 服务层组装 prompt 上下文和前端引用预览。
 
 说明：
 - 当前实现是第一阶段轻量版检索，不依赖 embedding 或向量数据库。
 - 分数只表示关键词匹配强度，用于快速落地、调试和解释检索结果。
 - 当问题没有有效 token 或文本块没有命中时，返回空列表，让上层明确处理“没有依据”的场景。
 - 中文检索会优先使用连续双字 token，并通过命中数量和覆盖率过滤弱相关结果。
-- 对“年假几天”“晚餐有吗”这类短中文问题，会放宽一次核心双字命中的门槛，避免短问句被过度过滤。
+- 对短中文问题会放宽一次核心双字命中的门槛，避免短问句被过度过滤。
+- 关键词同分时会优先选择命中密度更高的片段，减少长 chunk 偶然命中排在前面的情况。
 """
 
 #  导入正则表达式模块，用于re.findall(...)进行分词
@@ -29,6 +30,29 @@ MIN_QUERY_COVERAGE = 0.25
 MAX_SHORT_CHINESE_QUERY_LENGTH = 4
 # 短中文问题的最低覆盖率。至少覆盖约三分之一 token 时，才允许单个核心双字命中通过。
 MIN_SHORT_QUERY_COVERAGE = 1 / 3
+
+
+def calculate_match_density(overlap_score: int, chunk_text: str) -> float:
+    """
+    计算关键词命中在 chunk 中的密度。
+
+    函数说明：
+    1. 命中数量相同的情况下，短文本块通常比长文本块更聚焦。
+    2. 使用 overlap_score / chunk token 数作为密度分数。
+    3. 该逻辑不依赖具体业务关键词，只用于改善关键词兜底排序。
+
+    :param overlap_score: query 与 chunk 的重叠 token 数
+    :param chunk_text: 当前文本块原文
+    :return: 命中密度，数值越大表示命中越集中
+    """
+    # 统计当前 chunk 的 token 数，作为密度分母
+    chunk_token_count = len(tokenize(chunk_text))
+    # 没有 chunk token 时，密度为 0
+    if chunk_token_count <= 0:
+        return 0
+
+    # 返回命中密度；分母越小且命中越多，说明片段越聚焦
+    return overlap_score / chunk_token_count
 
 
 def count_chinese_chars(text: str) -> int:
@@ -153,7 +177,7 @@ def retrieve_top_chunks(query: str, chunks: list[dict[str, Any]], top_k: int = 3
     1. 对 query 和每个 chunk 分别分词。
     2. 用 token 重叠数量计算基础相关性分数。
     3. 如果 query 整句出现在 chunk 中，额外增加 phrase_bonus。
-    4. 按分数降序、chunk_id 升序返回前 top_k 个命中块。
+    4. 按分数降序、命中密度降序、chunk_id 升序返回前 top_k 个命中块。
 
     :param query: 当前用户问题
     :param chunks: 候选文本块列表，每个 chunk 至少应包含 text 和 chunk_id
@@ -188,6 +212,8 @@ def retrieve_top_chunks(query: str, chunks: list[dict[str, Any]], top_k: int = 3
         phrase_bonus = 2 if query.strip() and query.lower() in chunk_text.lower() else 0
 
         total_score = overlap_score + phrase_bonus
+        # 计算命中密度，用于同分时优先选择信息更集中的片段
+        match_density = calculate_match_density(overlap_score, chunk_text)
 
         # 只有命中数量和覆盖率都达标时，才把 chunk 作为可靠关键词兜底结果
         if is_reliable_keyword_match(
@@ -197,14 +223,23 @@ def retrieve_top_chunks(query: str, chunks: list[dict[str, Any]], top_k: int = 3
         ):
             scored_chunks.append({
                 **chunk,
-                "score": total_score
+                "score": total_score,
+                "_match_density": match_density
             })
 
     # 没有任何命中时交给服务层输出“知识库中没有找到依据”
     if not scored_chunks:
         return []
 
-    # 同分时按 chunk_id 稳定排序，避免同一输入在不同运行中出现引用顺序抖动
-    scored_chunks.sort(key=lambda item: (-item["score"], item["chunk_id"]))
+    # 同分时优先选择命中密度更高的片段，最后按 chunk_id 稳定排序，避免引用顺序抖动
+    scored_chunks.sort(key=lambda item: (-item["score"], -item["_match_density"], item["chunk_id"]))
 
-    return scored_chunks[:top_k]
+    # 返回给上层前移除内部排序字段，避免前端和数据库记录出现无关字段
+    return [
+        {
+            key: value
+            for key, value in chunk.items()
+            if key != "_match_density"
+        }
+        for chunk in scored_chunks[:top_k]
+    ]

@@ -6,6 +6,7 @@ Embedding 客户端模块。
 2. 本地模式默认使用 BAAI/bge-m3，便于离线演示和降低费用风险。
 3. 云端模式兼容 OpenAI SDK，便于后续接入 OpenAI、火山方舟或其他兼容服务。
 4. 为 RAG 向量检索层提供统一的 embedding 生成入口。
+5. 云端 embedding 会按小批次请求，兼容部分厂商单次最多 10 条输入的限制。
 
 说明：
 - local 模式会通过 sentence-transformers 加载本地开源模型。
@@ -27,6 +28,11 @@ from openai import OpenAI
 from backend.config import settings
 # 导入项目已有的大模型客户端创建函数，避免重复维护 OpenAI 客户端初始化逻辑
 from backend.llm.client import get_client
+
+
+# 云端 embedding 单批次最大文本数量。
+# 阿里云等 OpenAI 兼容服务可能限制 input.contents 一次最多 10 条，因此这里统一按 10 条拆分。
+REMOTE_EMBEDDING_BATCH_SIZE = 10
 
 
 @lru_cache(maxsize=1)
@@ -167,18 +173,29 @@ def generate_remote_embeddings(texts: list[str]) -> list[list[float]]:
     函数说明：
     1. 获取云端 embedding 客户端。
     2. 使用 settings.embedding_model 指定云端模型。
-    3. 按服务返回顺序提取 embedding 列表。
+    3. 将输入文本按 REMOTE_EMBEDDING_BATCH_SIZE 拆成多个小批次。
+    4. 逐批调用 embedding 接口，兼容单次输入数量有限制的云厂商。
+    5. 按原始文本顺序合并所有批次的 embedding 列表。
 
     :param texts: 已过滤后的有效文本列表
     :return: embedding 向量列表
     """
     # 创建或复用 OpenAI 兼容 embedding 客户端
     client = get_remote_embedding_client()
-    # 调用 OpenAI 兼容 embedding 接口
-    response = client.embeddings.create(
-        model=settings.embedding_model,
-        input=texts
-    )
+    # 存放所有批次合并后的 embedding，顺序和输入文本保持一致
+    embeddings: list[list[float]] = []
 
-    # 按返回顺序取出 embedding 向量
-    return [item.embedding for item in response.data]
+    # 按固定大小拆分文本，避免一次请求超过云端服务限制
+    for start_index in range(0, len(texts), REMOTE_EMBEDDING_BATCH_SIZE):
+        # 取出当前批次文本
+        batch_texts = texts[start_index:start_index + REMOTE_EMBEDDING_BATCH_SIZE]
+        # 调用 OpenAI 兼容 embedding 接口
+        response = client.embeddings.create(
+            model=settings.embedding_model,
+            input=batch_texts
+        )
+        # 按返回顺序追加当前批次 embedding
+        embeddings.extend(item.embedding for item in response.data)
+
+    # 返回合并后的 embedding 列表
+    return embeddings

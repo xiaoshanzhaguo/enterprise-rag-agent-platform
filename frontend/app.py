@@ -1453,7 +1453,7 @@ if chat_submission:
                     render_rag_preview(
                         chunks=rag_preview_chunks,
                         status=rag_status_info,
-                        expanded=True
+                        expanded=False
                     )
 
                 if can_show_result_actions:
