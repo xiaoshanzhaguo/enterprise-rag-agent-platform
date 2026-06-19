@@ -24,10 +24,6 @@ from uuid import uuid4
 import streamlit as st
 
 
-# RAG 引用面板里默认展示的片段预览长度，避免长 chunk 直接铺满页面。
-RAG_DISPLAY_PREVIEW_LIMIT = 120
-
-
 def escape_html_text(text: str) -> str:
     """
     转义即将写入 HTML 的文本。
@@ -123,18 +119,17 @@ def render_rag_preview_styles() -> None:
     )
 
 
-def build_compact_preview_text(text: str, limit: int = RAG_DISPLAY_PREVIEW_LIMIT) -> str:
+def normalize_preview_text(text: str) -> str:
     """
-    构造前端引用面板使用的短预览文本。
+    规范化前端引用面板使用的预览文本。
 
     函数说明：
     1. 清理片段首尾空白，避免预览区域出现多余空行。
-    2. 将过长文本截断到指定长度，保证引用面板默认状态更容易浏览。
-    3. 被截断时追加省略号，提示用户可展开查看完整原文。
+    2. 不在前端重复截断文本，统一使用后端 text_preview 的配置结果。
+    3. 没有预览内容时返回固定占位文案，避免卡片空白。
 
     :param text: 原始片段文本
-    :param limit: 预览最大字符数
-    :return: 截断后的预览文本
+    :return: 规范化后的预览文本
     """
     # 清理首尾空白，保留正文内部换行
     normalized_text = str(text or "").strip()
@@ -142,12 +137,8 @@ def build_compact_preview_text(text: str, limit: int = RAG_DISPLAY_PREVIEW_LIMIT
     if not normalized_text:
         return "（无预览内容）"
 
-    # 文本没有超过限制时直接返回
-    if len(normalized_text) <= limit:
-        return normalized_text
-
-    # 超过限制时截断，并追加省略号提示仍有完整原文
-    return f"{normalized_text[:limit].rstrip()}..."
+    # 直接返回后端生成的预览文本，预览长度由 RAG_PREVIEW_TEXT_LIMIT 统一控制
+    return normalized_text
 
 
 def build_markdown_filename(mode_name: str) -> str:
@@ -382,7 +373,7 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
             "source": source,
             "score": score,
             "retrieval_mode": retrieval_mode,
-            "text_preview": build_compact_preview_text(text_preview or text),
+            "text_preview": normalize_preview_text(text_preview or text),
             "text_length": text_length,
             "full_text": text or text_preview or "（无原文内容）"
         })

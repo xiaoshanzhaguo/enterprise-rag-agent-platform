@@ -124,8 +124,8 @@ class Settings:
     rag_store_ttl_seconds: int = _get_int_env("RAG_STORE_TTL_SECONDS", 3600)
     # RAG 存储最多保留多少个 session。防止内存无限增长。
     rag_store_max_sessions: int = _get_int_env("RAG_STORE_MAX_SESSIONS", 50)
-    # RAG 相关文本预览的最大字符数。
-    rag_preview_text_limit: int = _get_int_env("RAG_PREVIEW_TEXT_LIMIT", 220)
+    # RAG 相关文本预览的最大字符数。前端证据卡片直接展示该预览，不再二次截断。
+    rag_preview_text_limit: int = _get_int_env("RAG_PREVIEW_TEXT_LIMIT", 120)
     # 向量检索最低相似度阈值。低于该分数的结果会被视为没有可靠依据。
     rag_vector_score_threshold: float = _get_float_env("RAG_VECTOR_SCORE_THRESHOLD", 0.6)
     # 向量检索没有可靠命中时，是否允许回退到关键词检索。
