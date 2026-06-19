@@ -19,6 +19,7 @@
 # 导入时间模块，使得后面流式输出时用 time.sleep(0.01) 让文本增长更自然
 import sys
 import time
+import re
 from datetime import datetime
 from pathlib import Path
 # 导入 uuid4()，生成新的唯一会话 ID，每次重置当前前端会话时都会生成新的 session_id
@@ -832,10 +833,30 @@ def build_result_copy_text(
         preferred_text = workflow_blocks.get(preferred_step_name, "").strip()
         # 指定步骤存在有效内容时，直接作为复制文本
         if preferred_text:
-            return preferred_text
+            return strip_source_citations_for_copy(preferred_text)
 
     # 没有指定步骤或步骤内容为空时，回退到完整结果文本
-    return result_text.strip()
+    return strip_source_citations_for_copy(result_text)
+
+
+def strip_source_citations_for_copy(text: str) -> str:
+    """
+    清理复制文本中的 RAG 来源标记。
+
+    函数说明：
+    1. 页面展示时保留 [来源: xxx#chunk-n]，方便用户核对依据。
+    2. 复制答案时移除来源尾注，让复制出去的正文更自然。
+    3. 只清理形如 [来源: ...] 的引用标记，不删除“参考依据”折叠区的数据。
+
+    :param text: 原始复制文本
+    :return: 移除来源标记后的复制文本
+    """
+    # 先清理首尾空白
+    cleaned_text = text.strip()
+    # 移除中文来源标记，例如：[来源: 员工手册.md#chunk-4]
+    cleaned_text = re.sub(r"\s*[\[【]来源[:：][^\]】]+[\]】]", "", cleaned_text)
+    # 移除引用后可能留下的多余空白
+    return cleaned_text.strip()
 
 
 def is_no_rag_evidence_result(result_text: str) -> bool:
