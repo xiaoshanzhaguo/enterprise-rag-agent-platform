@@ -133,6 +133,7 @@ data/app.db
 eval/questions.jsonl
 eval/run_eval.py
 eval/report.md  # 运行评测后生成
+docs/eval_report_sample.md  # 可提交的评测报告样例
 ```
 
 运行命令：
@@ -148,6 +149,8 @@ python eval/run_eval.py
 - 关键词包含率
 - 无依据拒答准确率
 - 失败案例
+
+说明：`eval/report.md` 是本地运行后生成的报告文件，默认不提交；仓库中保留 `docs/eval_report_sample.md` 作为可查看的样例评测证据。
 
 ---
 
@@ -393,7 +396,7 @@ python eval/run_eval.py
 eval/report.md
 ```
 
-报告适合作为演示材料，展示当前 RAG 链路在测试集上的命中率、引用准确率、关键词覆盖率和无依据拒答准确率。
+报告适合作为演示材料，展示当前 RAG 链路在测试集上的命中率、引用准确率、关键词覆盖率和无依据拒答准确率。由于 `eval/report.md` 属于本地运行产物，仓库中额外提供 `docs/eval_report_sample.md` 作为可提交的样例评测证据。
 
 ---
 
