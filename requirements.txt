@@ -1,11 +1,20 @@
-streamlit>=1.56.0
-openai
-httpx[socks]
-fastapi
-python-dotenv
-pydantic
-requests
-pypdf
-uvicorn
-chromadb
-sentence-transformers
+# Web UI
+streamlit==1.56.0
+
+# Backend API
+fastapi==0.136.0
+uvicorn==0.44.0
+pydantic==2.13.2
+
+# LLM and HTTP clients
+openai==2.32.0
+httpx[socks]==0.28.1
+requests==2.33.1
+python-dotenv==1.2.2
+
+# File parsing
+pypdf==5.1.0
+
+# RAG vector retrieval
+chromadb==1.0.15
+sentence-transformers==3.3.1
