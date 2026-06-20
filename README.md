@@ -346,6 +346,14 @@ python -m backend.db.init_db
 uvicorn backend.main:app --reload --port 8000
 ```
 
+启动后可以检查后端健康状态：
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+健康检查会返回服务状态、SQLite 连接状态、当前 RAG 检索模式和向量库目录是否可写，便于本地演示和 Docker 排错。
+
 ### 6. 启动前端
 
 ```bash
