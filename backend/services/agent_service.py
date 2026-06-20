@@ -244,35 +244,93 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
     return need_knowledge_base, f"Agent 判断：{reason}", rewritten_query
 
 
-def _build_intent_decision_fallback(question: str, use_rag: bool) -> tuple[bool, str, str]:
+def _has_indexed_rag_document(session_id: str | None) -> bool:
+    """
+    判断当前会话是否已经有可检索的知识库文档。
+
+    函数说明：
+    1. 通过数据库文档状态判断，而不是依赖前端开关或内存状态。
+    2. 只有已有文档和 chunk 时，Agent 判断失败才适合按原问题兜底检索。
+    3. 状态查询失败时返回 False，避免数据库异常被误判成可检索。
+
+    :param session_id: 当前会话 ID
+    :return: True 表示当前会话已有可检索文档
+    """
+    # 没有 session_id 时，后端无法定位当前会话，也就无法查询这个会话是否上传过文档。
+    if not session_id:
+        return False
+
+    try:
+        # 从数据库读取当前会话的文档状态。
+        # 这里不用前端传来的状态，是为了防止页面刷新、后端重启或前端状态丢失后判断不准。
+        document_status = get_document_status(session_id)
+    except Exception:
+        # 文档状态查询失败时，不冒险进入 RAG 检索。
+        # 这样可以避免数据库异常时继续执行后续检索，导致更难理解的错误。
+        return False
+
+    # has_document 表示这个 session 有文档记录。
+    # chunk_count > 0 表示文档已经切块完成，确实可以被检索。
+    # 两个条件都满足，才认为“当前会话已有可检索知识库”。
+    return bool(
+        document_status.get("has_document")
+        and int(document_status.get("chunk_count") or 0) > 0
+    )
+
+
+def _build_intent_decision_fallback(
+    question: str,
+    use_rag: bool,
+    session_id: str | None = None,
+) -> tuple[bool, str, str]:
     """
     构造意图分类失败时的保守兜底结果。
 
     函数说明：
     1. 只处理 RAG 关闭、空问题和模型判断失败这类系统状态。
     2. 不再通过关键词判断用户意图，避免规则系统覆盖 Agent 判断。
-    3. 模型无法完成意图分类时，保守跳过知识库检索，避免盲目 RAG。
+    3. 如果 RAG 已开启且当前会话已有文档，则使用原问题执行检索，避免演示时因意图分类失败跳过知识库。
+    4. 没有可检索文档时，仍然保守跳过知识库检索，避免盲目 RAG。
 
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
+    :param session_id: 当前会话 ID，用于判断是否已有可检索文档
     :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
     """
     # 去掉首尾空白，只用于判断是否为空问题
     normalized_question = question.strip()
 
-    # 如果前端没有开启 RAG，则尊重用户设置，走普通对话
+    # 如果前端没有开启 RAG，则尊重用户设置，走普通对话。
+    # 即使当前 session 有文档，也不应该绕过用户开关强行检索。
     if not use_rag:
         return False, "当前未开启 RAG，按普通对话处理。", ""
 
-    # 空问题没有检索价值，直接跳过知识库检索
+    # 空问题没有检索价值，直接跳过知识库检索。
+    # 这里先拦截空输入，避免后面把空字符串写入 rag_queries 或传给检索器。
     if not normalized_question:
         return False, "当前问题为空，跳过知识库检索。", ""
 
-    # 没有模型判断结果时，不再用关键词猜测用户意图，避免规则误伤真实需求
-    return False, "Agent 意图分类暂不可用，本轮按普通对话处理。", ""
+    # Agent 判断失败但已有知识库文档时，用原问题兜底检索，保证演示链路仍然走 RAG。
+    if _has_indexed_rag_document(session_id):
+        # 这里返回 True，表示后续流程仍然进入“检索证据”步骤。
+        # 第三个返回值使用原始问题，等价于“没有 query rewrite 时，直接用用户问题检索”。
+        return (
+            True,
+            "Agent 意图分类暂不可用，已按原始问题检索当前会话知识库。",
+            normalized_question,
+        )
+
+    # 没有模型判断结果且没有可检索文档时，不再用关键词猜测用户意图。
+    # 这样可以避免用户只是闲聊或写作时，被后端硬塞进一个没有文档的 RAG 流程。
+    return False, "Agent 意图分类暂不可用，且当前会话没有可检索文档，本轮按普通对话处理。", ""
 
 
-def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tuple[bool, str, str]:
+def decide_need_knowledge_base(
+    question: str,
+    use_rag: bool,
+    client=None,
+    session_id: str | None = None,
+) -> tuple[bool, str, str]:
     """
     判断当前问题是否需要查询企业知识库，并生成检索 query。
 
@@ -284,16 +342,19 @@ def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tup
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
     :param client: OpenAI 兼容客户端，用于执行轻量 Agent 意图分类和 query rewrite
+    :param session_id: 当前会话 ID，用于模型判断失败时检查是否已有可检索文档
     :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
     """
     # 去掉首尾空白，只用于基础空值判断和传给模型
     normalized_question = question.strip()
 
-    # 如果前端没有开启 RAG，则尊重用户设置，走普通对话
+    # 如果前端没有开启 RAG，则尊重用户设置，走普通对话。
+    # 这个判断放在最前面，可以避免无意义调用 LLM 做意图分类。
     if not use_rag:
         return False, "当前未开启 RAG，按普通对话处理。", ""
 
-    # 空问题没有检索价值，直接走普通对话兜底
+    # 空问题没有检索价值，直接走普通对话兜底。
+    # 这样后面的 LLM 判断、query rewrite 和 RAG 检索都不会处理空字符串。
     if not normalized_question:
         return False, "当前问题为空，跳过知识库检索。", ""
 
@@ -306,10 +367,12 @@ def decide_need_knowledge_base(question: str, use_rag: bool, client=None) -> tup
     if llm_decision is not None:
         return llm_decision
 
-    # 模型决策失败时使用保守兜底，保证 Agent 主流程不被意图分类失败打断
+    # 模型决策失败时进入兜底逻辑。
+    # 兜底函数会根据 session_id 再查一次数据库：有文档就用原问题检索，没有文档就按普通对话处理。
     return _build_intent_decision_fallback(
         question=normalized_question,
         use_rag=use_rag,
+        session_id=session_id,
     )
 
 
@@ -749,15 +812,17 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 question=request.input_text,
                 use_rag=request.use_rag,
                 client=client,
+                # session_id 用于兜底场景：当 LLM 判断失败时，后端会检查当前会话是否已有文档。
+                session_id=request.session_id,
             )
             # 组装判断步骤展示文本
             judge_text = (
                 f"判断结果：{'需要查询知识库' if need_knowledge_base else '不需要查询知识库'}。\n\n"
                 f"判断依据：{decision_reason}"
             )
-            # 如果需要知识库，则展示本轮实际用于检索的 query，方便用户理解 Agent 为什么这样检索
+            # 如果需要知识库，则展示本轮实际用于检索的 query，兼容 query rewrite 和判断失败兜底两种来源
             if need_knowledge_base:
-                judge_text += f"\n\n改写后的检索问题：{retrieval_query}"
+                judge_text += f"\n\n本轮检索问题：{retrieval_query}"
             # 保存判断步骤结果
             final_result[STEP_JUDGE_KNOWLEDGE] = judge_text
             # 通知前端：判断步骤完成
