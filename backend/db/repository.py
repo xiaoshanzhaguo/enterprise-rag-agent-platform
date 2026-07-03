@@ -112,6 +112,11 @@ def _message_row_to_dict(row) -> dict[str, Any]:
         if isinstance(rag_status_info, dict):
             message["rag_status_info"] = rag_status_info
 
+        # 恢复 Agent 路由结果。这个字段不一定直接展示，但能帮助后续排查“为什么检索/为什么跳过检索”。
+        agent_route = metadata.get("agent_route")
+        if isinstance(agent_route, dict):
+            message["agent_route"] = agent_route
+
     if row["role"] == "assistant":
         try:
             parsed_content = json.loads(row["content"])
@@ -489,6 +494,10 @@ def save_document_with_chunks(
     chunks: list[str],
     mode: str = "unknown",
     source_type: str = "upload",
+    knowledge_base_type: str = "general",
+    department: str | None = None,
+    process_type: str | None = None,
+    process_status: str = "active",
 ) -> list[dict[str, Any]]:
     """
     保存上传文档及其切分后的文本块。
@@ -498,7 +507,7 @@ def save_document_with_chunks(
     2. 确保当前聊天会话存在。
     3. 生成文档内容哈希值，便于后续识别文档内容。
     4. 如果同一会话下已经存在同名同内容文档，则复用已有 chunk。
-    5. 如果不存在重复文档，则将文档基础信息追加写入 documents 表。
+    5. 如果不存在重复文档，则将文档基础信息和业务标签追加写入 documents 表。
     6. 将每个文本块写入 document_chunks 表。
     7. 返回带数据库主键和展示信息的 chunk 元数据。
 
@@ -507,6 +516,10 @@ def save_document_with_chunks(
     :param chunks: 切分后的文本块列表
     :param mode: 当前会话模式
     :param source_type: 文档来源类型
+    :param knowledge_base_type: 知识库类型，例如 hr、finance、it、product 或 general
+    :param department: 文档所属部门，例如 HR、财务、IT、产品
+    :param process_type: 流程类型，例如 leave、reimbursement、vpn、gitlab_access
+    :param process_status: 流程状态，例如 active、draft、archived
     :return: 文本块元数据列表
     """
     # 如果没有会话 ID 或没有切分结果，就没有可保存的数据
@@ -545,16 +558,21 @@ def save_document_with_chunks(
             existing_chunks = connection.execute(
                 """
                 SELECT
-                    id AS db_chunk_id,
-                    document_id,
-                    file_name,
-                    chunk_index AS chunk_id,
-                    chunk_text AS text,
-                    text_length,
-                    created_at
+                    document_chunks.id AS db_chunk_id,
+                    document_chunks.document_id AS document_id,
+                    document_chunks.file_name AS file_name,
+                    document_chunks.chunk_index AS chunk_id,
+                    document_chunks.chunk_text AS text,
+                    document_chunks.text_length AS text_length,
+                    document_chunks.created_at AS created_at,
+                    documents.knowledge_base_type AS knowledge_base_type,
+                    documents.department AS department,
+                    documents.process_type AS process_type,
+                    documents.process_status AS process_status
                 FROM document_chunks
-                WHERE document_id = ?
-                ORDER BY chunk_index ASC
+                INNER JOIN documents ON documents.id = document_chunks.document_id
+                WHERE document_chunks.document_id = ?
+                ORDER BY document_chunks.chunk_index ASC
                 """,
                 (existing_document["id"],),
             ).fetchall()
@@ -576,6 +594,10 @@ def save_document_with_chunks(
                     "text": row["text"],
                     "text_length": row["text_length"],
                     "created_at": row["created_at"],
+                    "knowledge_base_type": row["knowledge_base_type"],
+                    "department": row["department"],
+                    "process_type": row["process_type"],
+                    "process_status": row["process_status"],
                 }
                 for row in existing_chunks
             ]
@@ -583,10 +605,30 @@ def save_document_with_chunks(
         # 先保存文档主记录，后续 chunk 通过 document_id 关联到这条文档；同一会话允许累计多份文档
         document_cursor = connection.execute(
             """
-            INSERT INTO documents (session_id, file_name, content_hash, source_type, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO documents (
+                session_id,
+                file_name,
+                content_hash,
+                source_type,
+                knowledge_base_type,
+                department,
+                process_type,
+                process_status,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, file_name, content_hash, source_type, now),
+            (
+                session_id,
+                file_name,
+                content_hash,
+                source_type,
+                knowledge_base_type or "general",
+                department,
+                process_type,
+                process_status or "active",
+                now,
+            ),
         )
         # 取出刚插入的 documents.id，作为 document_chunks.document_id
         document_id = int(document_cursor.lastrowid)
@@ -613,6 +655,10 @@ def save_document_with_chunks(
                     "text": chunk_text,
                     "text_length": len(chunk_text),
                     "created_at": now,
+                    "knowledge_base_type": knowledge_base_type or "general",
+                    "department": department,
+                    "process_type": process_type,
+                    "process_status": process_status or "active",
                 }
             )
 
@@ -656,7 +702,11 @@ def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
                 document_chunks.chunk_index AS chunk_id,
                 document_chunks.chunk_text AS text,
                 document_chunks.text_length AS text_length,
-                document_chunks.created_at AS created_at
+                document_chunks.created_at AS created_at,
+                documents.knowledge_base_type AS knowledge_base_type,
+                documents.department AS department,
+                documents.process_type AS process_type,
+                documents.process_status AS process_status
             FROM document_chunks
             INNER JOIN documents ON documents.id = document_chunks.document_id
             WHERE documents.session_id = ?
@@ -675,6 +725,10 @@ def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
             "text": row["text"],
             "text_length": row["text_length"],
             "created_at": row["created_at"],
+            "knowledge_base_type": row["knowledge_base_type"],
+            "department": row["department"],
+            "process_type": row["process_type"],
+            "process_status": row["process_status"],
         }
         for row in rows
     ]
@@ -714,11 +768,22 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
                 documents.id AS document_id,
                 documents.file_name AS file_name,
                 documents.created_at AS created_at,
+                documents.knowledge_base_type AS knowledge_base_type,
+                documents.department AS department,
+                documents.process_type AS process_type,
+                documents.process_status AS process_status,
                 COUNT(document_chunks.id) AS chunk_count
             FROM documents
             LEFT JOIN document_chunks ON document_chunks.document_id = documents.id
             WHERE documents.session_id = ?
-            GROUP BY documents.id, documents.file_name, documents.created_at
+            GROUP BY
+                documents.id,
+                documents.file_name,
+                documents.created_at,
+                documents.knowledge_base_type,
+                documents.department,
+                documents.process_type,
+                documents.process_status
             ORDER BY documents.created_at DESC, documents.id DESC
             """,
             (session_id,),
@@ -743,6 +808,10 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
             "file_name": row["file_name"],
             "chunk_count": int(row["chunk_count"]),
             "created_at": row["created_at"],
+            "knowledge_base_type": row["knowledge_base_type"],
+            "department": row["department"],
+            "process_type": row["process_type"],
+            "process_status": row["process_status"],
         }
         for row in rows
     ]
@@ -806,13 +875,16 @@ def save_rag_query_with_hits(
     matched_chunks: list[dict[str, Any]],
     retrieval_mode: str,
     mode: str = "unknown",
+    agent_route_result: str | None = None,
+    agent_route_reason: str | None = None,
+    agent_rewritten_query: str | None = None,
 ) -> int | None:
     """
     保存一次 RAG 查询记录及其命中的文档块结果。
 
     函数说明：
     1. 先确保当前 session_id 对应的聊天会话存在。
-    2. 将用户本次 RAG 查询内容和实际检索方式保存到 rag_queries 表。
+    2. 将用户本次 RAG 查询内容、实际检索方式和 Agent 路由结果保存到 rag_queries 表。
     3. 遍历本次检索命中的 matched_chunks，将每个命中文档块保存到 rag_hits 表。
     4. 每条 rag_hits 记录会保存：
        - 当前查询 ID
@@ -827,6 +899,9 @@ def save_rag_query_with_hits(
     :param matched_chunks: 本次 RAG 检索命中的文本块列表。每个元素通常包含 db_chunk_id、score、chunk_id、text 等字段。其中 db_chunk_id 用于关联 document_chunks 表中的真实数据库记录。
     :param retrieval_mode: 本次实际使用的检索方式，例如 vector、keyword 或 no_hit
     :param mode: 当前会话模式。例如：内容分析、结构优化、工作流优化等。如果为空，则使用“unknown”
+    :param agent_route_result: Agent 路由结果，例如 use_knowledge_base、skip_knowledge_base
+    :param agent_route_reason: Agent 路由理由，来自意图分类或兜底策略
+    :param agent_rewritten_query: Agent 改写出的检索 query，方便排查 query rewrite 是否有效
     :return: 保存成功时，返回本次 rag_queries 表中新插入记录的主键 ID；如果 session_id 或 query_text 为空，则返回None
     """
     if not session_id or not query_text:
@@ -838,10 +913,28 @@ def save_rag_query_with_hits(
     with get_connection() as connection:
         query_cursor = connection.execute(
             """
-            INSERT INTO rag_queries (session_id, query_text, top_k, retrieval_mode, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO rag_queries (
+                session_id,
+                query_text,
+                top_k,
+                retrieval_mode,
+                agent_route_result,
+                agent_route_reason,
+                agent_rewritten_query,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, query_text, top_k, retrieval_mode or "unknown", now),
+            (
+                session_id,
+                query_text,
+                top_k,
+                retrieval_mode or "unknown",
+                agent_route_result,
+                agent_route_reason,
+                agent_rewritten_query,
+                now,
+            ),
         )
         rag_query_id = int(query_cursor.lastrowid)
 
@@ -864,3 +957,91 @@ def save_rag_query_with_hits(
         )
         connection.commit()
         return rag_query_id
+
+
+def save_n8n_execution_record(
+    session_id: str | None,
+    workflow_name: str,
+    workflow_url: str | None = None,
+    trigger_source: str = "agent",
+    execution_id: str | None = None,
+    status: str = "planned",
+    input_data: dict[str, Any] | None = None,
+    output_data: dict[str, Any] | None = None,
+    error_message: str | None = None,
+    message_id: int | None = None,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+) -> int | None:
+    """
+    保存一条 n8n 工作流执行记录。
+
+    当前项目还没有真正调用 n8n，这个函数先作为持久化入口预留。
+    等后续接入 n8n Webhook 后，Service 层只需要在调用前后写入 planned/running/success/failed 状态即可。
+
+    :param session_id: 当前会话 ID，可为空
+    :param workflow_name: n8n 工作流名称，例如 reimbursement_approval
+    :param workflow_url: n8n Webhook 或工作流地址
+    :param trigger_source: 触发来源，例如 agent、manual、webhook
+    :param execution_id: n8n 返回的执行 ID
+    :param status: 执行状态，例如 planned、running、success、failed
+    :param input_data: 传给 n8n 的输入参数
+    :param output_data: n8n 返回的结果
+    :param error_message: 执行失败时的错误信息
+    :param message_id: 关联的 assistant 消息 ID，可为空
+    :param started_at: 执行开始时间
+    :param finished_at: 执行结束时间
+    :return: 新增记录 ID；workflow_name 为空时返回 None
+    """
+    # workflow_name 是后续排查执行记录的最小必要信息，缺失时不写库
+    if not workflow_name:
+        return None
+
+    # 如果有 session_id，就确保会话存在，避免外键写入失败
+    if session_id:
+        ensure_chat_session(session_id=session_id, mode="agent")
+
+    # 字典统一序列化为 JSON 字符串，便于 SQLite 保存半结构化参数
+    input_json = json.dumps(input_data or {}, ensure_ascii=False)
+    output_json = json.dumps(output_data or {}, ensure_ascii=False)
+    now = _current_timestamp()
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO n8n_execution_records (
+                session_id,
+                message_id,
+                workflow_name,
+                workflow_url,
+                trigger_source,
+                execution_id,
+                status,
+                input_json,
+                output_json,
+                error_message,
+                started_at,
+                finished_at,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                message_id,
+                workflow_name,
+                workflow_url,
+                trigger_source or "agent",
+                execution_id,
+                status or "planned",
+                input_json,
+                output_json,
+                error_message,
+                started_at,
+                finished_at,
+                now,
+            ),
+        )
+
+        connection.commit()
+        return int(cursor.lastrowid)

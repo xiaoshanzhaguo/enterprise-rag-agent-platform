@@ -88,6 +88,10 @@ class IndexDocumentRequest(BaseModel):
     session_id: str  # 当前会话 ID
     document_text: str  # 完整文档文本
     file_name: Optional[str] = None  # 文件名，可选
+    knowledge_base_type: Optional[str] = None  # 知识库类型，例如 hr、finance、it、product、general；不传时由后端推断
+    department: Optional[str] = None  # 所属部门，例如 HR、财务、IT、产品
+    process_type: Optional[str] = None  # 流程类型，例如 leave、reimbursement、vpn、gitlab_access
+    process_status: Optional[str] = None  # 流程状态，例如 active、draft、archived；不传时默认为 active
 
 
 class IndexDocumentResponse(BaseModel):
@@ -97,6 +101,10 @@ class IndexDocumentResponse(BaseModel):
     session_id: str  # 当前会话 ID
     file_name: Optional[str] = None  # 文件名
     chunk_count: int  # 文档切分后的文本块数量
+    knowledge_base_type: str = "general"  # 本次索引文档的知识库类型
+    department: Optional[str] = None  # 本次索引文档所属部门
+    process_type: Optional[str] = None  # 本次索引文档流程类型
+    process_status: str = "active"  # 本次索引文档流程状态
 
 
 class RagPreviewRequest(BaseModel):
@@ -121,6 +129,10 @@ class RagPreviewChunk(BaseModel):
     text: str = ""  # 命中的原文片段
     text_preview: str  # 文本预览内容
     text_length: int  # 原始文本总长度
+    knowledge_base_type: Optional[str] = None  # 来源文档的知识库类型
+    department: Optional[str] = None  # 来源文档所属部门
+    process_type: Optional[str] = None  # 来源文档流程类型
+    process_status: Optional[str] = None  # 来源文档流程状态
 
 
 class RagPreviewResponse(BaseModel):

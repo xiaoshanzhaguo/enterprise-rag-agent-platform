@@ -79,6 +79,75 @@ from backend.services.agent_service import run_agent_stream
 router = APIRouter()
 
 
+def infer_document_business_fields(file_name: str | None, document_text: str) -> dict[str, str | None]:
+    """
+    根据文件名和文档内容推断企业知识库业务标签。
+
+    为什么要做自动推断：
+    1. 当前前端上传入口还没有部门、流程类型下拉框。
+    2. 目前需要先把“知识库类型、部门、流程类型、流程状态”字段落到接口和数据库。
+    3. 自动推断可以让旧前端请求不改 UI 也能写入基本业务标签，后续再做筛选或下拉选择会更平滑。
+
+    :param file_name: 上传文件名
+    :param document_text: 文档正文
+    :return: 包含 knowledge_base_type、department、process_type、process_status 的字典
+    """
+    # 统一转小写，方便同时匹配英文文件名和中文正文关键词
+    searchable_text = f"{file_name or ''}\n{document_text[:500]}".lower()
+
+    # 先按部门/知识库类型做粗分类
+    if any(keyword in searchable_text for keyword in ["hr", "请假", "考勤", "入职", "试用期"]):
+        knowledge_base_type = "hr"
+        department = "HR"
+    elif any(keyword in searchable_text for keyword in ["finance", "财务", "报销", "差旅", "付款", "发票"]):
+        knowledge_base_type = "finance"
+        department = "财务"
+    elif any(keyword in searchable_text for keyword in ["it", "vpn", "gitlab", "设备", "数据安全"]):
+        knowledge_base_type = "it"
+        department = "IT"
+    elif any(keyword in searchable_text for keyword in ["product", "产品", "发布", "客户反馈", "faq"]):
+        knowledge_base_type = "product"
+        department = "产品"
+    else:
+        knowledge_base_type = "general"
+        department = None
+
+    # 再按具体流程关键词细分，便于后续按流程类型筛选或路由
+    process_type = None
+    if any(keyword in searchable_text for keyword in ["请假", "休假", "leave"]):
+        process_type = "leave"
+    elif any(keyword in searchable_text for keyword in ["考勤", "远程办公", "attendance"]):
+        process_type = "attendance"
+    elif any(keyword in searchable_text for keyword in ["入职", "onboarding"]):
+        process_type = "onboarding"
+    elif any(keyword in searchable_text for keyword in ["报销", "reimbursement"]):
+        process_type = "reimbursement"
+    elif any(keyword in searchable_text for keyword in ["差旅", "travel"]):
+        process_type = "travel"
+    elif any(keyword in searchable_text for keyword in ["付款", "供应商", "payment"]):
+        process_type = "payment"
+    elif "vpn" in searchable_text:
+        process_type = "vpn"
+    elif "gitlab" in searchable_text:
+        process_type = "gitlab_access"
+    elif any(keyword in searchable_text for keyword in ["设备", "数据安全", "security"]):
+        process_type = "device_security"
+    elif any(keyword in searchable_text for keyword in ["产品 faq", "faq"]):
+        process_type = "product_faq"
+    elif any(keyword in searchable_text for keyword in ["发布", "release"]):
+        process_type = "release"
+    elif any(keyword in searchable_text for keyword in ["客户反馈", "feedback"]):
+        process_type = "customer_feedback"
+
+    # 样例文档默认都是已生效制度/流程；以后草稿文档可由前端显式传 draft
+    return {
+        "knowledge_base_type": knowledge_base_type,
+        "department": department,
+        "process_type": process_type,
+        "process_status": "active",
+    }
+
+
 @router.post("/chat_history")
 def chat_history(request: ChatHistoryRequest):
     """
@@ -215,18 +284,37 @@ def index_document(request: IndexDocumentRequest):
     if not chunks:
         raise HTTPException(status_code=400, detail="文档切块后为空，请检查输入内容。")
 
+    # 如果前端没有显式传业务标签，就根据文件名和正文做一次轻量推断
+    inferred_fields = infer_document_business_fields(
+        file_name=request.file_name,
+        document_text=cleaned_text,
+    )
+    # 显式传入的字段优先级更高；没传时使用自动推断值
+    knowledge_base_type = request.knowledge_base_type or inferred_fields["knowledge_base_type"] or "general"
+    department = request.department or inferred_fields["department"]
+    process_type = request.process_type or inferred_fields["process_type"]
+    process_status = request.process_status or inferred_fields["process_status"] or "active"
+
     # 把切好的块追加保存到当前会话对应的数据库 RAG store。这样后面同一会话里就能基于多份文档做检索。
     save_document_chunks(
         session_id=request.session_id,
         file_name=request.file_name,
-        chunks=chunks
+        chunks=chunks,
+        knowledge_base_type=knowledge_base_type,
+        department=department,
+        process_type=process_type,
+        process_status=process_status,
     )
 
     # 返回索引结果，方便前端展示切块数量
     return IndexDocumentResponse(
         session_id=request.session_id,
         file_name=request.file_name,
-        chunk_count=len(chunks)
+        chunk_count=len(chunks),
+        knowledge_base_type=knowledge_base_type,
+        department=department,
+        process_type=process_type,
+        process_status=process_status,
     )
 
 

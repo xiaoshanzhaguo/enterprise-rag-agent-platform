@@ -314,7 +314,11 @@ def build_rag_preview(session_id: str | None, query: str, top_k: int = 3) -> lis
             "source": build_source_label(item),
             "text": item.get("text", ""),
             "text_preview": item.get("text_preview") or item.get("text", "")[:preview_limit],
-            "text_length": len(item.get("text", ""))
+            "text_length": len(item.get("text", "")),
+            "knowledge_base_type": item.get("knowledge_base_type"),
+            "department": item.get("department"),
+            "process_type": item.get("process_type"),
+            "process_status": item.get("process_status"),
         }
         for index, item in enumerate(matched_chunks, start=1)
     ]

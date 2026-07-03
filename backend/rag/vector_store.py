@@ -158,6 +158,10 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
             "db_chunk_id": int(chunk.get("db_chunk_id", 0)),
             "file_name": chunk.get("file_name") or "未命名文件",
             "chunk_id": int(chunk.get("chunk_id", 0)),
+            "knowledge_base_type": chunk.get("knowledge_base_type") or "general",
+            "department": chunk.get("department") or "",
+            "process_type": chunk.get("process_type") or "",
+            "process_status": chunk.get("process_status") or "active",
         }
         for chunk in chunks
     ]
@@ -238,6 +242,10 @@ def retrieve_similar_chunks(session_id: str | None, query: str, top_k: int = 3) 
                 "document_id": metadata.get("document_id"),
                 "file_name": metadata.get("file_name"),
                 "chunk_id": metadata.get("chunk_id"),
+                "knowledge_base_type": metadata.get("knowledge_base_type"),
+                "department": metadata.get("department") or None,
+                "process_type": metadata.get("process_type") or None,
+                "process_status": metadata.get("process_status"),
                 "text": text or "",
                 "text_preview": (text or "")[:preview_limit],
                 "text_length": len(text or ""),

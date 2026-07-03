@@ -118,6 +118,11 @@ def normalize_messages(messages: list) -> list[dict]:
         if role == "assistant" and isinstance(rag_status_info, dict):
             normalized_message["rag_status_info"] = rag_status_info
 
+        # assistant 消息可能带有 Agent 路由结果，用于后续调试或展示“为什么检索/为什么跳过检索”
+        agent_route = message.get("agent_route")
+        if role == "assistant" and isinstance(agent_route, dict):
+            normalized_message["agent_route"] = agent_route
+
         normalized_messages.append(normalized_message)
 
     # 将清洗后的消息加入结果列表

@@ -15,9 +15,10 @@
 数据模型覆盖：
 1. 会话管理
 2. 消息历史和消息展示元数据
-3. 文档管理
-4. RAG 检索
-5. Prompt 评测
+3. 文档管理和企业知识库业务标签
+4. RAG 检索和 Agent 路由记录
+5. n8n 执行记录预留
+6. Prompt 评测
 """
 CREATE_TABLE_SQL = [
     # 保存聊天会话
@@ -52,6 +53,10 @@ CREATE_TABLE_SQL = [
         file_name TEXT,
         content_hash TEXT,
         source_type TEXT NOT NULL DEFAULT 'upload',
+        knowledge_base_type TEXT NOT NULL DEFAULT 'general',
+        department TEXT,
+        process_type TEXT,
+        process_status TEXT NOT NULL DEFAULT 'active',
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
@@ -77,6 +82,9 @@ CREATE_TABLE_SQL = [
         query_text TEXT NOT NULL,
         top_k INTEGER NOT NULL DEFAULT 3,
         retrieval_mode TEXT NOT NULL DEFAULT 'unknown',
+        agent_route_result TEXT,
+        agent_route_reason TEXT,
+        agent_rewritten_query TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
@@ -92,6 +100,28 @@ CREATE_TABLE_SQL = [
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (rag_query_id) REFERENCES rag_queries(id) ON DELETE CASCADE,
         FOREIGN KEY (document_chunk_id) REFERENCES document_chunks(id) ON DELETE CASCADE
+    )
+    """,
+    # 保存未来 n8n 工作流执行记录。当前项目还没有真正调用 n8n，
+    # 先把表结构预留出来，后续接入自动化流程时不用再重做数据库设计。
+    """
+    CREATE TABLE IF NOT EXISTS n8n_execution_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT,
+        message_id INTEGER,
+        workflow_name TEXT NOT NULL,
+        workflow_url TEXT,
+        trigger_source TEXT NOT NULL DEFAULT 'agent',
+        execution_id TEXT,
+        status TEXT NOT NULL DEFAULT 'planned',
+        input_json TEXT,
+        output_json TEXT,
+        error_message TEXT,
+        started_at TEXT,
+        finished_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE SET NULL,
+        FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE SET NULL
     )
     """,
     # 未来做 Prompt 测试
@@ -127,8 +157,13 @@ CREATE_TABLE_SQL = [
 CREATE_INDEX_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_session_id ON documents(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_documents_department ON documents(department)",
+    "CREATE INDEX IF NOT EXISTS idx_documents_process_type ON documents(process_type)",
     "CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id)",
     "CREATE INDEX IF NOT EXISTS idx_rag_queries_session_id ON rag_queries(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_rag_queries_agent_route_result ON rag_queries(agent_route_result)",
     "CREATE INDEX IF NOT EXISTS idx_rag_hits_query_id ON rag_hits(rag_query_id)",
+    "CREATE INDEX IF NOT EXISTS idx_n8n_execution_records_session_id ON n8n_execution_records(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_n8n_execution_records_status ON n8n_execution_records(status)",
     "CREATE INDEX IF NOT EXISTS idx_eval_results_case_id ON eval_results(eval_case_id)",
 ]

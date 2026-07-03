@@ -27,7 +27,15 @@ from backend.db.repository import save_document_with_chunks
 from backend.rag.vector_store import delete_session_vectors, upsert_document_chunks
 
 
-def save_document_chunks(session_id: str, file_name: str | None, chunks: list[str]) -> None:
+def save_document_chunks(
+    session_id: str,
+    file_name: str | None,
+    chunks: list[str],
+    knowledge_base_type: str = "general",
+    department: str | None = None,
+    process_type: str | None = None,
+    process_status: str = "active",
+) -> None:
     """
     将切分后的文本块保存到数据库。
 
@@ -39,6 +47,10 @@ def save_document_chunks(session_id: str, file_name: str | None, chunks: list[st
     :param session_id: 会话 ID
     :param file_name: 文件名
     :param chunks: 切好的文本块列表
+    :param knowledge_base_type: 知识库类型，例如 hr、finance、it、product
+    :param department: 所属部门，例如 HR、财务、IT、产品
+    :param process_type: 流程类型，例如 leave、reimbursement、vpn
+    :param process_status: 流程状态，例如 active、draft、archived
     :return: None
     """
     # 调用数据库仓储层，将文档和 chunk 持久化到 SQLite
@@ -46,6 +58,10 @@ def save_document_chunks(session_id: str, file_name: str | None, chunks: list[st
         session_id=session_id,
         file_name=file_name,
         chunks=chunks,
+        knowledge_base_type=knowledge_base_type,
+        department=department,
+        process_type=process_type,
+        process_status=process_status,
     )
 
     # 如果启用了向量检索，则把 SQLite 保存后的 chunk 同步写入 ChromaDB

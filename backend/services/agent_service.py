@@ -575,6 +575,11 @@ def _normalize_agent_answer_text(answer_text: str) -> str:
 def _build_agent_rag_metadata(
     request: ChatRequest,
     matched_chunks: list[dict[str, Any]],
+    need_knowledge_base: bool,
+    decision_reason: str,
+    rewritten_query: str,
+    effective_retrieval_query: str,
+    retrieval_mode: str,
 ) -> dict[str, Any] | None:
     """
     构造 Agent 回答对应的 RAG 展示元数据。
@@ -582,15 +587,29 @@ def _build_agent_rag_metadata(
     函数说明：
     1. 将后端实际命中的 chunks 转换为前端历史消息可恢复的引用片段。
     2. 保存当前会话的 RAG 文档状态，供刷新页面后展示文档名。
-    3. 如果没有命中片段，则返回 None，避免写入空元数据。
+    3. 保存 Agent 路由结果，便于后续排查“为什么检索/为什么跳过检索”。
+    4. 如果既没有命中片段，也没有路由信息，则返回 None，避免写入空元数据。
 
     :param request: 当前聊天请求对象
     :param matched_chunks: Agent 实际用于回答的检索片段
+    :param need_knowledge_base: Agent 是否决定查询知识库
+    :param decision_reason: Agent 判断理由
+    :param rewritten_query: Agent 改写出的检索 query
+    :param effective_retrieval_query: 最终实际用于检索的 query
+    :param retrieval_mode: 本轮实际检索方式
     :return: 可写入 chat_messages.metadata_json 的元数据；没有命中时返回 None
     """
-    # 没有命中片段时，不保存引用模块元数据
-    if not matched_chunks:
-        return None
+    # 先保存 Agent 路由结果。即使本轮跳过检索，也能在消息元数据里留下判断依据。
+    metadata: dict[str, Any] = {
+        "agent_route": {
+            "need_knowledge_base": need_knowledge_base,
+            "route_result": "use_knowledge_base" if need_knowledge_base else "skip_knowledge_base",
+            "reason": decision_reason,
+            "rewritten_query": rewritten_query,
+            "effective_retrieval_query": effective_retrieval_query,
+            "retrieval_mode": retrieval_mode,
+        }
+    }
 
     # 前端预览文本长度限制，至少保留 80 个字符
     preview_limit = max(settings.rag_preview_text_limit, 80)
@@ -613,14 +632,21 @@ def _build_agent_rag_metadata(
                 "text": text,
                 "text_preview": chunk.get("text_preview") or text[:preview_limit],
                 "text_length": len(text),
+                "knowledge_base_type": chunk.get("knowledge_base_type"),
+                "department": chunk.get("department"),
+                "process_type": chunk.get("process_type"),
+                "process_status": chunk.get("process_status"),
             }
         )
 
+    # 只有实际命中引用片段时，才写入前端引用面板需要的数据；
+    # 无命中时只保留 agent_route，避免前端误以为这条回答有可展示的引用依据。
+    if rag_preview_chunks:
+        metadata["rag_preview_chunks"] = rag_preview_chunks
+        metadata["rag_status_info"] = get_document_status(request.session_id)
+
     # 返回前端历史恢复需要的元数据结构
-    return {
-        "rag_preview_chunks": rag_preview_chunks,
-        "rag_status_info": get_document_status(request.session_id),
-    }
+    return metadata or None
 
 
 def _retrieve_agent_rag_chunks(
@@ -870,6 +896,9 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     matched_chunks=matched_chunks,
                     retrieval_mode=retrieval_mode,
                     mode=request.mode,
+                    agent_route_result="use_knowledge_base",
+                    agent_route_reason=decision_reason,
+                    agent_rewritten_query=retrieval_query,
                 )
                 # 格式化展示文案，避免 fallback 场景只显示 keyword 造成误解
                 retrieval_mode_display = _format_retrieval_mode_for_display(retrieval_mode)
@@ -1004,7 +1033,15 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             # 将 Agent 分步骤结果序列化为 JSON
             final_content = json.dumps(final_result, ensure_ascii=False)
             # 构造当前回答对应的引用模块元数据，既用于数据库保存，也用于本次 SSE final 事件返回前端
-            assistant_metadata = _build_agent_rag_metadata(request, matched_chunks)
+            assistant_metadata = _build_agent_rag_metadata(
+                request=request,
+                matched_chunks=matched_chunks,
+                need_knowledge_base=need_knowledge_base,
+                decision_reason=decision_reason,
+                rewritten_query=retrieval_query,
+                effective_retrieval_query=effective_retrieval_query,
+                retrieval_mode=retrieval_mode,
+            )
             # 保存 assistant 消息；如果本轮有引用片段，则把引用模块元数据一起保存
             save_chat_message(
                 session_id=request.session_id,
