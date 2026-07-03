@@ -45,6 +45,8 @@
 
 前端支持在聊天输入框中附加一份或多份文档，后端会提取文本、按章节和段落切分 chunk，并保存到 SQLite 数据库。同一会话可以持续追加文档，后续问题会在当前会话已保存的文档集合中检索。
 
+仓库内置了一组演示用企业资料，位于 `docs/sample_knowledge_base/`，覆盖 HR、财务、IT、产品 4 类常见内部场景。启动前端后可以直接上传这些 Markdown 文档，用于演示制度查询、流程说明、故障排查和产品 FAQ 问答。
+
 每个 chunk 会记录：
 
 - `document_id`
@@ -238,6 +240,8 @@ enterprise-rag-agent-platform/
 │   ├── questions.jsonl      # 评测问题集
 │   ├── run_eval.py          # 评测脚本
 │   └── report.md            # 评测报告，运行后生成
+├── docs/
+│   └── sample_knowledge_base/ # HR、财务、IT、产品样例知识库文档
 ├── data/
 │   ├── app.db               # SQLite 数据库，运行后生成
 │   └── chroma/              # ChromaDB 向量库，运行后生成
