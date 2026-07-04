@@ -1002,43 +1002,39 @@ if mode in RAG_ENABLED_MODES:
     if not has_persisted_rag_document and rag_checkbox_key not in st.session_state:
         st.session_state[rag_checkbox_key] = mode == AGENT_MODE_NAME
 
+st.sidebar.markdown("对话设置")
+# 只有支持 RAG 的模式才展示 RAG 开关
+if mode in RAG_ENABLED_MODES:
+    # 渲染 RAG 开关；默认值由当前 session 是否已有数据库文档决定
+    use_rag = st.sidebar.checkbox(
+        "启用文档检索增强（RAG）",
+        value=has_persisted_rag_document,
+        key=rag_checkbox_key
+    )
 
-# -----------------------------
-# 侧边栏对话设置
-# -----------------------------
-with st.sidebar.expander("对话设置", expanded=True):
-    # 只有支持 RAG 的模式才展示 RAG 开关
-    if mode in RAG_ENABLED_MODES:
-        # 渲染 RAG 开关；默认值由当前 session 是否已有数据库文档决定
-        use_rag = st.checkbox(
-            "启用文档检索增强（RAG）",
-            value=has_persisted_rag_document,
-            key=rag_checkbox_key
+    # 只有启用 RAG 后，才展示检索片段数量设置
+    if use_rag:
+        # 渲染滑块，让用户控制本次最多检索多少个文档片段
+        rag_top_k = st.sidebar.slider(
+            "检索片段数量",
+            min_value=1,
+            max_value=5,
+            value=3,
+            key=f"rag_top_k_{mode}"
         )
-
-        # 只有启用 RAG 后，才展示检索片段数量设置
-        if use_rag:
-            # 渲染滑块，让用户控制本次最多检索多少个文档片段
-            rag_top_k = st.slider(
-                "检索片段数量",
-                min_value=1,
-                max_value=5,
-                value=3,
-                key=f"rag_top_k_{mode}"
-            )
-        # 新增上传文档时显式选择知识库分类。
-        # 这个控件不依赖 use_rag 是否已勾选，因为企业知识库问答模式上传文件后会自动启用 RAG。
-        # 它只影响“本轮新上传文档”的分类，不会修改当前会话里已经保存过的历史文档。
-        if mode in UPLOAD_ENABLED_MODES:
-            selected_knowledge_base_category = st.selectbox(
-                "本轮上传文档分类",
-                options=list(KNOWLEDGE_BASE_CATEGORY_OPTIONS.keys()),
-                key=f"knowledge_base_category_{mode}_{current_session_id}",
-                help="上传文档时写入 SQLite，后续检索结果会显示来源分类。"
-            )
-    else:
-        # 不支持 RAG 的模式不展示开关，避免用户误以为该模式可以检索文档
-        st.info("当前模式暂不支持文档检索增强（RAG）。")
+    # 新增上传文档时显式选择知识库分类。
+    # 这个控件不依赖 use_rag 是否已勾选，因为企业知识库问答模式上传文件后会自动启用 RAG。
+    # 它只影响“本轮新上传文档”的分类，不会修改当前会话里已经保存过的历史文档。
+    if mode in UPLOAD_ENABLED_MODES:
+        selected_knowledge_base_category = st.sidebar.selectbox(
+            "本轮上传文档分类",
+            options=list(KNOWLEDGE_BASE_CATEGORY_OPTIONS.keys()),
+            key=f"knowledge_base_category_{mode}_{current_session_id}",
+            help="上传文档时写入 SQLite，后续检索结果会显示来源分类。"
+        )
+else:
+    # 不支持 RAG 的模式不展示开关，避免用户误以为该模式可以检索文档
+    st.info("当前模式暂不支持文档检索增强（RAG）。")
 
 # -----------------------------
 # 展示当前模式的历史消息
