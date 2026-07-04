@@ -364,6 +364,16 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
         rank = chunk.get("rank")
         # 后端返回的实际检索方式，用于解释当前命中来自向量检索还是关键词检索
         retrieval_mode = chunk.get("retrieval_mode") or "unknown"
+        # 来源分类优先展示 department，因为它是用户能看懂的 HR / 财务 / IT / 产品
+        department = chunk.get("department")
+        # knowledge_base_type 是后端内部分类值，例如 hr、finance、it、product，作为 department 缺失时的兜底
+        knowledge_base_type = chunk.get("knowledge_base_type")
+        # 流程类型用于进一步说明来源属于哪类流程，例如 reimbursement、vpn、gitlab_access
+        process_type = chunk.get("process_type")
+        # 流程状态用于说明当前来源是否为 active / draft / archived
+        process_status = chunk.get("process_status")
+        # 组装用户可读的分类展示文本
+        source_category = department or knowledge_base_type or "未分类"
 
         # 将整理后的字段加入列表，后续两个展示区域都复用这一份数据
         preview_items.append({
@@ -373,6 +383,11 @@ def _build_rag_preview_items(chunks: list[dict], fallback_file_name: str) -> lis
             "source": source,
             "score": score,
             "retrieval_mode": retrieval_mode,
+            "source_category": source_category,
+            "knowledge_base_type": knowledge_base_type,
+            "department": department,
+            "process_type": process_type,
+            "process_status": process_status,
             "text_preview": normalize_preview_text(text_preview or text),
             "text_length": text_length,
             "full_text": text or text_preview or "（无原文内容）"
@@ -453,7 +468,7 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
                     </div>
                     <div class="rag-evidence-preview">{escape_html_text(item['text_preview'])}</div>
                     <div class="rag-evidence-meta">
-                        {escape_html_text(item['retrieval_mode'])} · chunk-{escape_html_text(item['chunk_id'])} · {escape_html_text(item['text_length'])} 字
+                        分类：{escape_html_text(item['source_category'])} · {escape_html_text(item['retrieval_mode'])} · chunk-{escape_html_text(item['chunk_id'])} · {escape_html_text(item['text_length'])} 字
                     </div>
                 </div>
                 """,
@@ -469,6 +484,9 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
             {
                 "rank": item["rank"] or index,
                 "source": item["source"],
+                "category": item["source_category"],
+                "process_type": item["process_type"] or "",
+                "process_status": item["process_status"] or "",
                 "retrieval_mode": item["retrieval_mode"],
                 "score": item["score"],
                 "text_length": item["text_length"],
@@ -489,6 +507,7 @@ def render_rag_preview(chunks: list[dict], status: dict | None = None, expanded:
             st.markdown(
                 f"**片段 {rank}** · "
                 f"[来源: {item['source']}] · "
+                f"分类={item['source_category']} · "
                 f"检索方式={item['retrieval_mode']} · "
                 f"score={item['score']} · "
                 f"{item['text_length']} 字"

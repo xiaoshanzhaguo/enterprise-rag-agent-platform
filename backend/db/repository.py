@@ -554,6 +554,29 @@ def save_document_with_chunks(
 
         # 如果已经存在同名同内容文档，则直接复用已有 chunk 元数据
         if existing_document:
+            # 即使文档内容重复，也允许用户通过本轮上传修正文档分类。
+            # 这样前端选择 HR / 财务 / IT / 产品 后，不会因为复用旧 chunk 而保留过期分类。
+            connection.execute(
+                """
+                UPDATE documents
+                SET
+                    knowledge_base_type = ?,
+                    department = ?,
+                    process_type = ?,
+                    process_status = ?,
+                    source_type = ?
+                WHERE id = ?
+                """,
+                (
+                    knowledge_base_type or "general",
+                    department,
+                    process_type,
+                    process_status or "active",
+                    source_type,
+                    existing_document["id"],
+                ),
+            )
+
             # 读取已有文本块，返回给向量库 upsert，确保 ChromaDB 缺失时也能补写
             existing_chunks = connection.execute(
                 """

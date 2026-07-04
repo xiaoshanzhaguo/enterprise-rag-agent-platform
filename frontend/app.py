@@ -802,6 +802,27 @@ RAG_ENABLED_MODES = {
     "企业知识库问答"
 }
 
+# 上传知识库文档时可选择的业务分类。
+# label 用于前端展示，knowledge_base_type / department 会随 /index_document 请求写入 SQLite。
+KNOWLEDGE_BASE_CATEGORY_OPTIONS = {
+    "HR": {
+        "knowledge_base_type": "hr",
+        "department": "HR",
+    },
+    "财务": {
+        "knowledge_base_type": "finance",
+        "department": "财务",
+    },
+    "IT": {
+        "knowledge_base_type": "it",
+        "department": "IT",
+    },
+    "产品": {
+        "knowledge_base_type": "product",
+        "department": "产品",
+    },
+}
+
 # 企业知识库问答模式名称。单独抽成常量，避免后续判断里重复写字符串
 AGENT_MODE_NAME = "企业知识库问答"
 
@@ -950,6 +971,7 @@ current_messages = current_session["messages"]
 # - rag_top_k: 默认检索3个片段
 # - rag_status_info: 后端 /rag_status 返回的当前 session 文档状态，后面用于展示文件名和判断是否有可检索文档
 # - has_persisted_rag_document: 当前 session 是否已经在数据库中保存过 RAG 文档和 chunk
+# - selected_knowledge_base_category: 当前选择的知识库分类
 # - rag_checkbox_key: 当前模式 + 当前 session 的 RAG 开关组件 key，用于让不同模式、不同会话的勾选状态互不影响
 # - rag_default_applied_key: 标记当前 session 是否已经自动应用过一次 RAG 默认开启逻辑，避免每次页面重跑都覆盖用户手动选择
 # -----------------------------
@@ -957,6 +979,7 @@ use_rag = False
 rag_top_k = 3
 rag_status_info = {}
 has_persisted_rag_document = False
+selected_knowledge_base_category = "HR"
 rag_checkbox_key = f"use_rag_{mode}_{current_session_id}"
 rag_default_applied_key = f"{rag_checkbox_key}_default_applied"
 
@@ -1002,6 +1025,16 @@ with st.sidebar.expander("对话设置", expanded=True):
                 max_value=5,
                 value=3,
                 key=f"rag_top_k_{mode}"
+            )
+        # 新增上传文档时显式选择知识库分类。
+        # 这个控件不依赖 use_rag 是否已勾选，因为企业知识库问答模式上传文件后会自动启用 RAG。
+        # 它只影响“本轮新上传文档”的分类，不会修改当前会话里已经保存过的历史文档。
+        if mode in UPLOAD_ENABLED_MODES:
+            selected_knowledge_base_category = st.selectbox(
+                "本轮上传文档分类",
+                options=list(KNOWLEDGE_BASE_CATEGORY_OPTIONS.keys()),
+                key=f"knowledge_base_category_{mode}_{current_session_id}",
+                help="上传文档时写入 SQLite，后续检索结果会显示来源分类。"
             )
     else:
         # 不支持 RAG 的模式不展示开关，避免用户误以为该模式可以检索文档
@@ -1149,10 +1182,16 @@ if chat_submission:
             if not current_file_text:
                 continue
 
-            # 保存解析后的文件名和正文，后续用于展示、RAG 索引和非 RAG 拼接输入
+            # 读取本轮用户在侧边栏选择的知识库分类。当前设计是一轮上传共享同一个分类，
+            # 这样不需要额外文件管理页面，也能满足 HR / 财务 / IT / 产品 分类保存。
+            category_fields = KNOWLEDGE_BASE_CATEGORY_OPTIONS[selected_knowledge_base_category]
+
+            # 保存解析后的文件名、正文和分类字段，后续用于展示、RAG 索引和非 RAG 拼接输入
             uploaded_file_payloads.append({
                 "file_name": current_file_name,
-                "document_text": current_file_text
+                "document_text": current_file_text,
+                "knowledge_base_type": category_fields["knowledge_base_type"],
+                "department": category_fields["department"],
             })
 
         # 收集本轮成功解析的全部文件名
@@ -1224,7 +1263,7 @@ if chat_submission:
         # 给当前批次文件生成一个指纹，用来判断”这一批文档是不是和之前同一批“
         text_fingerprint = build_text_fingerprint(
             "\n\n".join(
-                f"{file_payload['file_name']}::{file_payload['document_text']}"
+                f"{file_payload['file_name']}::{file_payload.get('knowledge_base_type')}::{file_payload.get('department')}::{file_payload['document_text']}"
                 for file_payload in uploaded_file_payloads
             )
         )
@@ -1260,7 +1299,9 @@ if chat_submission:
                     success, message = index_uploaded_document(
                         session_id=current_session_id,
                         file_name=current_file_name,
-                        document_text=current_file_text
+                        document_text=current_file_text,
+                        knowledge_base_type=file_payload.get("knowledge_base_type"),
+                        department=file_payload.get("department"),
                     )
                     # 如果任意文件索引失败，跳出循环并交给下面的错误处理
                     if not success:
@@ -1282,7 +1323,8 @@ if chat_submission:
             st.session_state.rag_index_state[mode] = {
                 "session_id": current_session_id,
                 "file_names": uploaded_file_names,
-                "text_fingerprint": text_fingerprint
+                "text_fingerprint": text_fingerprint,
+                "knowledge_base_category": selected_knowledge_base_category,
             }
             # 索引成功后更新本次运行中的数据库文档状态
             has_persisted_rag_document = True

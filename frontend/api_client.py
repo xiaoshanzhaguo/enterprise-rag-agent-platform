@@ -204,23 +204,41 @@ def clear_chat_session(session_id: str) -> None:
         pass
 
 
-def index_uploaded_document(session_id: str, file_name: str, document_text: str) -> tuple[bool, str]:
+def index_uploaded_document(
+    session_id: str,
+    file_name: str,
+    document_text: str,
+    knowledge_base_type: str | None = None,
+    department: str | None = None,
+) -> tuple[bool, str]:
     """
     调用后端 /index_document 接口，为当前会话追加建立文档索引。
 
     :param session_id: 当前会话 ID
     :param file_name: 上传文件名
     :param document_text: 提取出来的完整文档文本
+    :param knowledge_base_type: 本轮上传选择的知识库分类，例如 hr、finance、it、product
+    :param department: 本轮上传选择的部门展示名，例如 HR、财务、IT、产品
     :return: (True, 成功提示) 或 (False, 错误提示)
     """
+    # 先构造基础请求体，再按需追加分类字段。
+    # 这样旧调用方不传分类时，后端仍可使用自动推断逻辑。
+    payload = {
+        "session_id": session_id,
+        "file_name": file_name,
+        "document_text": document_text,
+    }
+    # 如果前端显式选择了知识库分类，则写入请求体，后端会保存到 documents 表
+    if knowledge_base_type:
+        payload["knowledge_base_type"] = knowledge_base_type
+    # department 是展示给用户看的来源分类，例如 HR、财务、IT、产品
+    if department:
+        payload["department"] = department
+
     response = requests.post(
         f"{BACKEND_BASE_URL}/index_document",
         # 把请求体作为 JSON 发送给后端
-        json={
-            "session_id": session_id,
-            "file_name": file_name,
-            "document_text": document_text
-        },
+        json=payload,
         timeout=300 # 请求最多等待 300 秒。本地 embedding 首次加载或下载模型时可能较慢。
     )
 
@@ -231,7 +249,8 @@ def index_uploaded_document(session_id: str, file_name: str, document_text: str)
     # 把后端返回的 JSON 响应解析成 Python 字典
     result = response.json()
     # 如果成功，就返回成功标记和一条中性提示文案；多文档总提示由 app.py 统一展示
-    return True, f"文档索引已完成，已生成 {result['chunk_count']} 个可检索文本块。"
+    department_text = result.get("department") or "未分类"
+    return True, f"文档索引已完成，分类：{department_text}，已生成 {result['chunk_count']} 个可检索文本块。"
 
 
 def clear_indexed_document(session_id: str) -> None:
