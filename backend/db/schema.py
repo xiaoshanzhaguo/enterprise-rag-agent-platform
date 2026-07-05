@@ -167,3 +167,21 @@ CREATE_INDEX_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_n8n_execution_records_status ON n8n_execution_records(status)",
     "CREATE INDEX IF NOT EXISTS idx_eval_results_case_id ON eval_results(eval_case_id)",
 ]
+
+
+# SQLite 的 CREATE TABLE IF NOT EXISTS 只会在表不存在时创建新表；
+# 如果本地已经有旧版 app.db，它不会自动给旧表补充新增字段。
+# 所以新增字段后，需要在 init_database() 里按这个清单执行轻量 ALTER TABLE 迁移。
+TABLE_COLUMN_MIGRATIONS = {
+    "documents": [
+        ("knowledge_base_type", "TEXT NOT NULL DEFAULT 'general'"),
+        ("department", "TEXT"),
+        ("process_type", "TEXT"),
+        ("process_status", "TEXT NOT NULL DEFAULT 'active'"),
+    ],
+    "rag_queries": [
+        ("agent_route_result", "TEXT"),
+        ("agent_route_reason", "TEXT"),
+        ("agent_rewritten_query", "TEXT"),
+    ],
+}

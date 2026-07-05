@@ -19,7 +19,51 @@
 
 from backend.db.connection import get_connection, resolve_sqlite_path
 # 导入建表 SQL 和建索引 SQL
-from backend.db.schema import CREATE_INDEX_SQL, CREATE_TABLE_SQL
+from backend.db.schema import CREATE_INDEX_SQL, CREATE_TABLE_SQL, TABLE_COLUMN_MIGRATIONS
+
+
+def _get_existing_columns(connection, table_name: str) -> set[str]:
+    """
+    读取 SQLite 表中已经存在的列名。
+
+    为什么需要这个函数：
+    1. 本地开发时 data/app.db 往往已经存在。
+    2. CREATE TABLE IF NOT EXISTS 不会修改旧表结构。
+    3. 先查已有列，再只补缺失列，可以保证初始化逻辑重复执行也安全。
+
+    :param connection: SQLite 数据库连接
+    :param table_name: 表名
+    :return: 当前表已有列名集合
+    """
+    # PRAGMA table_info(table_name) 会返回当前表的列信息，其中 name 是列名
+    rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    # get_connection() 已经把 row_factory 设为 sqlite3.Row，因此可以通过 row["name"] 读取列名
+    return {row["name"] for row in rows}
+
+
+def _apply_column_migrations(connection) -> None:
+    """
+    给旧版 SQLite 表补充新增列。
+
+    说明：
+    - 当前只做新增列迁移，不做删除列、改类型、搬数据等高风险操作。
+    - 新增列要么允许 NULL，要么带 DEFAULT，保证旧数据可以平滑升级。
+    - 迁移必须在创建索引之前执行，否则索引引用新列时会报 no such column。
+    """
+    # 遍历 schema.py 中声明的轻量迁移清单
+    for table_name, columns in TABLE_COLUMN_MIGRATIONS.items():
+        # 读取当前旧表已经有哪些列
+        existing_columns = _get_existing_columns(connection, table_name)
+        # 逐个补充缺失列
+        for column_name, column_definition in columns:
+            # 如果列已经存在，就跳过，避免重复 ALTER TABLE 报错
+            if column_name in existing_columns:
+                continue
+
+            # SQLite 不支持 ADD COLUMN IF NOT EXISTS，所以这里依赖上面的 PRAGMA 判断
+            connection.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+            )
 
 
 def init_database(database_url: str | None = None) -> None:
@@ -40,6 +84,10 @@ def init_database(database_url: str | None = None) -> None:
         # 依次执行所有建表 SQL
         for statement in CREATE_TABLE_SQL:
             connection.execute(statement)
+
+        # 先给旧表补新增列，再创建依赖这些列的索引。
+        # 否则旧库里没有 department/process_type 时，idx_documents_department 会启动失败。
+        _apply_column_migrations(connection)
 
         # 依次执行所有建索引 SQL
         for statement in CREATE_INDEX_SQL:
