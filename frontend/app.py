@@ -1005,10 +1005,11 @@ if mode in RAG_ENABLED_MODES:
 st.sidebar.markdown("对话设置")
 # 只有支持 RAG 的模式才展示 RAG 开关
 if mode in RAG_ENABLED_MODES:
-    # 渲染 RAG 开关；默认值由当前 session 是否已有数据库文档决定
+    # 渲染 RAG 开关。
+    # 默认值已经在上方写入 st.session_state[rag_checkbox_key]，这里不要再传 value，
+    # 否则 Streamlit 会认为同一个 widget 同时有两个默认值来源并输出警告。
     use_rag = st.sidebar.checkbox(
         "启用文档检索增强（RAG）",
-        value=has_persisted_rag_document,
         key=rag_checkbox_key
     )
 
@@ -1031,6 +1032,12 @@ if mode in RAG_ENABLED_MODES:
             options=list(KNOWLEDGE_BASE_CATEGORY_OPTIONS.keys()),
             key=f"knowledge_base_category_{mode}_{current_session_id}",
             help="上传文档时写入 SQLite，后续检索结果会显示来源分类。"
+        )
+        selected_retrieval_category = st.sidebar.selectbox(
+            "本轮检索分类范围",
+            options=["全部"] + list(KNOWLEDGE_BASE_CATEGORY_OPTIONS.keys()),
+            key=f"retrieval_category_{mode}_{current_session_id}",
+            help="本次检索的文档范围"
         )
 else:
     # 不支持 RAG 的模式不展示开关，避免用户误以为该模式可以检索文档
@@ -1330,6 +1337,13 @@ if chat_submission:
     # 默认没有 RAG 命中片段；只有启用 RAG 时才会调用后端获取
     rag_preview_chunks = []
 
+    # 组装后端扩展参数。display_text 用于数据库保存前端展示文本，RAG 元数据用于保存每条回答自己的引用模块
+    selected_filter_value = (
+        None
+        if selected_retrieval_category == "全部"
+        else KNOWLEDGE_BASE_CATEGORY_OPTIONS[selected_retrieval_category]["knowledge_base_type"]
+    )
+
     # 如果启用了 RAG，则先获取本次 query 命中的片段，稍后放到模型答案下方展示。
     # 企业知识库问答模式由后端 Agent 自己先判断是否需要知识库，因此这里不提前调用 /rag_preview，避免“还没判断就先检索”。
     if use_rag and mode in RAG_ENABLED_MODES and task_type != "agent":
@@ -1339,17 +1353,18 @@ if chat_submission:
             rag_preview_chunks = get_rag_preview(
                 session_id=current_session_id,
                 query=submit_raw_text,
+                knowledge_base_type_filter=selected_filter_value,
                 top_k=rag_top_k
             )
         # 调用后端 /rag_status/{session_id}，获取当前会话索引状态
         rag_status_info = rag_status_info or get_rag_status(current_session_id)
 
-    # 组装后端扩展参数。display_text 用于数据库保存前端展示文本，RAG 元数据用于保存每条回答自己的引用模块
     user_options = {
         # display_text 是前端聊天区展示文本；
         # 上传文件场景下，它只展示用户问题和附件名，避免把完整文档全文保存成可见聊天记录。
         # 后端会优先用 display_text 保存 message.content，同时用 input_text 保存 raw_content。
-        "display_text": submit_display_text
+        "display_text": submit_display_text,
+        "knowledge_base_type_filter": selected_filter_value,
     }
 
     # 只有本轮确实有命中片段时，才把引用模块元数据交给后端保存

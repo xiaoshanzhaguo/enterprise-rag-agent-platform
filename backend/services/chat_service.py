@@ -186,10 +186,13 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
 
             # 根据当前请求决定是否启用 RAG
             rag_context = ""
+            # 获取检索的知识库分类
+            knowledge_base_type_filter = request.user_options.get("knowledge_base_type_filter")
             if request.use_rag:
                 rag_context = build_rag_context(
                     session_id=request.session_id,
                     query=request.input_text,
+                    knowledge_base_type_filter=knowledge_base_type_filter,
                     top_k=request.rag_top_k
                 )
 

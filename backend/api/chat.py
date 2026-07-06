@@ -327,6 +327,7 @@ def rag_preview(request: RagPreviewRequest):
     chunks = build_rag_preview(
         session_id=request.session_id,
         query=request.query,
+        knowledge_base_type_filter=request.knowledge_base_type_filter,
         top_k=request.top_k
     )
 

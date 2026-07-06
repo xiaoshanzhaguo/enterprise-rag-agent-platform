@@ -17,7 +17,7 @@ RAG 服务层模块。
 - 当 RAG_KEYWORD_FALLBACK_ENABLED=true 时，向量无可靠命中才回退到关键词检索
 - 适合本地开发、项目演示和求职场景下的工程化展示
 """
-from typing import Any
+from typing import Any, Optional
 
 from backend.config import settings
 from backend.db.repository import save_rag_query_with_hits
@@ -103,7 +103,7 @@ def resolve_retrieval_mode(matched_chunks: list[dict[str, Any]]) -> str:
     return NO_HIT_RETRIEVAL_MODE
 
 
-def retrieve_keyword_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
+def retrieve_keyword_chunks(session_id: str | None, query: str, knowledge_base_type_filter: str, top_k: int = 3) -> list[dict[str, Any]]:
     """
     使用关键词检索获取当前会话的 RAG 文本块。
 
@@ -114,6 +114,7 @@ def retrieve_keyword_chunks(session_id: str | None, query: str, top_k: int = 3) 
 
     :param session_id: 当前会话 ID，可以是字符串，也可以是 None
     :param query: 当前用户问题
+    :param knowledge_base_type_filter: 知识库分类过滤条件
     :param top_k: 最多返回几个最相关的块，默认 3
     :return: 关键词检索命中的 chunk 列表
     """
@@ -126,13 +127,19 @@ def retrieve_keyword_chunks(session_id: str | None, query: str, top_k: int = 3) 
     if not chunks:
         return []
 
+    if knowledge_base_type_filter:
+        chunks = [
+            chunk for chunk in chunks
+            if chunk.get("knowledge_base_type") == knowledge_base_type_filter
+        ]
+
     # 根据 query 从所有文本块中检索最相关的前 top_k 个
     keyword_chunks = retrieve_top_chunks(query=query, chunks=chunks, top_k=top_k)
     # 给关键词检索结果补充 rank 和 retrieval_mode，便于前端解释和数据库记录
     return attach_retrieval_metadata(keyword_chunks, "keyword")
 
 
-def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
+def retrieve_rag_chunks(session_id: str | None, query: str, knowledge_base_type_filter: str, top_k: int = 3) -> list[dict[str, Any]]:
     """
     根据 session_id 和 query 获取最相关的 RAG 文本块。
 
@@ -144,6 +151,7 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
 
     :param session_id: 当前会话 ID，可以是字符串，也可以是 None
     :param query: 当前用户问题
+    :param knowledge_base_type_filter: 知识库分类过滤
     :param top_k: 最多返回几个最相关的块，默认 3
     :return: 一个列表。列表里的每个元素是一个 chunk 字典。
     """
@@ -151,12 +159,13 @@ def retrieve_rag_chunks(session_id: str | None, query: str, top_k: int = 3) -> l
     matched_chunks, _retrieval_mode = retrieve_rag_chunks_with_mode(
         session_id=session_id,
         query=query,
+        knowledge_base_type_filter=knowledge_base_type_filter,
         top_k=top_k
     )
     return matched_chunks
 
 
-def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, top_k: int = 3) -> tuple[list[dict[str, Any]], str]:
+def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, knowledge_base_type_filter: str, top_k: int = 3) -> tuple[list[dict[str, Any]], str]:
     """
     根据 session_id 和 query 获取 RAG 文本块，并返回本次实际检索结果状态。
 
@@ -167,6 +176,7 @@ def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, top_k: int
 
     :param session_id: 当前会话 ID，可以是字符串，也可以是 None
     :param query: 当前用户问题
+    :param knowledge_base_type_filter: 知识库分类过滤条件
     :param top_k: 最多返回几个最相关的块，默认 3
     :return: 二元组，第一项是命中 chunk 列表，第二项是实际检索状态
     """
@@ -179,6 +189,7 @@ def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, top_k: int
         vector_chunks = retrieve_similar_chunks(
             session_id=session_id,
             query=query,
+            knowledge_base_type_filter=knowledge_base_type_filter,
             top_k=top_k
         )
         # 如果向量检索命中可靠结果，直接返回向量结果
@@ -194,6 +205,7 @@ def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, top_k: int
         keyword_chunks = retrieve_keyword_chunks(
             session_id=session_id,
             query=query,
+            knowledge_base_type_filter=knowledge_base_type_filter,
             top_k=top_k
         )
         if keyword_chunks:
@@ -204,6 +216,7 @@ def retrieve_rag_chunks_with_mode(session_id: str | None, query: str, top_k: int
     keyword_chunks = retrieve_keyword_chunks(
         session_id=session_id,
         query=query,
+        knowledge_base_type_filter=knowledge_base_type_filter,
         top_k=top_k
     )
     if keyword_chunks:
@@ -258,14 +271,20 @@ def build_rag_context_from_chunks(matched_chunks: list[dict[str, Any]]) -> str:
     )
 
 
-def build_rag_context(session_id: str | None, query: str, top_k: int = 3) -> str:
+def build_rag_context(session_id: str | None, query: str, knowledge_base_type_filter: str, top_k: int = 3) -> str:
     """
     根据 session_id 和 query 构造可直接拼接进 prompt 的检索上下文。
+
+    :param session_id: 当前会话 ID，可以是字符串，也可以是 None
+    :param query: 当前用户问题
+    :param knowledge_base_type_filter: 知识库分类过滤条件
+    :param top_k: 最多返回几个最相关的块，默认 3
     """
     # 先检索最相关的文本块
     matched_chunks, retrieval_mode = retrieve_rag_chunks_with_mode(
         session_id=session_id,
         query=query,
+        knowledge_base_type_filter=knowledge_base_type_filter,
         top_k=top_k
     )
 
@@ -275,21 +294,28 @@ def build_rag_context(session_id: str | None, query: str, top_k: int = 3) -> str
         query_text=query,
         top_k=top_k,
         matched_chunks=matched_chunks,
-        retrieval_mode=retrieval_mode
+        retrieval_mode=retrieval_mode,
+        knowledge_base_type_filter=knowledge_base_type_filter,
     )
 
     # 再把检索结果转换成 prompt 可直接使用的上下文字符串
     return build_rag_context_from_chunks(matched_chunks)
 
 
-def build_rag_preview(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
+def build_rag_preview(session_id: str | None, query: str, knowledge_base_type_filter: str, top_k: int = 3) -> list[dict[str, Any]]:
     """
     构造给前端展示的检索片段摘要。
+
+    :param session_id: 当前会话 ID，可以是字符串，也可以是 None
+    :param query: 当前用户问题
+    :param knowledge_base_type_filter: 知识库分类过滤条件
+    :param top_k: 最多返回几个最相关的块，默认 3
     """
     # 先检索最相关的文本块
     matched_chunks, _retrieval_mode = retrieve_rag_chunks_with_mode(
         session_id=session_id,
         query=query,
+        knowledge_base_type_filter=knowledge_base_type_filter,
         top_k=top_k
     )
 

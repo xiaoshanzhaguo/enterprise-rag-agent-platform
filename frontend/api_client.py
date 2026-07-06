@@ -302,7 +302,7 @@ def post_stream_request(payload: dict, task_type: str):
     )
 
 
-def get_rag_preview(session_id: str, query: str, top_k: int) -> list[dict]:
+def get_rag_preview(session_id: str, query: str, knowledge_base_type_filter: str, top_k: int) -> list[dict]:
     """
     获取当前 query 的 RAG 命中引用和原文片段。
 
@@ -322,6 +322,7 @@ def get_rag_preview(session_id: str, query: str, top_k: int) -> list[dict]:
             json={
                 "session_id": session_id, # 当前会话ID
                 "query": query, # 当前问题
+                "knowledge_base_type_filter": knowledge_base_type_filter, # 知识库分类
                 "top_k": top_k # 检索数量
             },
             timeout=20

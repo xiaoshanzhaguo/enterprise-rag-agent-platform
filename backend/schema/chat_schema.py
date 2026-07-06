@@ -113,6 +113,7 @@ class RagPreviewRequest(BaseModel):
     """
     session_id: str  # 当前会话 ID
     query: str  # 当前查询问题
+    knowledge_base_type_filter: Optional[str] = None # 知识库分类
     top_k: int = Field(default=3, ge=1, le=5)  # 检索预览的片段数量
 
 

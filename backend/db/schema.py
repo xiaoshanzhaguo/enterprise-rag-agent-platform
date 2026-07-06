@@ -85,6 +85,7 @@ CREATE_TABLE_SQL = [
         agent_route_result TEXT,
         agent_route_reason TEXT,
         agent_rewritten_query TEXT,
+        knowledge_base_type_filter TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
@@ -183,5 +184,6 @@ TABLE_COLUMN_MIGRATIONS = {
         ("agent_route_result", "TEXT"),
         ("agent_route_reason", "TEXT"),
         ("agent_rewritten_query", "TEXT"),
+        ("knowledge_base_type_filter", "TEXT"),
     ],
 }

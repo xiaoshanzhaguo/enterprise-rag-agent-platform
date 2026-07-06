@@ -47,7 +47,8 @@ from backend.schema.chat_schema import ChatRequest, StreamEvent
 from backend.services.session_title import generate_session_title
 # SSE 格式化工具
 from backend.utils.stream_helper import to_sse
-
+# 轻量 Agent 路由模块
+from backend.services.agent_router import route_question, AgentRouteType
 
 # Agent 第一步：判断是否需要知识库
 STEP_JUDGE_KNOWLEDGE = "judge_knowledge"
@@ -70,77 +71,15 @@ AGENT_STEP_KEYS = (
     STEP_GENERATE_ANSWER,
 )
 
-def _extract_json_object(text: str) -> dict[str, Any] | None:
-    """
-    从模型输出中提取 JSON 对象。
-
-    函数说明：
-    1. 优先直接按 JSON 解析模型输出。
-    2. 如果模型额外包了 Markdown 或说明文字，则截取第一个 {...} 再解析。
-    3. 解析失败时返回 None，让外层使用保守兜底。
-
-    :param text: 模型返回的原始文本
-    :return: 解析得到的 JSON 字典；解析失败时返回 None
-    """
-    # 去掉首尾空白，避免换行影响 JSON 解析
-    normalized_text = text.strip()
-    # 空输出无法解析
-    if not normalized_text:
-        return None
-
-    try:
-        # 优先尝试直接解析完整输出
-        parsed_result = json.loads(normalized_text)
-    except json.JSONDecodeError:
-        # 如果模型输出里夹杂说明文字，则尝试截取第一个 JSON 对象范围
-        start_index = normalized_text.find("{")
-        end_index = normalized_text.rfind("}")
-        # 没有找到完整 JSON 对象时返回 None
-        if start_index < 0 or end_index <= start_index:
-            return None
-
-        try:
-            # 解析截取出来的 JSON 对象
-            parsed_result = json.loads(normalized_text[start_index:end_index + 1])
-        except json.JSONDecodeError:
-            # 截取后仍然无法解析，交给外层保守兜底
-            return None
-
-    # 只有字典结构才符合当前决策协议
-    if not isinstance(parsed_result, dict):
-        return None
-
-    # 返回解析出的字典
-    return parsed_result
-
-
-def _normalize_rewritten_query(question: str, rewritten_query: Any) -> str:
-    """
-    归一化模型改写后的检索 query。
-
-    函数说明：
-    1. 去掉模型可能额外输出的空白、引号和换行。
-    2. 如果模型没有给出可用 query，则回退到用户原始问题。
-    3. 限制 query 长度，避免把大段文本直接送入检索链路。
-
-    :param question: 用户原始问题
-    :param rewritten_query: 模型输出的改写 query
-    :return: 可用于 RAG 检索的 query
-    """
-    # 用户原始问题作为最终兜底，保证检索链路始终有 query 可用
-    fallback_query = question.strip()
-    # 非字符串结构无法作为检索 query，直接回退
-    if not isinstance(rewritten_query, str):
-        return fallback_query
-
-    # 清理首尾空白、换行和常见包裹引号
-    normalized_query = rewritten_query.strip().strip('"').strip("'").strip()
-    # 空字符串没有检索价值，回退到原始问题
-    if not normalized_query:
-        return fallback_query
-
-    # 过长 query 会稀释检索重点，因此只保留前 120 个字符
-    return normalized_query[:120]
+# Agent 路由中文标签
+ROUTE_TYPE_LABELS = {
+    AgentRouteType.KNOWLEDGE_QA: "知识问答",
+    AgentRouteType.PROCESS_APPLY: "流程申请",
+    AgentRouteType.IT_SUPPORT: "IT 支持",
+    AgentRouteType.FINANCE_PROCESS: "财务流程",
+    AgentRouteType.PRODUCT_DOC: "产品资料",
+    AgentRouteType.IRRELEVANT: "无关问题",
+}
 
 
 def _format_retrieval_mode_for_display(retrieval_mode: str) -> str:
@@ -161,219 +100,6 @@ def _format_retrieval_mode_for_display(retrieval_mode: str) -> str:
 
     # 其他情况直接展示原始检索方式
     return retrieval_mode
-
-
-def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str, str] | None:
-    """
-    使用大模型进行意图分类和检索 query 改写。
-
-    函数说明：
-    1. 让模型只做轻量路由决策和检索 query 改写，不生成最终答案。
-    2. 要求模型返回固定 JSON，包含 need_knowledge_base、reason 和 rewritten_query。
-    3. 如果模型输出不合规或调用失败，则返回 None，让外层保守兜底。
-
-    :param question: 用户当前输入的问题
-    :param client: OpenAI 兼容客户端
-    :return: 三元组，依次表示是否需要知识库、判断理由、检索 query；失败时返回 None
-    """
-    # 如果没有可用客户端，则无法进行模型决策
-    if client is None:
-        return None
-
-    try:
-        # 调用模型做一次非流式轻量决策，避免前端还没判断就先检索
-        response = client.chat.completions.create(
-            model=settings.llm_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "你是企业知识库问答系统的意图分类与检索改写 Agent，只负责判断用户问题是否需要查询企业知识库，并在需要时改写检索 query。"
-                        "当问题明确依赖已有知识库、上传资料、企业内部文档、制度规则、流程标准、可追溯来源或特定上下文证据时，need_knowledge_base=true。"
-                        "当问题是普通对话、开放写作、通用文本处理、常识问答、代码问题，且没有要求基于特定资料或内部规则回答时，need_knowledge_base=false。"
-                        "如果问题同时包含通用任务和资料依据要求，请优先判断是否需要外部证据；只有需要外部证据时才查询知识库。"
-                        "当 need_knowledge_base=true 时，rewritten_query 必须是适合向量检索的短查询，保留核心实体、规则类型、资料范围和约束词，去掉寒暄、附件说明和无关口语。"
-                        "当 need_knowledge_base=false 时，rewritten_query 必须为空字符串。"
-                        "只返回 JSON，不要返回 Markdown，不要补充解释。"
-                        "JSON 格式必须是：{\"need_knowledge_base\": true, \"reason\": \"简短中文理由\", \"rewritten_query\": \"适合检索的中文短查询\"}"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"用户问题：{question}",
-                },
-            ],
-            temperature=0, # 控制模型的随机性，0 为最稳定，尽量让意图判断结果可复现
-        )
-    except Exception:
-        # 模型决策失败不能中断 Agent 主流程，后续交给保守兜底
-        return None
-
-    try:
-        # 读取模型返回文本
-        decision_text = response.choices[0].message.content or ""
-    except (AttributeError, IndexError):
-        # 如果模型响应结构异常，则交给保守兜底
-        return None
-    # 从模型输出中解析 JSON
-    decision_json = _extract_json_object(decision_text)
-    # 如果解析失败，则交给保守兜底
-    if not decision_json:
-        return None
-
-    # 读取是否需要知识库字段
-    need_knowledge_base = decision_json.get("need_knowledge_base")
-    # 字段必须是布尔值，避免字符串 true/false 导致误判
-    if not isinstance(need_knowledge_base, bool):
-        return None
-
-    # 读取模型给出的简短理由
-    reason = str(decision_json.get("reason") or "").strip()
-    # 如果模型没有给理由，则补充默认理由
-    if not reason:
-        reason = "模型判断当前问题需要按路由结果处理。"
-
-    # 需要知识库时使用模型改写后的 query；不需要知识库时不保留检索 query
-    rewritten_query = (
-        _normalize_rewritten_query(question, decision_json.get("rewritten_query"))
-        if need_knowledge_base
-        else ""
-    )
-
-    # 返回模型决策结果和检索 query
-    return need_knowledge_base, f"Agent 判断：{reason}", rewritten_query
-
-
-def _has_indexed_rag_document(session_id: str | None) -> bool:
-    """
-    判断当前会话是否已经有可检索的知识库文档。
-
-    函数说明：
-    1. 通过数据库文档状态判断，而不是依赖前端开关或内存状态。
-    2. 只有已有文档和 chunk 时，Agent 判断失败才适合按原问题兜底检索。
-    3. 状态查询失败时返回 False，避免数据库异常被误判成可检索。
-
-    :param session_id: 当前会话 ID
-    :return: True 表示当前会话已有可检索文档
-    """
-    # 没有 session_id 时，后端无法定位当前会话，也就无法查询这个会话是否上传过文档。
-    if not session_id:
-        return False
-
-    try:
-        # 从数据库读取当前会话的文档状态。
-        # 这里不用前端传来的状态，是为了防止页面刷新、后端重启或前端状态丢失后判断不准。
-        document_status = get_document_status(session_id)
-    except Exception:
-        # 文档状态查询失败时，不冒险进入 RAG 检索。
-        # 这样可以避免数据库异常时继续执行后续检索，导致更难理解的错误。
-        return False
-
-    # has_document 表示这个 session 有文档记录。
-    # chunk_count > 0 表示文档已经切块完成，确实可以被检索。
-    # 两个条件都满足，才认为“当前会话已有可检索知识库”。
-    return bool(
-        document_status.get("has_document")
-        and int(document_status.get("chunk_count") or 0) > 0
-    )
-
-
-def _build_intent_decision_fallback(
-    question: str,
-    use_rag: bool,
-    session_id: str | None = None,
-) -> tuple[bool, str, str]:
-    """
-    构造意图分类失败时的保守兜底结果。
-
-    函数说明：
-    1. 只处理 RAG 关闭、空问题和模型判断失败这类系统状态。
-    2. 不再通过关键词判断用户意图，避免规则系统覆盖 Agent 判断。
-    3. 如果 RAG 已开启且当前会话已有文档，则使用原问题执行检索，避免演示时因意图分类失败跳过知识库。
-    4. 没有可检索文档时，仍然保守跳过知识库检索，避免盲目 RAG。
-
-    :param question: 用户当前输入的问题
-    :param use_rag: 前端是否开启 RAG
-    :param session_id: 当前会话 ID，用于判断是否已有可检索文档
-    :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
-    """
-    # 去掉首尾空白，只用于判断是否为空问题
-    normalized_question = question.strip()
-
-    # 如果前端没有开启 RAG，则尊重用户设置，走普通对话。
-    # 即使当前 session 有文档，也不应该绕过用户开关强行检索。
-    if not use_rag:
-        return False, "当前未开启 RAG，按普通对话处理。", ""
-
-    # 空问题没有检索价值，直接跳过知识库检索。
-    # 这里先拦截空输入，避免后面把空字符串写入 rag_queries 或传给检索器。
-    if not normalized_question:
-        return False, "当前问题为空，跳过知识库检索。", ""
-
-    # Agent 判断失败但已有知识库文档时，用原问题兜底检索，保证演示链路仍然走 RAG。
-    if _has_indexed_rag_document(session_id):
-        # 这里返回 True，表示后续流程仍然进入“检索证据”步骤。
-        # 第三个返回值使用原始问题，等价于“没有 query rewrite 时，直接用用户问题检索”。
-        return (
-            True,
-            "Agent 意图分类暂不可用，已按原始问题检索当前会话知识库。",
-            normalized_question,
-        )
-
-    # 没有模型判断结果且没有可检索文档时，不再用关键词猜测用户意图。
-    # 这样可以避免用户只是闲聊或写作时，被后端硬塞进一个没有文档的 RAG 流程。
-    return False, "Agent 意图分类暂不可用，且当前会话没有可检索文档，本轮按普通对话处理。", ""
-
-
-def decide_need_knowledge_base(
-    question: str,
-    use_rag: bool,
-    client=None,
-    session_id: str | None = None,
-) -> tuple[bool, str, str]:
-    """
-    判断当前问题是否需要查询企业知识库，并生成检索 query。
-
-    函数说明：
-    1. 如果前端没有开启 RAG，直接判定为不需要知识库。
-    2. 优先使用大模型做意图分类和 query rewrite。
-    3. 如果模型决策失败，则使用保守兜底，保证流程稳定。
-
-    :param question: 用户当前输入的问题
-    :param use_rag: 前端是否开启 RAG
-    :param client: OpenAI 兼容客户端，用于执行轻量 Agent 意图分类和 query rewrite
-    :param session_id: 当前会话 ID，用于模型判断失败时检查是否已有可检索文档
-    :return: 三元组，依次表示是否需要知识库、判断理由、检索 query
-    """
-    # 去掉首尾空白，只用于基础空值判断和传给模型
-    normalized_question = question.strip()
-
-    # 如果前端没有开启 RAG，则尊重用户设置，走普通对话。
-    # 这个判断放在最前面，可以避免无意义调用 LLM 做意图分类。
-    if not use_rag:
-        return False, "当前未开启 RAG，按普通对话处理。", ""
-
-    # 空问题没有检索价值，直接走普通对话兜底。
-    # 这样后面的 LLM 判断、query rewrite 和 RAG 检索都不会处理空字符串。
-    if not normalized_question:
-        return False, "当前问题为空，跳过知识库检索。", ""
-
-    # 优先让模型做一次轻量意图分类和 query rewrite，增强 Agent 自主决策能力
-    llm_decision = _decide_need_knowledge_base_by_llm(
-        question=normalized_question,
-        client=client,
-    )
-    # 模型决策成功时直接使用模型结论
-    if llm_decision is not None:
-        return llm_decision
-
-    # 模型决策失败时进入兜底逻辑。
-    # 兜底函数会根据 session_id 再查一次数据库：有文档就用原问题检索，没有文档就按普通对话处理。
-    return _build_intent_decision_fallback(
-        question=normalized_question,
-        use_rag=use_rag,
-        session_id=session_id,
-    )
 
 
 def _build_agent_answer_system_prompt(has_rag_evidence: bool) -> str:
@@ -653,6 +379,7 @@ def _retrieve_agent_rag_chunks(
     session_id: str | None,
     rewritten_query: str,
     original_question: str,
+    knowledge_base_type_filter: str,
     top_k: int,
 ) -> tuple[list[dict[str, Any]], str, str, str]:
     """
@@ -667,6 +394,7 @@ def _retrieve_agent_rag_chunks(
     :param rewritten_query: Agent 改写后的检索问题
     :param original_question: 用户原始问题
     :param top_k: 最多返回的检索片段数量
+    :param knowledge_base_type_filter: 知识库分类过滤条件
     :return: 四元组，依次为命中片段、检索方式、实际检索 query、补充说明
     """
     # 清理改写 query，避免空白影响检索
@@ -684,6 +412,7 @@ def _retrieve_agent_rag_chunks(
     matched_chunks, retrieval_mode = retrieve_rag_chunks_with_mode(
         session_id=session_id,
         query=primary_query,
+        knowledge_base_type_filter=knowledge_base_type_filter,
         top_k=top_k,
     )
     # 如果改写 query 已经命中，直接返回结果
@@ -698,6 +427,7 @@ def _retrieve_agent_rag_chunks(
     fallback_chunks, fallback_mode = retrieve_rag_chunks_with_mode(
         session_id=session_id,
         query=normalized_original_question,
+        knowledge_base_type_filter=knowledge_base_type_filter,
         top_k=top_k,
     )
     # 如果原始问题命中，则返回 fallback 结果，并给前端展示一条说明
@@ -833,17 +563,24 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 )
             )
 
-            # 执行意图分类和 query rewrite
-            need_knowledge_base, decision_reason, retrieval_query = decide_need_knowledge_base(
+            # 执行路由分类、意图分类和 query rewrite
+            route_decision = route_question(
                 question=request.input_text,
                 use_rag=request.use_rag,
                 client=client,
                 # session_id 用于兜底场景：当 LLM 判断失败时，后端会检查当前会话是否已有文档。
                 session_id=request.session_id,
             )
+            # 读取数据
+            route_type = route_decision.route_type
+            route_type_label = ROUTE_TYPE_LABELS.get(route_type, route_type.value)
+            need_knowledge_base = route_decision.should_use_rag
+            decision_reason = route_decision.reason
+            retrieval_query = route_decision.rewritten_query
             # 组装判断步骤展示文本
             judge_text = (
-                f"判断结果：{'需要查询知识库' if need_knowledge_base else '不需要查询知识库'}。\n\n"
+                f"路由类型：{route_type_label} {route_type.value}\n\n"
+                f"是否需要查知识库：{'需要查询知识库' if need_knowledge_base else '不需要查询知识库'}。\n\n"
                 f"判断依据：{decision_reason}"
             )
             # 如果需要知识库，则展示本轮实际用于检索的 query，兼容 query rewrite 和判断失败兜底两种来源
@@ -879,6 +616,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             effective_retrieval_query = retrieval_query
             # 默认没有额外检索说明；只有发生 query fallback 时才展示
             retrieval_note = ""
+            # 获取检索的知识库分类
+            knowledge_base_type_filter = request.user_options.get("knowledge_base_type_filter", None)
             # 如果判断需要知识库，则执行 RAG 检索
             if need_knowledge_base:
                 # 调用 Agent 检索链路，优先使用改写 query，改写无命中时回退原始问题
@@ -886,6 +625,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     session_id=request.session_id,
                     rewritten_query=retrieval_query,
                     original_question=request.input_text,
+                    knowledge_base_type_filter=knowledge_base_type_filter,
                     top_k=request.rag_top_k,
                 )
                 # 保存本次检索记录，便于第 10 天可解释面板和数据库追踪继续生效
@@ -899,6 +639,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     agent_route_result="use_knowledge_base",
                     agent_route_reason=decision_reason,
                     agent_rewritten_query=retrieval_query,
+                    knowledge_base_type_filter=knowledge_base_type_filter,
                 )
                 # 格式化展示文案，避免 fallback 场景只显示 keyword 造成误解
                 retrieval_mode_display = _format_retrieval_mode_for_display(retrieval_mode)

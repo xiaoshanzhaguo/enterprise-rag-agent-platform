@@ -178,7 +178,7 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
     )
 
 
-def retrieve_similar_chunks(session_id: str | None, query: str, top_k: int = 3) -> list[dict[str, Any]]:
+def retrieve_similar_chunks(session_id: str | None, query: str, knowledge_base_type_filter: str, top_k: int = 3) -> list[dict[str, Any]]:
     """
     使用 ChromaDB 根据 query 相似度检索 chunk。
 
@@ -189,6 +189,7 @@ def retrieve_similar_chunks(session_id: str | None, query: str, top_k: int = 3) 
 
     :param session_id: 当前会话 ID
     :param query: 当前用户问题
+    :param knowledge_base_type_filter: 知识库分类过滤条件
     :param top_k: 最多返回几个 chunk
     :return: 命中的 chunk 列表
     """
@@ -206,11 +207,16 @@ def retrieve_similar_chunks(session_id: str | None, query: str, top_k: int = 3) 
     # 获取 Chroma collection
     collection = get_chroma_collection()
 
+    # 添加知识库过滤
+    where_filter = {"session_id": session_id}
+    if knowledge_base_type_filter:
+        where_filter["knowledge_base_type"] = knowledge_base_type_filter
+
     # 按 session_id 过滤，只检索当前会话的文档 chunk
     result = collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k, # 返回的结果条数
-        where={"session_id": session_id},
+        where=where_filter,
         include=["documents", "metadatas", "distances"], # 要返回的字段
     )
 

@@ -901,6 +901,7 @@ def save_rag_query_with_hits(
     agent_route_result: str | None = None,
     agent_route_reason: str | None = None,
     agent_rewritten_query: str | None = None,
+    knowledge_base_type_filter: str | None = None,
 ) -> int | None:
     """
     保存一次 RAG 查询记录及其命中的文档块结果。
@@ -925,6 +926,7 @@ def save_rag_query_with_hits(
     :param agent_route_result: Agent 路由结果，例如 use_knowledge_base、skip_knowledge_base
     :param agent_route_reason: Agent 路由理由，来自意图分类或兜底策略
     :param agent_rewritten_query: Agent 改写出的检索 query，方便排查 query rewrite 是否有效
+    :param knowledge_base_type_filter: 知识库类型
     :return: 保存成功时，返回本次 rag_queries 表中新插入记录的主键 ID；如果 session_id 或 query_text 为空，则返回None
     """
     if not session_id or not query_text:
@@ -944,9 +946,10 @@ def save_rag_query_with_hits(
                 agent_route_result,
                 agent_route_reason,
                 agent_rewritten_query,
+                knowledge_base_type_filter,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
@@ -956,6 +959,7 @@ def save_rag_query_with_hits(
                 agent_route_result,
                 agent_route_reason,
                 agent_rewritten_query,
+                knowledge_base_type_filter,
                 now,
             ),
         )

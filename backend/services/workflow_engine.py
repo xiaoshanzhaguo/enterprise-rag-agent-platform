@@ -231,6 +231,8 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
 
                 # 当前步骤是否启用 RAG
                 rag_context = ""
+                # 获取检索的知识库分类
+                knowledge_base_type_filter = request.user_options.get("knowledge_base_type_filter")
                 if request.use_rag:
                     # 使用“步骤名称 + 用户输入”作为检索 query
                     # 让 summary / analysis / suggestion 各自更贴近当前步骤要求
@@ -238,6 +240,7 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                     rag_context = build_rag_context(
                         session_id=request.session_id,
                         query=step_query,
+                        knowledge_base_type_filter=knowledge_base_type_filter,
                         top_k=request.rag_top_k
                     )
 
