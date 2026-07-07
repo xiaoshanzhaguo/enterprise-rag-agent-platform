@@ -88,6 +88,8 @@ class IndexDocumentRequest(BaseModel):
     session_id: str  # 当前会话 ID
     document_text: str  # 完整文档文本
     file_name: Optional[str] = None  # 文件名，可选
+    knowledge_base_id: Optional[str] = None  # 文档要写入的企业知识库 ID；不传时使用默认企业知识库
+    user_role: Optional[str] = None  # 演示级用户角色；kb_admin/admin 才允许上传知识库
     knowledge_base_type: Optional[str] = None  # 知识库类型，例如 hr、finance、it、product、general；不传时由后端推断
     department: Optional[str] = None  # 所属部门，例如 HR、财务、IT、产品
     process_type: Optional[str] = None  # 流程类型，例如 leave、reimbursement、vpn、gitlab_access
@@ -99,6 +101,7 @@ class IndexDocumentResponse(BaseModel):
     文档索引响应模型。
     """
     session_id: str  # 当前会话 ID
+    knowledge_base_id: str = "session_scoped"  # 本次文档写入的知识库范围；旧入口为 session_scoped
     file_name: Optional[str] = None  # 文件名
     chunk_count: int  # 文档切分后的文本块数量
     knowledge_base_type: str = "general"  # 本次索引文档的知识库类型
@@ -107,12 +110,58 @@ class IndexDocumentResponse(BaseModel):
     process_status: str = "active"  # 本次索引文档流程状态
 
 
+class KnowledgeBaseCategory(BaseModel):
+    """
+    前端可选择的知识库分类模型。
+
+    当前项目里 category_id 和 knowledge_base_type 暂时使用同一个值，
+    例如 finance 表示“财务”分类。后续如果新增独立分类表，可以继续保留
+    category_id 作为前后端交互字段，再在后端映射到数据库主键。
+    """
+    category_id: str  # 前端选择后提交的分类 ID
+    label: str  # 前端下拉框展示名
+    knowledge_base_type: str  # 当前文档入库和检索过滤使用的分类值
+    department: Optional[str] = None  # 分类对应的部门展示名
+    description: str = ""  # 分类说明，便于以后前端 tooltip 或说明面板使用
+
+
+class KnowledgeBaseCategoryListResponse(BaseModel):
+    """
+    知识库分类列表响应模型。
+    """
+    categories: List[KnowledgeBaseCategory]  # 可上传、可检索过滤的分类列表
+
+
+class KnowledgeBaseItem(BaseModel):
+    """
+    企业知识库列表项。
+
+    这是“知识库从 session 独立出来”的接口模型：
+    - knowledge_base_id 表示检索和上传的业务范围
+    - session_id 只表示一次聊天会话，不再代表知识库本身
+    """
+    knowledge_base_id: str  # 知识库 ID
+    name: str  # 知识库展示名称
+    description: Optional[str] = None  # 知识库说明
+    owner_role: str = "kb_admin"  # 默认维护角色
+    created_at: Optional[str] = None  # 创建时间
+    updated_at: Optional[str] = None  # 更新时间
+
+
+class KnowledgeBaseListResponse(BaseModel):
+    """
+    企业知识库列表响应模型。
+    """
+    knowledge_bases: List[KnowledgeBaseItem]  # 当前可查询的企业知识库列表
+
+
 class RagPreviewRequest(BaseModel):
     """
     RAG 检索预览请求。
     """
     session_id: str  # 当前会话 ID
     query: str  # 当前查询问题
+    knowledge_base_id: Optional[str] = None  # 本次检索使用的企业知识库 ID
     knowledge_base_type_filter: Optional[str] = None # 知识库分类
     top_k: int = Field(default=3, ge=1, le=5)  # 检索预览的片段数量
 
@@ -130,6 +179,7 @@ class RagPreviewChunk(BaseModel):
     text: str = ""  # 命中的原文片段
     text_preview: str  # 文本预览内容
     text_length: int  # 原始文本总长度
+    knowledge_base_id: Optional[str] = None  # 命中文档所属企业知识库 ID
     knowledge_base_type: Optional[str] = None  # 来源文档的知识库类型
     department: Optional[str] = None  # 来源文档所属部门
     process_type: Optional[str] = None  # 来源文档流程类型
@@ -141,6 +191,7 @@ class RagPreviewResponse(BaseModel):
     RAG 检索预览响应。
     """
     session_id: str  # 当前会话 ID
+    knowledge_base_id: Optional[str] = None  # 本次预览使用的企业知识库 ID
     query: str  # 当前查询问题
     retrieval_mode: str = "unknown"  # 本次预览实际使用的检索方式，例如 vector、keyword 或 no_hit
     chunks: List[RagPreviewChunk]  # 检索片段摘要列表
@@ -151,6 +202,7 @@ class RagStatusResponse(BaseModel):
     RAG 数据库文档状态响应。
     """
     session_id: str  # 当前会话 ID
+    knowledge_base_id: Optional[str] = None  # 当前状态对应的企业知识库 ID
     has_document: bool  # 当前会话是否已有索引文档
     file_names: List[str] = Field(default_factory=list)  # 当前会话已索引的全部文档文件名
     document_count: int = 0  # 当前会话已索引的文档数量

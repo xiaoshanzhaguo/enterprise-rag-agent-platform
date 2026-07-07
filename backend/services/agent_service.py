@@ -30,7 +30,13 @@ from fastapi.responses import StreamingResponse
 # 项目配置对象，用于读取模型名称和引用预览长度
 from backend.config import settings
 # 数据库持久化函数，用于保存聊天会话、读取标题、保存消息和 RAG 查询日志
-from backend.db.repository import ensure_chat_session, get_chat_session_title, save_chat_message, save_rag_query_with_hits
+from backend.db.repository import (
+    ensure_chat_session,
+    get_chat_session_title,
+    save_chat_message,
+    save_rag_query_with_hits,
+    update_rag_query_answer,
+)
 # 数据库文档状态查询函数，用于保存历史消息中的引用模块状态
 from backend.rag.store import get_document_status
 # RAG 服务函数，用于检索、组装引用上下文和生成来源标识
@@ -306,6 +312,8 @@ def _build_agent_rag_metadata(
     rewritten_query: str,
     effective_retrieval_query: str,
     retrieval_mode: str,
+    knowledge_base_id: str | None,
+    knowledge_base_type_filter: str | None,
 ) -> dict[str, Any] | None:
     """
     构造 Agent 回答对应的 RAG 展示元数据。
@@ -323,6 +331,8 @@ def _build_agent_rag_metadata(
     :param rewritten_query: Agent 改写出的检索 query
     :param effective_retrieval_query: 最终实际用于检索的 query
     :param retrieval_mode: 本轮实际检索方式
+    :param knowledge_base_id: 企业知识库 ID
+    :param knowledge_base_type_filter: 本轮前端选择的知识库分类过滤条件；None 表示全部分类
     :return: 可写入 chat_messages.metadata_json 的元数据；没有命中时返回 None
     """
     # 先保存 Agent 路由结果。即使本轮跳过检索，也能在消息元数据里留下判断依据。
@@ -334,6 +344,8 @@ def _build_agent_rag_metadata(
             "rewritten_query": rewritten_query,
             "effective_retrieval_query": effective_retrieval_query,
             "retrieval_mode": retrieval_mode,
+            "knowledge_base_id": knowledge_base_id,
+            "knowledge_base_type_filter": knowledge_base_type_filter,
         }
     }
 
@@ -358,6 +370,7 @@ def _build_agent_rag_metadata(
                 "text": text,
                 "text_preview": chunk.get("text_preview") or text[:preview_limit],
                 "text_length": len(text),
+                "knowledge_base_id": chunk.get("knowledge_base_id") or knowledge_base_id,
                 "knowledge_base_type": chunk.get("knowledge_base_type"),
                 "department": chunk.get("department"),
                 "process_type": chunk.get("process_type"),
@@ -369,7 +382,7 @@ def _build_agent_rag_metadata(
     # 无命中时只保留 agent_route，避免前端误以为这条回答有可展示的引用依据。
     if rag_preview_chunks:
         metadata["rag_preview_chunks"] = rag_preview_chunks
-        metadata["rag_status_info"] = get_document_status(request.session_id)
+        metadata["rag_status_info"] = get_document_status(request.session_id, knowledge_base_id=knowledge_base_id)
 
     # 返回前端历史恢复需要的元数据结构
     return metadata or None
@@ -379,7 +392,8 @@ def _retrieve_agent_rag_chunks(
     session_id: str | None,
     rewritten_query: str,
     original_question: str,
-    knowledge_base_type_filter: str,
+    knowledge_base_id: str | None,
+    knowledge_base_type_filter: str | None,
     top_k: int,
 ) -> tuple[list[dict[str, Any]], str, str, str]:
     """
@@ -393,8 +407,9 @@ def _retrieve_agent_rag_chunks(
     :param session_id: 当前会话 ID
     :param rewritten_query: Agent 改写后的检索问题
     :param original_question: 用户原始问题
-    :param top_k: 最多返回的检索片段数量
+    :param knowledge_base_id: 企业知识库 ID；传入后优先检索公共知识库
     :param knowledge_base_type_filter: 知识库分类过滤条件
+    :param top_k: 最多返回的检索片段数量
     :return: 四元组，依次为命中片段、检索方式、实际检索 query、补充说明
     """
     # 清理改写 query，避免空白影响检索
@@ -413,6 +428,7 @@ def _retrieve_agent_rag_chunks(
         session_id=session_id,
         query=primary_query,
         knowledge_base_type_filter=knowledge_base_type_filter,
+        knowledge_base_id=knowledge_base_id,
         top_k=top_k,
     )
     # 如果改写 query 已经命中，直接返回结果
@@ -428,6 +444,7 @@ def _retrieve_agent_rag_chunks(
         session_id=session_id,
         query=normalized_original_question,
         knowledge_base_type_filter=knowledge_base_type_filter,
+        knowledge_base_id=knowledge_base_id,
         top_k=top_k,
     )
     # 如果原始问题命中，则返回 fallback 结果，并给前端展示一条说明
@@ -517,6 +534,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
         final_result: dict[str, str] = {}
         # 当前回答实际使用的 RAG 命中片段
         matched_chunks: list[dict[str, Any]] = []
+        # 当前回答对应的 rag_queries 主键。检索先发生，答案后生成，所以需要生成结束后再回填 answer_text。
+        rag_query_id: int | None = None
 
         try:
             # 优先使用前端传入的展示文本，避免上传文件场景把全文展示进聊天气泡
@@ -564,12 +583,15 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             )
 
             # 执行路由分类、意图分类和 query rewrite
+            # knowledge_base_id 表示本轮要查询哪个企业知识库；session_id 只表示当前员工聊天会话。
+            knowledge_base_id = request.user_options.get("knowledge_base_id")
             route_decision = route_question(
                 question=request.input_text,
                 use_rag=request.use_rag,
                 client=client,
                 # session_id 用于兜底场景：当 LLM 判断失败时，后端会检查当前会话是否已有文档。
                 session_id=request.session_id,
+                knowledge_base_id=knowledge_base_id,
             )
             # 读取数据
             route_type = route_decision.route_type
@@ -625,20 +647,22 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     session_id=request.session_id,
                     rewritten_query=retrieval_query,
                     original_question=request.input_text,
+                    knowledge_base_id=knowledge_base_id,
                     knowledge_base_type_filter=knowledge_base_type_filter,
                     top_k=request.rag_top_k,
                 )
                 # 保存本次检索记录，便于第 10 天可解释面板和数据库追踪继续生效
-                save_rag_query_with_hits(
+                rag_query_id = save_rag_query_with_hits(
                     session_id=request.session_id,
                     query_text=effective_retrieval_query,
                     top_k=request.rag_top_k,
                     matched_chunks=matched_chunks,
                     retrieval_mode=retrieval_mode,
                     mode=request.mode,
-                    agent_route_result="use_knowledge_base",
+                    agent_route_result=route_type.value,
                     agent_route_reason=decision_reason,
                     agent_rewritten_query=retrieval_query,
+                    knowledge_base_id=knowledge_base_id,
                     knowledge_base_type_filter=knowledge_base_type_filter,
                 )
                 # 格式化展示文案，避免 fallback 场景只显示 keyword 造成误解
@@ -782,6 +806,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 rewritten_query=retrieval_query,
                 effective_retrieval_query=effective_retrieval_query,
                 retrieval_mode=retrieval_mode,
+                knowledge_base_id=knowledge_base_id,
+                knowledge_base_type_filter=knowledge_base_type_filter,
             )
             # 保存 assistant 消息；如果本轮有引用片段，则把引用模块元数据一起保存
             save_chat_message(
@@ -791,6 +817,11 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 raw_content=final_content,
                 mode=request.mode,
                 metadata=assistant_metadata,
+            )
+            # Agent 检索日志已经拿到了精确 rag_query_id，生成结束后把最终回答回填到同一条记录。
+            update_rag_query_answer(
+                rag_query_id=rag_query_id,
+                answer_text=answer_text,
             )
 
             # 发送最终完成事件

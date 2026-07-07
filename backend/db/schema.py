@@ -45,11 +45,25 @@ CREATE_TABLE_SQL = [
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
     """,
+    # 保存企业知识库主表。
+    # 知识库独立出来以后，聊天 session 只代表一次员工对话；
+    # documents.knowledge_base_id 才代表文档属于哪个企业知识库。
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_bases (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        owner_role TEXT NOT NULL DEFAULT 'kb_admin',
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    )
+    """,
     # 保存文档信息
     """
     CREATE TABLE IF NOT EXISTS documents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL,
+        knowledge_base_id TEXT NOT NULL DEFAULT 'session_scoped',
         file_name TEXT,
         content_hash TEXT,
         source_type TEXT NOT NULL DEFAULT 'upload',
@@ -85,7 +99,9 @@ CREATE_TABLE_SQL = [
         agent_route_result TEXT,
         agent_route_reason TEXT,
         agent_rewritten_query TEXT,
+        knowledge_base_id TEXT,
         knowledge_base_type_filter TEXT,
+        answer_text TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
@@ -158,6 +174,7 @@ CREATE_TABLE_SQL = [
 CREATE_INDEX_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_session_id ON documents(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_documents_knowledge_base_id ON documents(knowledge_base_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_department ON documents(department)",
     "CREATE INDEX IF NOT EXISTS idx_documents_process_type ON documents(process_type)",
     "CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id)",
@@ -175,6 +192,7 @@ CREATE_INDEX_SQL = [
 # 所以新增字段后，需要在 init_database() 里按这个清单执行轻量 ALTER TABLE 迁移。
 TABLE_COLUMN_MIGRATIONS = {
     "documents": [
+        ("knowledge_base_id", "TEXT NOT NULL DEFAULT 'session_scoped'"),
         ("knowledge_base_type", "TEXT NOT NULL DEFAULT 'general'"),
         ("department", "TEXT"),
         ("process_type", "TEXT"),
@@ -184,6 +202,8 @@ TABLE_COLUMN_MIGRATIONS = {
         ("agent_route_result", "TEXT"),
         ("agent_route_reason", "TEXT"),
         ("agent_rewritten_query", "TEXT"),
+        ("knowledge_base_id", "TEXT"),
         ("knowledge_base_type_filter", "TEXT"),
+        ("answer_text", "TEXT"),
     ],
 }

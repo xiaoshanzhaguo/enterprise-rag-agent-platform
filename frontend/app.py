@@ -42,6 +42,8 @@ from backend.utils.workflow_formatter import format_workflow_blocks
 # 导入“前端请求封装层”里的函数
 from frontend.api_client import (
     clear_chat_session, # 删除后端数据库中的聊天会话
+    get_knowledge_base_categories, # 从后端读取知识库分类列表
+    get_knowledge_bases, # 从后端读取企业知识库列表
     index_uploaded_document, # 通知后端给文档建立索引
     iter_sse_events, # 逐条解析后端返回的 SSE 事件流
     get_rag_preview, # 获取本次 query 命中的 RAG 片段摘要
@@ -802,9 +804,9 @@ RAG_ENABLED_MODES = {
     "企业知识库问答"
 }
 
-# 上传知识库文档时可选择的业务分类。
-# label 用于前端展示，knowledge_base_type / department 会随 /index_document 请求写入 SQLite。
-KNOWLEDGE_BASE_CATEGORY_OPTIONS = {
+# 后端分类接口不可用时使用的默认分类。
+# 正常情况下页面会优先读取 /knowledge_base_categories，避免前后端分类值维护两份。
+DEFAULT_KNOWLEDGE_BASE_CATEGORY_OPTIONS = {
     "HR": {
         "knowledge_base_type": "hr",
         "department": "HR",
@@ -822,6 +824,111 @@ KNOWLEDGE_BASE_CATEGORY_OPTIONS = {
         "department": "产品",
     },
 }
+
+def build_knowledge_base_category_options(categories: list[dict]) -> dict[str, dict[str, str]]:
+    """
+    将后端返回的分类列表转换成 Streamlit selectbox 使用的 options 字典。
+
+    函数说明：
+    1. 后端返回的是列表结构，适合 API 表达。
+    2. 前端下拉框更适合使用 label -> 字段配置 的字典。
+    3. category_id 在当前项目中等同于 knowledge_base_type；真正检索过滤仍使用 knowledge_base_type。
+    4. 如果后端返回脏数据，这里会跳过异常项，最后由默认分类兜底。
+
+    :param categories: 后端 /knowledge_base_categories 返回的 categories 列表
+    :return: 前端可直接用于上传分类和检索分类的选项字典
+    """
+    options: dict[str, dict[str, str]] = {}
+
+    for category in categories:
+        label = str(category.get("label") or "").strip()
+        knowledge_base_type = str(
+            category.get("knowledge_base_type")
+            or category.get("category_id")
+            or ""
+        ).strip()
+        department = str(category.get("department") or label).strip()
+
+        # label 和 knowledge_base_type 是当前分类链路的最小必需字段。
+        # 缺少任意一个都不展示，避免用户选中后发送无效分类。
+        if not label or not knowledge_base_type:
+            continue
+
+        options[label] = {
+            "knowledge_base_type": knowledge_base_type,
+            "department": department,
+        }
+
+    return options
+
+
+# 上传文档和检索过滤共用同一份分类选项。
+# 后端不可用时使用本地默认分类，保证前端仍能打开和演示。
+KNOWLEDGE_BASE_CATEGORY_OPTIONS = (
+    build_knowledge_base_category_options(get_knowledge_base_categories())
+    or DEFAULT_KNOWLEDGE_BASE_CATEGORY_OPTIONS
+)
+
+
+# 后端知识库接口不可用时使用的默认知识库。
+# 它和分类不是一回事：knowledge_base_id 表示“查哪个企业知识库”，
+# knowledge_base_type 表示“文档属于 HR / 财务 / IT / 产品 哪个分类”。
+DEFAULT_KNOWLEDGE_BASE_OPTIONS = {
+    "企业默认知识库": {
+        "knowledge_base_id": "enterprise_default",
+        "description": "保存企业内部制度、流程、FAQ 和支持资料。",
+        "owner_role": "kb_admin",
+    }
+}
+
+
+def build_knowledge_base_options(knowledge_bases: list[dict]) -> dict[str, dict[str, str]]:
+    """
+    将后端返回的知识库列表转换成 Streamlit selectbox 使用的 options 字典。
+
+    函数说明：
+    1. 后端返回列表结构，适合接口表达。
+    2. 前端下拉框更适合使用 name -> 字段配置 的字典。
+    3. 缺少 knowledge_base_id 的脏数据会被跳过，避免发送无效检索范围。
+
+    :param knowledge_bases: 后端 /knowledge_bases 返回的 knowledge_bases 列表
+    :return: 前端可直接用于知识库选择的选项字典
+    """
+    options: dict[str, dict[str, str]] = {}
+
+    for knowledge_base in knowledge_bases:
+        knowledge_base_id = str(knowledge_base.get("knowledge_base_id") or "").strip()
+        name = str(knowledge_base.get("name") or knowledge_base_id).strip()
+
+        if not knowledge_base_id or not name:
+            continue
+
+        options[name] = {
+            "knowledge_base_id": knowledge_base_id,
+            "description": str(knowledge_base.get("description") or ""),
+            "owner_role": str(knowledge_base.get("owner_role") or "kb_admin"),
+        }
+
+    return options
+
+
+KNOWLEDGE_BASE_OPTIONS = (
+    build_knowledge_base_options(get_knowledge_bases())
+    or DEFAULT_KNOWLEDGE_BASE_OPTIONS
+)
+
+
+# 演示级角色配置。当前项目还没有登录系统，所以先用下拉框模拟角色边界：
+# - 普通员工：只查询知识库、提交问题或流程
+# - 知识库管理员/系统管理员：可以上传和维护知识库资料
+USER_ROLE_OPTIONS = {
+    "普通员工": "employee",
+    "知识库管理员": "kb_admin",
+    "审批主管": "approver",
+    "系统管理员": "admin",
+}
+KNOWLEDGE_BASE_ADMIN_ROLES = {"kb_admin", "admin"}
+
 
 # 企业知识库问答模式名称。单独抽成常量，避免后续判断里重复写字符串
 AGENT_MODE_NAME = "企业知识库问答"
@@ -971,7 +1078,13 @@ current_messages = current_session["messages"]
 # - rag_top_k: 默认检索3个片段
 # - rag_status_info: 后端 /rag_status 返回的当前 session 文档状态，后面用于展示文件名和判断是否有可检索文档
 # - has_persisted_rag_document: 当前 session 是否已经在数据库中保存过 RAG 文档和 chunk
-# - selected_knowledge_base_category: 当前选择的知识库分类
+# - selected_knowledge_base_category: 本轮上传文档时使用的分类，例如 HR / 财务 / IT / 产品
+# - selected_retrieval_category: 本轮检索时使用的分类范围；“全部”表示不按分类过滤
+# - selected_user_role_label: 前端展示用的当前演示角色名称，例如“普通员工”“知识库管理员”
+# - selected_user_role: 后端接口使用的角色值，例如 employee、kb_admin、admin
+# - selected_knowledge_base_name: 前端展示用的当前企业知识库名称
+# - selected_knowledge_base_id: 后端检索和上传使用的企业知识库 ID，例如 enterprise_default
+# - can_manage_selected_knowledge_base: 当前角色是否允许上传和维护企业知识库文档
 # - rag_checkbox_key: 当前模式 + 当前 session 的 RAG 开关组件 key，用于让不同模式、不同会话的勾选状态互不影响
 # - rag_default_applied_key: 标记当前 session 是否已经自动应用过一次 RAG 默认开启逻辑，避免每次页面重跑都覆盖用户手动选择
 # -----------------------------
@@ -980,15 +1093,47 @@ rag_top_k = 3
 rag_status_info = {}
 has_persisted_rag_document = False
 selected_knowledge_base_category = "HR"
+selected_retrieval_category = "全部"
+selected_user_role_label = "普通员工"
+selected_user_role = USER_ROLE_OPTIONS[selected_user_role_label]
+selected_knowledge_base_name = next(iter(KNOWLEDGE_BASE_OPTIONS)) # 从知识库选项字典里取第一个知识库名称，作为当前默认选中的知识库名称。
+selected_knowledge_base_id = KNOWLEDGE_BASE_OPTIONS[selected_knowledge_base_name]["knowledge_base_id"]
+can_manage_selected_knowledge_base = selected_user_role in KNOWLEDGE_BASE_ADMIN_ROLES
 rag_checkbox_key = f"use_rag_{mode}_{current_session_id}"
 rag_default_applied_key = f"{rag_checkbox_key}_default_applied"
 
 
+# 企业知识库问答模式先选择角色和知识库，再查询 RAG 状态。
+# 这样后续 /rag_status、/rag_preview、/agent_stream 使用的是同一个 knowledge_base_id。
+if mode == AGENT_MODE_NAME:
+    st.sidebar.markdown("知识库")
+    selected_user_role_label = st.sidebar.selectbox(
+        "当前演示角色",
+        options=list(USER_ROLE_OPTIONS.keys()),
+        key=f"user_role_{mode}",
+        help="用于演示权限边界：普通员工只查询，知识库管理员可以上传资料。"
+    )
+    selected_user_role = USER_ROLE_OPTIONS[selected_user_role_label]
+    can_manage_selected_knowledge_base = selected_user_role in KNOWLEDGE_BASE_ADMIN_ROLES
+
+    selected_knowledge_base_name = st.sidebar.selectbox(
+        "查询知识库",
+        options=list(KNOWLEDGE_BASE_OPTIONS.keys()),
+        key=f"knowledge_base_{mode}_{current_session_id}",
+        help="员工提问和管理员上传都会落到这个企业知识库范围内。"
+    )
+    selected_knowledge_base_id = KNOWLEDGE_BASE_OPTIONS[selected_knowledge_base_name]["knowledge_base_id"]
+
+
 # 只有当前模式支持 RAG 时，才查询数据库文档状态
 if mode in RAG_ENABLED_MODES:
-    # 先查询当前 session 是否已经有数据库持久化的 RAG 文档
-    rag_status_info = get_rag_status(current_session_id)
-    # 根据后端状态判断当前 session 是否有可检索文档
+    # 先查询当前知识库是否已经有数据库持久化的 RAG 文档。
+    # 企业知识库问答模式传 knowledge_base_id，其他旧模式不传，保持兼容旧 session 文档逻辑。
+    rag_status_info = get_rag_status(
+        current_session_id,
+        knowledge_base_id=selected_knowledge_base_id if mode == AGENT_MODE_NAME else None,
+    )
+    # 根据后端状态判断当前知识库或当前 session 是否有可检索文档
     has_persisted_rag_document = bool(rag_status_info.get("has_document"))
 
     # 如果数据库已经有文档，并且还没有给当前 session 应用过默认值，则自动开启一次 RAG
@@ -1024,15 +1169,19 @@ if mode in RAG_ENABLED_MODES:
             key=f"rag_top_k_{mode}"
         )
     # 新增上传文档时显式选择知识库分类。
-    # 这个控件不依赖 use_rag 是否已勾选，因为企业知识库问答模式上传文件后会自动启用 RAG。
-    # 它只影响“本轮新上传文档”的分类，不会修改当前会话里已经保存过的历史文档。
-    if mode in UPLOAD_ENABLED_MODES:
+    # 企业知识库问答模式下，只有知识库管理员/系统管理员可以上传；
+    # 普通员工只能查询知识库，避免“员工聊天附件”被误当成企业公共资料。
+    if mode in UPLOAD_ENABLED_MODES and (mode != AGENT_MODE_NAME or can_manage_selected_knowledge_base):
         selected_knowledge_base_category = st.sidebar.selectbox(
             "本轮上传文档分类",
             options=list(KNOWLEDGE_BASE_CATEGORY_OPTIONS.keys()),
             key=f"knowledge_base_category_{mode}_{current_session_id}",
             help="上传文档时写入 SQLite，后续检索结果会显示来源分类。"
         )
+    elif mode == AGENT_MODE_NAME:
+        st.sidebar.info("普通员工仅可查询知识库；上传入口请切换为知识库管理员。")
+
+    if mode in RAG_ENABLED_MODES:
         selected_retrieval_category = st.sidebar.selectbox(
             "本轮检索分类范围",
             options=["全部"] + list(KNOWLEDGE_BASE_CATEGORY_OPTIONS.keys()),
@@ -1103,10 +1252,16 @@ for idx, message in enumerate(current_messages):
 # 2. 文本 + 文件附件
 # 3. 仅上传文件
 # -----------------------------
+# 是否允许当前入口上传附件。
+# 企业知识库问答模式中，附件会进入企业公共知识库，所以只开放给知识库管理员/系统管理员。
+# 其他支持上传的内容处理模式仍沿用原来的附件能力。
+can_upload_files = mode in UPLOAD_ENABLED_MODES and (
+    mode != AGENT_MODE_NAME or can_manage_selected_knowledge_base
+)
 chat_submission = st.chat_input(
     "请输入内容，或直接附加文件后发送...",
-    accept_file=("multiple" if mode in UPLOAD_ENABLED_MODES else False), # 当前模式支持文件上传时，允许一次附加多份文件
-    file_type=CHAT_INPUT_FILE_TYPES if mode in UPLOAD_ENABLED_MODES else None, # 如果支持上传文件，只允许 txt / md / pdf
+    accept_file=("multiple" if can_upload_files else False), # 当前模式支持文件上传时，允许一次附加多份文件
+    file_type=CHAT_INPUT_FILE_TYPES if can_upload_files else None, # 如果支持上传文件，只允许 txt / md / pdf
     key=f"chat_input_{mode}" # 不同模式使用不同 key，避免输入框状态冲突
 )
 
@@ -1121,7 +1276,7 @@ uploaded_files = []          # 当前提交中的文件列表
 # 先解析提交对象，提前知道本轮是否附加了文件，后面的 RAG 空状态提示需要依赖这个结果
 if chat_submission:
     # accept_file=True 时，chat_input 返回 dict-like 对象，包含 text 和 files
-    if mode in UPLOAD_ENABLED_MODES:
+    if can_upload_files:
         user_text = (chat_submission.text or "").strip()
         uploaded_files = chat_submission["files"]
     else:
@@ -1152,10 +1307,12 @@ if mode in RAG_ENABLED_MODES:
 
         # 如果 RAG 已开启，用成功提示强调后续问题会基于该文档检索
         if use_rag:
-            st.success(f"RAG 已开启，当前会话将基于已保存文档进行检索：{file_name}{chunk_count_text}")
+            status_scope_text = selected_knowledge_base_name if mode == AGENT_MODE_NAME else "当前会话"
+            st.success(f"RAG 已开启，{status_scope_text}将基于已保存文档进行检索：{file_name}{chunk_count_text}")
         else:
             # 如果数据库有文档但用户手动关闭 RAG，则提示文档仍在，但本次不会用于检索
-            st.info(f"当前会话已保存文档：{file_name}{chunk_count_text}。在左侧对话设置中开启 RAG 后，可以继续基于该文档提问。")
+            status_scope_text = selected_knowledge_base_name if mode == AGENT_MODE_NAME else "当前会话"
+            st.info(f"{status_scope_text}已保存文档：{file_name}{chunk_count_text}。在左侧对话设置中开启 RAG 后，可以继续基于该文档提问。")
 
     # 当前没有数据库文档时，不在主界面常驻提示。
     # 原因：用户在 chat_input 中选中文件但尚未发送时，Streamlit 还不会把文件交给脚本；
@@ -1256,7 +1413,10 @@ if chat_submission:
         and not uploaded_file_text
         and not has_persisted_rag_document
     ):
-        st.warning("当前会话没有可检索文档。请先上传文件，或关闭 RAG 后直接提问。")
+        if mode == AGENT_MODE_NAME:
+            st.warning("当前知识库没有可检索文档。请切换为知识库管理员上传资料，或选择已有资料的知识库。")
+        else:
+            st.warning("当前会话没有可检索文档。请先上传文件，或关闭 RAG 后直接提问。")
         st.stop()
 
     # -----------------------------
@@ -1280,6 +1440,7 @@ if chat_submission:
         need_reindex = (
             not current_index_state
             or current_index_state.get("session_id") != current_session_id
+            or current_index_state.get("knowledge_base_id") != selected_knowledge_base_id
             or current_index_state.get("text_fingerprint") != text_fingerprint
         )
 
@@ -1303,6 +1464,8 @@ if chat_submission:
                         session_id=current_session_id,
                         file_name=current_file_name,
                         document_text=current_file_text,
+                        knowledge_base_id=selected_knowledge_base_id if mode == AGENT_MODE_NAME else None,
+                        user_role=selected_user_role if mode == AGENT_MODE_NAME else None,
                         knowledge_base_type=file_payload.get("knowledge_base_type"),
                         department=file_payload.get("department"),
                     )
@@ -1325,6 +1488,7 @@ if chat_submission:
             # 记录当前模式当前会话已索引过这批文档
             st.session_state.rag_index_state[mode] = {
                 "session_id": current_session_id,
+                "knowledge_base_id": selected_knowledge_base_id,
                 "file_names": uploaded_file_names,
                 "text_fingerprint": text_fingerprint,
                 "knowledge_base_category": selected_knowledge_base_category,
@@ -1332,7 +1496,10 @@ if chat_submission:
             # 索引成功后更新本次运行中的数据库文档状态
             has_persisted_rag_document = True
             # 索引成功后更新本次运行中的状态信息，便于后续预览展示
-            rag_status_info = get_rag_status(current_session_id)
+            rag_status_info = get_rag_status(
+                current_session_id,
+                knowledge_base_id=selected_knowledge_base_id if mode == AGENT_MODE_NAME else None,
+            )
 
     # 默认没有 RAG 命中片段；只有启用 RAG 时才会调用后端获取
     rag_preview_chunks = []
@@ -1354,16 +1521,22 @@ if chat_submission:
                 session_id=current_session_id,
                 query=submit_raw_text,
                 knowledge_base_type_filter=selected_filter_value,
-                top_k=rag_top_k
+                top_k=rag_top_k,
+                knowledge_base_id=selected_knowledge_base_id if mode == AGENT_MODE_NAME else None,
             )
         # 调用后端 /rag_status/{session_id}，获取当前会话索引状态
-        rag_status_info = rag_status_info or get_rag_status(current_session_id)
+        rag_status_info = rag_status_info or get_rag_status(
+            current_session_id,
+            knowledge_base_id=selected_knowledge_base_id if mode == AGENT_MODE_NAME else None,
+        )
 
     user_options = {
         # display_text 是前端聊天区展示文本；
         # 上传文件场景下，它只展示用户问题和附件名，避免把完整文档全文保存成可见聊天记录。
         # 后端会优先用 display_text 保存 message.content，同时用 input_text 保存 raw_content。
         "display_text": submit_display_text,
+        "knowledge_base_id": selected_knowledge_base_id if mode == AGENT_MODE_NAME else None,
+        "user_role": selected_user_role,
         "knowledge_base_type_filter": selected_filter_value,
     }
 

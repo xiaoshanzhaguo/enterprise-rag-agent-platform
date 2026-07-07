@@ -4,7 +4,7 @@ RAG 向量库模块。
 职责：
 1. 使用本地 ChromaDB 作为向量库。
 2. 将文档 chunk 的 embedding、正文和 metadata 持久化到 data/chroma/。
-3. 根据 query embedding 从向量库中按相似度取回当前 session 的 chunk。
+3. 根据 query embedding 从向量库中按相似度取回当前知识库或当前 session 的 chunk。
 4. 支持按 session 删除向量，保持清空会话时 SQLite 与 ChromaDB 状态一致。
 
 说明：
@@ -27,7 +27,8 @@ from backend.rag.embedding_client import generate_embedding, generate_embeddings
 
 # 项目根目录，用于将 ./data/chroma 这类相对路径解析为项目内绝对路径
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-# Chroma collection 名称。当前项目先使用一个 collection，通过 metadata.session_id 区分会话
+# Chroma collection 名称。
+# 新链路通过 metadata.knowledge_base_id 区分企业知识库，旧数据仍保留 metadata.session_id 兼容。
 COLLECTION_NAME = "rag_chunks"
 
 
@@ -128,7 +129,7 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
     1. 接收 SQLite 保存后返回的 chunk 元数据。
     2. 为每个 chunk 正文生成 embedding。
     3. 将 embedding、正文和 metadata 写入 ChromaDB。
-    4. metadata 保存 session_id、document_id、db_chunk_id、file_name、chunk_id。
+    4. metadata 保存 session_id、knowledge_base_id、document_id、db_chunk_id、file_name、chunk_id。
 
     :param session_id: 当前会话 ID
     :param chunks: SQLite 保存后的 chunk 元数据列表
@@ -151,9 +152,10 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
     ids = [build_vector_id(session_id, chunk["db_chunk_id"]) for chunk in chunks]
 
     # 构造 metadata，字段要保持简单类型，便于 ChromaDB 过滤
-    metadatas = [
+    metadata = [
         {
             "session_id": session_id,
+            "knowledge_base_id": chunk.get("knowledge_base_id") or "",
             "document_id": int(chunk.get("document_id", 0)),
             "db_chunk_id": int(chunk.get("db_chunk_id", 0)),
             "file_name": chunk.get("file_name") or "未命名文件",
@@ -174,27 +176,35 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
         ids=ids,
         embeddings=embeddings,
         documents=documents,
-        metadatas=metadatas,
+        metadatas=metadata,
     )
 
 
-def retrieve_similar_chunks(session_id: str | None, query: str, knowledge_base_type_filter: str, top_k: int = 3) -> list[dict[str, Any]]:
+def retrieve_similar_chunks(
+    session_id: str | None,
+    query: str,
+    knowledge_base_type_filter: str | None,
+    knowledge_base_id: str | None = None,
+    top_k: int = 3,
+) -> list[dict[str, Any]]:
     """
     使用 ChromaDB 根据 query 相似度检索 chunk。
 
     函数说明：
     1. 为 query 生成 embedding。
-    2. 在 ChromaDB 中按 session_id 过滤当前会话的向量。
+    2. 优先在 ChromaDB 中按 knowledge_base_id 过滤企业知识库向量。
+    3. 没有 knowledge_base_id 时，兼容旧逻辑按 session_id 过滤当前会话向量。
     3. 返回和现有 RAG 服务层兼容的 chunk 字典结构。
 
     :param session_id: 当前会话 ID
     :param query: 当前用户问题
     :param knowledge_base_type_filter: 知识库分类过滤条件
+    :param knowledge_base_id: 企业知识库 ID；传入后优先按知识库过滤
     :param top_k: 最多返回几个 chunk
     :return: 命中的 chunk 列表
     """
-    # 如果缺少 session_id 或 query，则无法检索
-    if not session_id or not query.strip():
+    # 如果缺少检索范围或 query，则无法检索
+    if not (knowledge_base_id or session_id) or not query.strip():
         return []
 
     # 为 query 生成 embedding
@@ -207,10 +217,19 @@ def retrieve_similar_chunks(session_id: str | None, query: str, knowledge_base_t
     # 获取 Chroma collection
     collection = get_chroma_collection()
 
-    # 添加知识库过滤
-    where_filter = {"session_id": session_id}
+    # 添加知识库过滤。
+    # 新链路用 knowledge_base_id 表示企业公共知识库范围；
+    # 旧链路没有 knowledge_base_id 时，继续用 session_id 兼容历史数据。
+    base_filter = {"knowledge_base_id": knowledge_base_id} if knowledge_base_id else {"session_id": session_id}
+    where_filter = base_filter
     if knowledge_base_type_filter:
-        where_filter["knowledge_base_type"] = knowledge_base_type_filter
+        where_filter = {
+            # $and是一个字符串的key，表示给向量库看的逻辑条件”并且“
+            "$and": [
+                base_filter,
+                {"knowledge_base_type": knowledge_base_type_filter},
+            ]
+        }
 
     # 按 session_id 过滤，只检索当前会话的文档 chunk
     result = collection.query(
@@ -248,6 +267,7 @@ def retrieve_similar_chunks(session_id: str | None, query: str, knowledge_base_t
                 "document_id": metadata.get("document_id"),
                 "file_name": metadata.get("file_name"),
                 "chunk_id": metadata.get("chunk_id"),
+                "knowledge_base_id": metadata.get("knowledge_base_id"),
                 "knowledge_base_type": metadata.get("knowledge_base_type"),
                 "department": metadata.get("department") or None,
                 "process_type": metadata.get("process_type") or None,

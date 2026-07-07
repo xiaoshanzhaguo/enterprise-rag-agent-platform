@@ -53,10 +53,22 @@ from backend.rag.chunker import split_text_into_chunks
 from backend.rag.store import save_document_chunks
 from backend.rag.store import clear_document_chunks
 from backend.rag.store import get_document_status
+from backend.rag.categories import (
+    DEFAULT_KNOWLEDGE_BASE_TYPE,
+    get_department_for_knowledge_base_type,
+    list_knowledge_base_categories,
+    normalize_knowledge_base_type,
+)
+from backend.rag.knowledge_bases import (
+    SESSION_SCOPED_KNOWLEDGE_BASE_ID,
+    can_manage_knowledge_base,
+    normalize_knowledge_base_id,
+)
 from backend.rag.service import build_rag_preview, resolve_retrieval_mode
 from backend.db.repository import delete_chat_session
 from backend.db.repository import ensure_chat_session
 from backend.db.repository import get_chat_session_detail
+from backend.db.repository import list_knowledge_bases
 from backend.db.repository import list_recent_chat_sessions
 from backend.db.repository import load_latest_mode_sessions
 from backend.schema.chat_schema import (
@@ -67,6 +79,8 @@ from backend.schema.chat_schema import (
     ChatSessionCreateRequest,
     IndexDocumentRequest,
     IndexDocumentResponse,
+    KnowledgeBaseCategoryListResponse,
+    KnowledgeBaseListResponse,
     RagPreviewRequest,
     RagPreviewResponse,
     RagStatusResponse
@@ -264,6 +278,34 @@ def agent_stream(request: ChatRequest):
     return run_agent_stream(request, client)  # 将请求交给轻量 Agent 服务处理
 
 
+@router.get("/knowledge_base_categories", response_model=KnowledgeBaseCategoryListResponse)
+def knowledge_base_categories():
+    """
+    返回前端可选的知识库分类列表。
+
+    当前项目还没有独立的分类表，因此后端常量是唯一可信来源。
+    前端上传文档、检索过滤都应该优先使用这里返回的 category_id /
+    knowledge_base_type，避免前后端分类值不一致。
+    """
+    return {
+        "categories": list_knowledge_base_categories()
+    }
+
+
+@router.get("/knowledge_bases", response_model=KnowledgeBaseListResponse)
+def knowledge_bases():
+    """
+    返回可查询的企业知识库列表。
+
+    这个接口是“知识库从 session 中独立出来”的最小后端入口。
+    前端提问时会把选中的 knowledge_base_id 一起传回来，
+    后端再按该知识库范围检索，而不是只查当前聊天 session 的临时文件。
+    """
+    return {
+        "knowledge_bases": list_knowledge_bases()
+    }
+
+
 @router.post("/index_document", response_model=IndexDocumentResponse)
 def index_document(request: IndexDocumentRequest):
     """
@@ -272,8 +314,16 @@ def index_document(request: IndexDocumentRequest):
     作用：
     1. 接收前端上传并提取后的完整文本
     2. 做文本切块
-    3. 追加存入当前 session 对应的数据库文档表和文本块表
+    3. 追加存入选中的企业知识库，而不是只挂在当前聊天 session 下
     """
+    # 当前项目还没有正式登录/RBAC，这里先用前端传入的 user_role 做演示级边界。
+    # 只有显式写入企业知识库时才校验管理员；旧的 session 临时文档入口保持兼容。
+    if request.knowledge_base_id and not can_manage_knowledge_base(request.user_role):
+        raise HTTPException(status_code=403, detail="当前角色没有知识库上传权限，请切换为知识库管理员。")
+
+    # 传了 knowledge_base_id 表示写企业公共知识库；没传则保持旧的 session 文档上传行为。
+    knowledge_base_id = normalize_knowledge_base_id(request.knowledge_base_id) if request.knowledge_base_id else None
+
     cleaned_text = request.document_text.strip()  # 去掉首尾空白，避免无效输入
     # 如果清理后发现文档内容是空的，就抛出一个 400 错误。阻止无效文档进入 RAG 索引流程。
     if not cleaned_text:
@@ -289,9 +339,33 @@ def index_document(request: IndexDocumentRequest):
         file_name=request.file_name,
         document_text=cleaned_text,
     )
-    # 显式传入的字段优先级更高；没传时使用自动推断值
-    knowledge_base_type = request.knowledge_base_type or inferred_fields["knowledge_base_type"] or "general"
-    department = request.department or inferred_fields["department"]
+    # 先校验前端显式传入的分类。传入未知值时直接返回 400，
+    # 这样比静默写入错误分类更容易排查“为什么按分类检索不到”的问题。
+    try:
+        requested_knowledge_base_type = normalize_knowledge_base_type(
+            request.knowledge_base_type,
+            allow_none=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # 显式传入的分类优先级最高；没有传时使用轻量推断；仍为空则归到 general。
+    try:
+        knowledge_base_type = normalize_knowledge_base_type(
+            requested_knowledge_base_type
+            or inferred_fields["knowledge_base_type"]
+            or DEFAULT_KNOWLEDGE_BASE_TYPE
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # department 只是展示字段。优先使用前端传入值；没有传时根据分类补齐；
+    # 如果分类是 general，再使用旧的自动推断值兜底。
+    department = (
+        request.department
+        or get_department_for_knowledge_base_type(knowledge_base_type)
+        or inferred_fields["department"]
+    )
     process_type = request.process_type or inferred_fields["process_type"]
     process_status = request.process_status or inferred_fields["process_status"] or "active"
 
@@ -300,6 +374,7 @@ def index_document(request: IndexDocumentRequest):
         session_id=request.session_id,
         file_name=request.file_name,
         chunks=chunks,
+        knowledge_base_id=knowledge_base_id,
         knowledge_base_type=knowledge_base_type,
         department=department,
         process_type=process_type,
@@ -309,6 +384,7 @@ def index_document(request: IndexDocumentRequest):
     # 返回索引结果，方便前端展示切块数量
     return IndexDocumentResponse(
         session_id=request.session_id,
+        knowledge_base_id=knowledge_base_id or SESSION_SCOPED_KNOWLEDGE_BASE_ID,
         file_name=request.file_name,
         chunk_count=len(chunks),
         knowledge_base_type=knowledge_base_type,
@@ -323,17 +399,32 @@ def rag_preview(request: RagPreviewRequest):
     """
     返回当前 query 命中的 RAG 引用来源和原文片段，便于前端展示检索依据。
     """
+    # 检索过滤条件必须先校验。None 表示不过滤分类，也就是检索当前会话全部文档。
+    try:
+        knowledge_base_type_filter = normalize_knowledge_base_type(
+            request.knowledge_base_type_filter,
+            allow_none=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # 只有前端显式传入 knowledge_base_id 时才按企业知识库检索；
+    # 旧的会话级 RAG 入口不传该字段时，继续按 session_id 检索，保持兼容。
+    knowledge_base_id = normalize_knowledge_base_id(request.knowledge_base_id) if request.knowledge_base_id else None
+
     # 调用 RAG 服务层，构造适合前端展示的检索片段预览数据
     chunks = build_rag_preview(
         session_id=request.session_id,
         query=request.query,
-        knowledge_base_type_filter=request.knowledge_base_type_filter,
+        knowledge_base_type_filter=knowledge_base_type_filter,
+        knowledge_base_id=knowledge_base_id,
         top_k=request.top_k
     )
 
     # 返回当前 query 对应的检索摘要
     return RagPreviewResponse(
         session_id=request.session_id,
+        knowledge_base_id=knowledge_base_id,
         query=request.query,
         retrieval_mode=resolve_retrieval_mode(chunks),
         chunks=chunks
@@ -341,12 +432,19 @@ def rag_preview(request: RagPreviewRequest):
 
 
 @router.get("/rag_status/{session_id}", response_model=RagStatusResponse)
-def rag_status(session_id: str):
+def rag_status(session_id: str, knowledge_base_id: str | None = Query(default=None)):
     """
-    返回当前 session 的数据库 RAG 文档状态。
+    返回 RAG 文档状态。
+
+    如果传入 knowledge_base_id，则返回企业公共知识库状态；
+    如果不传，则兼容旧逻辑，返回当前 session 的临时文档状态。
     """
-    # 查询当前会话的文档状态，并转换为响应模型
-    return RagStatusResponse(**get_document_status(session_id))
+    # 查询当前知识库或当前会话的文档状态，并转换为响应模型
+    # **data: 把 data 字典里的 key 当成参数名; 把 data 字典里的 value 当成参数值。即："name": "Vera" → name="Vera"；"age": 25 → age=25
+    return RagStatusResponse(**get_document_status(
+        session_id,
+        knowledge_base_id=normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None,
+    ))
 
 
 @router.delete("/clear_document/{session_id}")

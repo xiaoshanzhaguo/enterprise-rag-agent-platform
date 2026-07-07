@@ -28,6 +28,14 @@ from typing import Any
 
 # 导入数据库连接工具，获取SQLite连接
 from backend.db.connection import get_connection
+from backend.rag.knowledge_bases import (
+    DEFAULT_KNOWLEDGE_BASE,
+    DEFAULT_KNOWLEDGE_BASE_ID,
+    SESSION_SCOPED_KNOWLEDGE_BASE_ID,
+    build_knowledge_base_storage_session_id,
+    list_default_knowledge_bases,
+    normalize_knowledge_base_id,
+)
 from backend.utils.workflow_formatter import WORKFLOW_STEP_TITLE_MAP, format_workflow_blocks
 
 
@@ -216,6 +224,99 @@ def get_chat_session_title(session_id: str | None) -> str | None:
     title = str(row["title"] or "").strip()
     # 有内容则返回标题，否则返回 None
     return title or None
+
+
+def ensure_knowledge_base(
+    knowledge_base_id: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    owner_role: str = "kb_admin",
+) -> str:
+    """
+    确保企业知识库主记录存在。
+
+    函数说明：
+    1. 当前第一版默认只有 enterprise_default 一个企业知识库。
+    2. 上传文档和查询知识库列表前都会调用它，避免空库启动时没有知识库记录。
+    3. 返回归一化后的 knowledge_base_id，调用方后续统一使用这个 ID。
+
+    :param knowledge_base_id: 知识库 ID；为空时使用默认企业知识库
+    :param name: 知识库展示名称
+    :param description: 知识库说明
+    :param owner_role: 维护该知识库的角色
+    :return: 归一化后的知识库 ID
+    """
+    normalized_id = normalize_knowledge_base_id(knowledge_base_id)
+    default_config = DEFAULT_KNOWLEDGE_BASE if normalized_id == DEFAULT_KNOWLEDGE_BASE_ID else {}
+    now = _current_timestamp()
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO knowledge_bases (id, name, description, owner_role, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description,
+                owner_role = excluded.owner_role,
+                updated_at = excluded.updated_at
+            """,
+            (
+                normalized_id,
+                name or default_config.get("name") or normalized_id,
+                description or default_config.get("description"),
+                owner_role or default_config.get("owner_role") or "kb_admin",
+                now,
+                now,
+            ),
+        )
+        connection.commit()
+
+    return normalized_id
+
+
+def list_knowledge_bases() -> list[dict[str, Any]]:
+    """
+    返回可查询的企业知识库列表。
+
+    函数说明：
+    1. 先确保默认企业知识库存在。
+    2. 再从 SQLite 读取知识库主表。
+    3. 如果数据库为空，至少返回内置默认知识库，保证前端可演示。
+
+    :return: 知识库字典列表
+    """
+    ensure_knowledge_base(DEFAULT_KNOWLEDGE_BASE_ID)
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                id AS knowledge_base_id,
+                name,
+                description,
+                owner_role,
+                created_at,
+                updated_at
+            FROM knowledge_bases
+            ORDER BY created_at ASC, id ASC
+            """
+        ).fetchall()
+
+    if not rows:
+        return list_default_knowledge_bases()
+
+    return [
+        {
+            "knowledge_base_id": row["knowledge_base_id"],
+            "name": row["name"],
+            "description": row["description"],
+            "owner_role": row["owner_role"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
 
 
 def get_session_messages(session_id: str | None) -> list[dict[str, Any]]:
@@ -494,6 +595,7 @@ def save_document_with_chunks(
     chunks: list[str],
     mode: str = "unknown",
     source_type: str = "upload",
+    knowledge_base_id: str | None = None,
     knowledge_base_type: str = "general",
     department: str | None = None,
     process_type: str | None = None,
@@ -504,9 +606,9 @@ def save_document_with_chunks(
 
     函数说明：
     1. 如果 session_id 或 chunks 为空，直接返回空列表。
-    2. 确保当前聊天会话存在。
+    2. 确保当前聊天会话和企业知识库记录存在。
     3. 生成文档内容哈希值，便于后续识别文档内容。
-    4. 如果同一会话下已经存在同名同内容文档，则复用已有 chunk。
+    4. 如果同一知识库下已经存在同名同内容文档，则复用已有 chunk。
     5. 如果不存在重复文档，则将文档基础信息和业务标签追加写入 documents 表。
     6. 将每个文本块写入 document_chunks 表。
     7. 返回带数据库主键和展示信息的 chunk 元数据。
@@ -516,6 +618,7 @@ def save_document_with_chunks(
     :param chunks: 切分后的文本块列表
     :param mode: 当前会话模式
     :param source_type: 文档来源类型
+    :param knowledge_base_id: 文档所属企业知识库 ID；为空时使用默认企业知识库
     :param knowledge_base_type: 知识库类型，例如 hr、finance、it、product 或 general
     :param department: 文档所属部门，例如 HR、财务、IT、产品
     :param process_type: 流程类型，例如 leave、reimbursement、vpn、gitlab_access
@@ -526,8 +629,25 @@ def save_document_with_chunks(
     if not session_id or not chunks:
         return []
 
-    # 确保当前会话存在，避免 documents.session_id 外键关联失败
+    # 确保当前员工聊天会话存在。这个 session 代表“谁触发了上传动作”。
     ensure_chat_session(session_id=session_id, mode=mode)
+    # 只有显式传入 knowledge_base_id 时，才把文档写入企业公共知识库。
+    # 没传时保持旧逻辑：文档仍属于当前 session，兼容内容分析等旧入口。
+    normalized_knowledge_base_id = ensure_knowledge_base(knowledge_base_id) if knowledge_base_id else None
+    if normalized_knowledge_base_id:
+        # documents 表历史上有 session_id 外键。公共知识库文档统一挂到内部 session，
+        # 这样普通用户删除聊天 session 时，不会误删公共知识库文档。
+        storage_session_id = build_knowledge_base_storage_session_id(normalized_knowledge_base_id)
+        ensure_chat_session(
+            session_id=storage_session_id,
+            mode="knowledge_base",
+            title=f"知识库文档存储：{normalized_knowledge_base_id}",
+        )
+    else:
+        storage_session_id = session_id
+    # documents.knowledge_base_id 目前是 NOT NULL。旧 session 文档没有独立知识库范围时，
+    # 写入默认值只做兼容占位；真正检索范围仍然由 session_id 决定。
+    document_knowledge_base_id = normalized_knowledge_base_id or SESSION_SCOPED_KNOWLEDGE_BASE_ID
     # 生成当前本地时间，统一用于文档和 chunk 的 created_at
     now = _current_timestamp()
     # 生成文档指纹
@@ -535,12 +655,15 @@ def save_document_with_chunks(
 
     # 打开数据库连接，保存文档和文本块
     with get_connection() as connection:
-        # 查询当前会话是否已经保存过同名同内容文档，避免刷新后重复上传造成重复索引
+        # 查询是否已经保存过同名同内容文档，避免刷新后重复上传造成重复索引。
+        # 公共知识库文档按 knowledge_base_id 去重；旧入口文档仍按 session_id 去重。
+        duplicate_where_clause = "knowledge_base_id = ?" if normalized_knowledge_base_id else "session_id = ?"
+        duplicate_where_value = normalized_knowledge_base_id or session_id
         existing_document = connection.execute(
-            """
+            f"""
             SELECT id
             FROM documents
-            WHERE session_id = ?
+            WHERE {duplicate_where_clause}
               AND content_hash = ?
               AND (
                   file_name = ?
@@ -549,7 +672,7 @@ def save_document_with_chunks(
             ORDER BY created_at DESC, id DESC
             LIMIT 1
             """,
-            (session_id, content_hash, file_name, file_name),
+            (duplicate_where_value, content_hash, file_name, file_name),
         ).fetchone()
 
         # 如果已经存在同名同内容文档，则直接复用已有 chunk 元数据
@@ -560,6 +683,7 @@ def save_document_with_chunks(
                 """
                 UPDATE documents
                 SET
+                    knowledge_base_id = ?,
                     knowledge_base_type = ?,
                     department = ?,
                     process_type = ?,
@@ -568,6 +692,7 @@ def save_document_with_chunks(
                 WHERE id = ?
                 """,
                 (
+                    document_knowledge_base_id,
                     knowledge_base_type or "general",
                     department,
                     process_type,
@@ -588,6 +713,7 @@ def save_document_with_chunks(
                     document_chunks.chunk_text AS text,
                     document_chunks.text_length AS text_length,
                     document_chunks.created_at AS created_at,
+                    documents.knowledge_base_id AS knowledge_base_id,
                     documents.knowledge_base_type AS knowledge_base_type,
                     documents.department AS department,
                     documents.process_type AS process_type,
@@ -600,7 +726,12 @@ def save_document_with_chunks(
                 (existing_document["id"],),
             ).fetchall()
 
-            # 更新会话时间，表示用户刚刚使用过这份文档
+            # 更新内部知识库 session 时间，表示公共知识库文档被复用或更新。
+            connection.execute(
+                "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+                (now, storage_session_id),
+            )
+            # 同时刷新触发上传的用户 session，便于历史会话列表体现最近使用过。
             connection.execute(
                 "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
                 (now, session_id),
@@ -617,6 +748,7 @@ def save_document_with_chunks(
                     "text": row["text"],
                     "text_length": row["text_length"],
                     "created_at": row["created_at"],
+                    "knowledge_base_id": row["knowledge_base_id"],
                     "knowledge_base_type": row["knowledge_base_type"],
                     "department": row["department"],
                     "process_type": row["process_type"],
@@ -630,6 +762,7 @@ def save_document_with_chunks(
             """
             INSERT INTO documents (
                 session_id,
+                knowledge_base_id,
                 file_name,
                 content_hash,
                 source_type,
@@ -639,10 +772,11 @@ def save_document_with_chunks(
                 process_status,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                session_id,
+                    storage_session_id,
+                    document_knowledge_base_id,
                 file_name,
                 content_hash,
                 source_type,
@@ -678,6 +812,7 @@ def save_document_with_chunks(
                     "text": chunk_text,
                     "text_length": len(chunk_text),
                     "created_at": now,
+                    "knowledge_base_id": document_knowledge_base_id,
                     "knowledge_base_type": knowledge_base_type or "general",
                     "department": department,
                     "process_type": process_type,
@@ -685,7 +820,12 @@ def save_document_with_chunks(
                 }
             )
 
-        # 更新会话时间，表示当前 session 的 RAG 文档发生变化
+        # 更新内部知识库 session 时间，表示公共知识库文档发生变化
+        connection.execute(
+            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+            (now, storage_session_id),
+        )
+        # 同时刷新触发上传的用户 session，便于历史会话列表体现最近使用过。
         connection.execute(
             "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
             (now, session_id),
@@ -696,28 +836,33 @@ def save_document_with_chunks(
         return saved_chunks
 
 
-def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
+def get_document_chunks(session_id: str | None, knowledge_base_id: str | None = None) -> list[dict[str, Any]]:
     """
-    从数据库读取当前会话已持久化的 RAG 文本块。
+    从数据库读取已持久化的 RAG 文本块。
 
     函数说明：
-    1. 如果 session_id 为空，直接返回空列表。
-    2. 根据 session_id 查询 documents 表，定位当前会话的文档。
+    1. 如果传入 knowledge_base_id，则按企业知识库查询公共文档。
+    2. 如果没有 knowledge_base_id，则兼容旧逻辑，按 session_id 查询当前会话文档。
     3. 关联 document_chunks 表，读取文档切分后的所有文本块。
     4. 将数据库字段转换为 RAG 检索层需要的 chunk 字典结构。
 
     :param session_id: 当前会话ID
+    :param knowledge_base_id: 企业知识库 ID；传入后优先按知识库范围查询
     :return: 文本块列表
     """
-    # 如果没有会话 ID，就无法定位文档，直接返回空列表
-    if not session_id:
+    normalized_knowledge_base_id = normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None
+    # 没有知识库 ID 且没有会话 ID 时，就无法定位文档，直接返回空列表。
+    if not normalized_knowledge_base_id and not session_id:
         return []
+
+    where_clause = "documents.knowledge_base_id = ?" if normalized_knowledge_base_id else "documents.session_id = ?"
+    where_value = normalized_knowledge_base_id or session_id
 
     # 打开数据库连接，查询结束后自动关闭
     with get_connection() as connection:
-        # 关联 documents 和 document_chunks，读取当前 session 对应的全部 chunk
+        # 关联 documents 和 document_chunks，读取指定知识库或旧 session 对应的全部 chunk
         rows = connection.execute(
-            """
+            f"""
             SELECT
                 document_chunks.id AS db_chunk_id,
                 document_chunks.document_id AS document_id,
@@ -726,16 +871,17 @@ def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
                 document_chunks.chunk_text AS text,
                 document_chunks.text_length AS text_length,
                 document_chunks.created_at AS created_at,
+                documents.knowledge_base_id AS knowledge_base_id,
                 documents.knowledge_base_type AS knowledge_base_type,
                 documents.department AS department,
                 documents.process_type AS process_type,
                 documents.process_status AS process_status
             FROM document_chunks
             INNER JOIN documents ON documents.id = document_chunks.document_id
-            WHERE documents.session_id = ?
+            WHERE {where_clause}
             ORDER BY documents.created_at DESC, documents.id DESC, document_chunks.chunk_index ASC
             """,
-            (session_id,),
+            (where_value,),
         ).fetchall()
 
     # 将 sqlite3.Row 转成普通字典，统一提供给 RAG 检索层使用
@@ -748,6 +894,7 @@ def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
             "text": row["text"],
             "text_length": row["text_length"],
             "created_at": row["created_at"],
+            "knowledge_base_id": row["knowledge_base_id"],
             "knowledge_base_type": row["knowledge_base_type"],
             "department": row["department"],
             "process_type": row["process_type"],
@@ -757,23 +904,26 @@ def get_document_chunks(session_id: str | None) -> list[dict[str, Any]]:
     ]
 
 
-def get_document_status(session_id: str | None) -> dict[str, Any]:
+def get_document_status(session_id: str | None, knowledge_base_id: str | None = None) -> dict[str, Any]:
     """
-    从数据库读取当前会话的 RAG 文档状态。
+    从数据库读取 RAG 文档状态。
 
     函数说明：
-    1. 如果 session_id 为空，返回无文档状态。
-    2. 查询当前会话已上传的全部文档。
+    1. 如果传入 knowledge_base_id，则返回企业公共知识库的文档状态。
+    2. 如果没有 knowledge_base_id，则兼容旧逻辑，返回当前会话文档状态。
     3. 统计每份文档对应的 chunk 数量。
     4. 返回前端 /rag_status 接口需要的聚合状态结构。
 
     :param session_id: 当前会话ID
+    :param knowledge_base_id: 企业知识库 ID；传入后优先按知识库范围查询
     :return: RAG 文档状态
     """
-    # 如果没有会话 ID，就返回一个空状态，避免接口报错
-    if not session_id:
+    normalized_knowledge_base_id = normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None
+    # 没有知识库 ID 且没有会话 ID 时，就返回一个空状态，避免接口报错。
+    if not normalized_knowledge_base_id and not session_id:
         return {
             "session_id": session_id or "",
+            "knowledge_base_id": normalized_knowledge_base_id,
             "has_document": False,
             "file_names": [],
             "document_count": 0,
@@ -782,13 +932,17 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
             "expires_in_seconds": 0,
         }
 
-    # 打开数据库连接，查询当前 session 的文档状态
+    where_clause = "documents.knowledge_base_id = ?" if normalized_knowledge_base_id else "documents.session_id = ?"
+    where_value = normalized_knowledge_base_id or session_id
+
+    # 打开数据库连接，查询当前知识库或旧 session 的文档状态
     with get_connection() as connection:
-        # 查询当前会话下的全部文档，并按上传时间倒序展示
+        # 查询当前知识库下的全部文档，并按上传时间倒序展示
         rows = connection.execute(
-            """
+            f"""
             SELECT
                 documents.id AS document_id,
+                documents.knowledge_base_id AS knowledge_base_id,
                 documents.file_name AS file_name,
                 documents.created_at AS created_at,
                 documents.knowledge_base_type AS knowledge_base_type,
@@ -798,9 +952,10 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
                 COUNT(document_chunks.id) AS chunk_count
             FROM documents
             LEFT JOIN document_chunks ON document_chunks.document_id = documents.id
-            WHERE documents.session_id = ?
+            WHERE {where_clause}
             GROUP BY
                 documents.id,
+                documents.knowledge_base_id,
                 documents.file_name,
                 documents.created_at,
                 documents.knowledge_base_type,
@@ -809,13 +964,14 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
                 documents.process_status
             ORDER BY documents.created_at DESC, documents.id DESC
             """,
-            (session_id,),
+            (where_value,),
         ).fetchall()
 
         # 如果当前会话没有文档记录，就返回无文档状态
         if not rows:
             return {
                 "session_id": session_id,
+                "knowledge_base_id": normalized_knowledge_base_id,
                 "has_document": False,
                 "file_names": [],
                 "document_count": 0,
@@ -828,6 +984,7 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
     documents = [
         {
             "document_id": row["document_id"],
+            "knowledge_base_id": row["knowledge_base_id"],
             "file_name": row["file_name"],
             "chunk_count": int(row["chunk_count"]),
             "created_at": row["created_at"],
@@ -852,6 +1009,7 @@ def get_document_status(session_id: str | None) -> dict[str, Any]:
     # 返回和 RagStatusResponse 对齐的状态字段
     return {
         "session_id": session_id,
+        "knowledge_base_id": normalized_knowledge_base_id,
         "has_document": total_chunk_count > 0,
         "file_names": file_names,
         "document_count": document_count,
@@ -901,14 +1059,16 @@ def save_rag_query_with_hits(
     agent_route_result: str | None = None,
     agent_route_reason: str | None = None,
     agent_rewritten_query: str | None = None,
+    knowledge_base_id: str | None = None,
     knowledge_base_type_filter: str | None = None,
+    answer_text: str | None = None,
 ) -> int | None:
     """
     保存一次 RAG 查询记录及其命中的文档块结果。
 
     函数说明：
     1. 先确保当前 session_id 对应的聊天会话存在。
-    2. 将用户本次 RAG 查询内容、实际检索方式和 Agent 路由结果保存到 rag_queries 表。
+    2. 将用户本次 RAG 查询内容、实际检索方式、Agent 路由结果和最终回答保存到 rag_queries 表。
     3. 遍历本次检索命中的 matched_chunks，将每个命中文档块保存到 rag_hits 表。
     4. 每条 rag_hits 记录会保存：
        - 当前查询 ID
@@ -926,12 +1086,15 @@ def save_rag_query_with_hits(
     :param agent_route_result: Agent 路由结果，例如 use_knowledge_base、skip_knowledge_base
     :param agent_route_reason: Agent 路由理由，来自意图分类或兜底策略
     :param agent_rewritten_query: Agent 改写出的检索 query，方便排查 query rewrite 是否有效
+    :param knowledge_base_id: 本次检索使用的企业知识库 ID
     :param knowledge_base_type_filter: 知识库类型
+    :param answer_text: 本次检索对应的最终回答。流式生成场景下可以先为空，生成结束后再回填
     :return: 保存成功时，返回本次 rag_queries 表中新插入记录的主键 ID；如果 session_id 或 query_text 为空，则返回None
     """
     if not session_id or not query_text:
         return None
 
+    normalized_knowledge_base_id = normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None
     ensure_chat_session(session_id=session_id, mode=mode)
     now = _current_timestamp()
 
@@ -946,10 +1109,12 @@ def save_rag_query_with_hits(
                 agent_route_result,
                 agent_route_reason,
                 agent_rewritten_query,
+                knowledge_base_id,
                 knowledge_base_type_filter,
+                answer_text,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
@@ -959,7 +1124,9 @@ def save_rag_query_with_hits(
                 agent_route_result,
                 agent_route_reason,
                 agent_rewritten_query,
+                normalized_knowledge_base_id,
                 knowledge_base_type_filter,
+                answer_text,
                 now,
             ),
         )
@@ -984,6 +1151,67 @@ def save_rag_query_with_hits(
         )
         connection.commit()
         return rag_query_id
+
+
+def update_rag_query_answer(rag_query_id: int | None, answer_text: str) -> None:
+    """
+    回填某次 RAG 查询对应的最终回答。
+
+    函数说明：
+    1. save_rag_query_with_hits() 发生在检索完成后、模型生成前。
+    2. 流式回答结束后再调用本函数，把最终 answer_text 写回 rag_queries。
+    3. 这样 rag_queries / rag_hits 可以作为完整证据：问题、分类、命中片段、分数、最终回答都能查到。
+
+    :param rag_query_id: rag_queries 表主键
+    :param answer_text: 模型最终生成的回答文本
+    :return: None
+    """
+    if not rag_query_id:
+        return
+
+    with get_connection() as connection:
+        connection.execute(
+            "UPDATE rag_queries SET answer_text = ? WHERE id = ?",
+            (answer_text, rag_query_id),
+        )
+        connection.commit()
+
+
+def update_latest_rag_query_answer(session_id: str | None, answer_text: str) -> None:
+    """
+    回填当前会话最近一次 RAG 查询的最终回答。
+
+    普通 chat/workflow 链路里的 build_rag_context() 只负责构造 prompt，
+    调用方拿不到 rag_query_id，因此这里按 session_id 找最近一条记录回填。
+    Agent 链路已经能拿到精确 rag_query_id 时，应优先调用 update_rag_query_answer()。
+
+    :param session_id: 当前会话 ID
+    :param answer_text: 模型最终生成的回答文本
+    :return: None
+    """
+    if not session_id:
+        return
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id
+            FROM rag_queries
+            WHERE session_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (session_id,),
+        ).fetchone()
+
+        if not row:
+            return
+
+        connection.execute(
+            "UPDATE rag_queries SET answer_text = ? WHERE id = ?",
+            (answer_text, int(row["id"])),
+        )
+        connection.commit()
 
 
 def save_n8n_execution_record(

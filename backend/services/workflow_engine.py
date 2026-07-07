@@ -29,7 +29,12 @@ from fastapi.responses import StreamingResponse
 # 导入项目配置对象，用于读取模型名称等运行配置
 from backend.config import settings
 # 导入数据库持久化函数，用于确保会话存在、读取标题并保存聊天信息
-from backend.db.repository import ensure_chat_session, get_chat_session_title, save_chat_message
+from backend.db.repository import (
+    ensure_chat_session,
+    get_chat_session_title,
+    save_chat_message,
+    update_latest_rag_query_answer,
+)
 # 导入系统提示词构造函数，根据当前模式生成 system prompt
 from backend.prompt.prompt_builder import build_system_prompt
 # 导入请求模型和流式事件模型，用于约束请求结构和 SSE 事件结构
@@ -231,6 +236,9 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
 
                 # 当前步骤是否启用 RAG
                 rag_context = ""
+                # knowledge_base_id 表示本轮要查询的企业公共知识库；
+                # workflow 里的每个步骤都会在同一个知识库范围内检索。
+                knowledge_base_id = request.user_options.get("knowledge_base_id")
                 # 获取检索的知识库分类
                 knowledge_base_type_filter = request.user_options.get("knowledge_base_type_filter")
                 if request.use_rag:
@@ -241,6 +249,7 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                         session_id=request.session_id,
                         query=step_query,
                         knowledge_base_type_filter=knowledge_base_type_filter,
+                        knowledge_base_id=knowledge_base_id,
                         top_k=request.rag_top_k
                     )
 
@@ -320,6 +329,13 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                 mode=request.mode,
                 metadata=build_assistant_message_metadata(request.user_options)
             )
+            # workflow 可能按步骤多次检索。这里至少把最终工作流结果回填到最近一次 rag_queries，
+            # 让检索日志里能看到本轮生成出的最终答案证据。
+            if request.use_rag:
+                update_latest_rag_query_answer(
+                    session_id=request.session_id,
+                    answer_text=final_content,
+                )
 
             # 所有步骤执行完成后，发送最终事件
             yield to_sse(

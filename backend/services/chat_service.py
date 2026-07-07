@@ -28,7 +28,12 @@ from fastapi.responses import StreamingResponse
 # 项目配置对象
 from backend.config import settings
 # 确保会话存在、保存聊天记录、读取会话标题
-from backend.db.repository import ensure_chat_session, get_chat_session_title, save_chat_message
+from backend.db.repository import (
+    ensure_chat_session,
+    get_chat_session_title,
+    save_chat_message,
+    update_latest_rag_query_answer,
+)
 # 构造 RAG 参考内容
 from backend.rag.service import build_rag_context
 # 构造 assistant 消息展示元数据
@@ -186,6 +191,9 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
 
             # 根据当前请求决定是否启用 RAG
             rag_context = ""
+            # knowledge_base_id 表示本轮要查询的企业公共知识库；
+            # session_id 只表示当前聊天会话，不再承担知识库边界职责。
+            knowledge_base_id = request.user_options.get("knowledge_base_id")
             # 获取检索的知识库分类
             knowledge_base_type_filter = request.user_options.get("knowledge_base_type_filter")
             if request.use_rag:
@@ -193,6 +201,7 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                     session_id=request.session_id,
                     query=request.input_text,
                     knowledge_base_type_filter=knowledge_base_type_filter,
+                    knowledge_base_id=knowledge_base_id,
                     top_k=request.rag_top_k
                 )
 
@@ -261,6 +270,12 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                 mode=request.mode,
                 metadata=build_assistant_message_metadata(request.user_options)
             )
+            # RAG 检索记录是在模型生成前保存的；生成结束后再把最终回答回填到最近一次 rag_queries。
+            if request.use_rag:
+                update_latest_rag_query_answer(
+                    session_id=request.session_id,
+                    answer_text=full_text,
+                )
 
             # 模型输出完成后，发送最终事件
             yield to_sse(

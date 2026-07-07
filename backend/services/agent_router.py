@@ -216,7 +216,7 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
     )
 
 
-def _has_indexed_rag_document(session_id: str | None) -> bool:
+def _has_indexed_rag_document(session_id: str | None, knowledge_base_id: str | None = None) -> bool:
     """
     判断当前会话是否已经有可检索的知识库文档。
 
@@ -226,6 +226,7 @@ def _has_indexed_rag_document(session_id: str | None) -> bool:
     3. 状态查询失败时返回 False，避免数据库异常被误判成可检索。
 
     :param session_id: 当前会话 ID
+    :param knowledge_base_id: 企业知识库 ID；传入后优先检查公共知识库是否有文档
     :return: True 表示当前会话已有可检索文档
     """
     # 没有 session_id 时，后端无法定位当前会话，也就无法查询这个会话是否上传过文档。
@@ -235,7 +236,7 @@ def _has_indexed_rag_document(session_id: str | None) -> bool:
     try:
         # 从数据库读取当前会话的文档状态。
         # 这里不用前端传来的状态，是为了防止页面刷新、后端重启或前端状态丢失后判断不准。
-        document_status = get_document_status(session_id)
+        document_status = get_document_status(session_id, knowledge_base_id=knowledge_base_id)
     except Exception:
         # 文档状态查询失败时，不冒险进入 RAG 检索。
         # 这样可以避免数据库异常时继续执行后续检索，导致更难理解的错误。
@@ -250,7 +251,12 @@ def _has_indexed_rag_document(session_id: str | None) -> bool:
     )
 
 
-def _build_intent_decision_fallback(question: str, use_rag: bool, session_id: str | None = None) -> AgentRouteDecision:
+def _build_intent_decision_fallback(
+    question: str,
+    use_rag: bool,
+    session_id: str | None = None,
+    knowledge_base_id: str | None = None,
+) -> AgentRouteDecision:
     """
     构造意图分类失败时的保守兜底结果。
 
@@ -263,6 +269,7 @@ def _build_intent_decision_fallback(question: str, use_rag: bool, session_id: st
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
     :param session_id: 当前会话 ID，用于判断是否已有可检索文档
+    :param knowledge_base_id: 企业知识库 ID，用于判断公共知识库是否已有可检索文档
     :return: AgentRouteDecision，包含路由类型、判断原因、是否开启 RAG、改写后的query
     """
     # 去掉首尾空白，只用于判断是否为空问题
@@ -289,7 +296,7 @@ def _build_intent_decision_fallback(question: str, use_rag: bool, session_id: st
         )
 
     # Agent 判断失败但已有知识库文档时，用原问题兜底检索，保证演示链路仍然走 RAG。
-    if _has_indexed_rag_document(session_id):
+    if _has_indexed_rag_document(session_id, knowledge_base_id=knowledge_base_id):
         # 这里返回 True，表示后续流程仍然进入“检索证据”步骤。
         # 第三个返回值使用原始问题，等价于“没有 query rewrite 时，直接用用户问题检索”。
         return AgentRouteDecision(
@@ -388,7 +395,13 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
 
 
 
-def route_question(question: str, use_rag: bool, client=None, session_id: str | None = None) -> AgentRouteDecision:
+def route_question(
+    question: str,
+    use_rag: bool,
+    client=None,
+    session_id: str | None = None,
+    knowledge_base_id: str | None = None,
+) -> AgentRouteDecision:
     """
     根据用户问题判断 Agent 路由类型。
 
@@ -401,6 +414,7 @@ def route_question(question: str, use_rag: bool, client=None, session_id: str | 
     :param use_rag: 前端是否开启 RAG
     :param client: OpenAI 兼容客户端，用于执行轻量 Agent 意图分类和 query rewrite
     :param session_id: 当前会话 ID，用于模型判断失败时检查是否已有可检索文档
+    :param knowledge_base_id: 企业知识库 ID，用于模型判断失败时检查公共知识库是否已有文档
     :return: AgentRouteDecision，包含路由类型、判断原因、是否开启 RAG、改写后的query
     """
     normalized_question = question.strip()
@@ -445,4 +459,5 @@ def route_question(question: str, use_rag: bool, client=None, session_id: str | 
         question=normalized_question,
         use_rag=use_rag,
         session_id=session_id,
+        knowledge_base_id=knowledge_base_id,
     )

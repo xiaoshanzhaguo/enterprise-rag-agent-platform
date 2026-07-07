@@ -204,10 +204,78 @@ def clear_chat_session(session_id: str) -> None:
         pass
 
 
+def get_knowledge_base_categories() -> list[dict]:
+    """
+    从后端读取可选知识库分类列表。
+
+    函数说明：
+    1. 优先让后端作为分类列表的唯一可信来源。
+    2. 请求失败时返回空列表，由 app.py 使用本地默认分类兜底。
+    3. 这样后端分类以后有调整时，前端下拉框不需要同步手改一份。
+
+    :return: 分类字典列表；请求失败或结构异常时返回空列表
+    """
+    try:
+        response = requests.get(
+            f"{BACKEND_BASE_URL}/knowledge_base_categories",
+            timeout=3
+        )
+    except requests.RequestException:
+        return []
+
+    if response.status_code != 200:
+        return []
+
+    categories = response.json().get("categories", [])
+    if not isinstance(categories, list):
+        return []
+
+    return [
+        category
+        for category in categories
+        if isinstance(category, dict)
+    ]
+
+
+def get_knowledge_bases() -> list[dict]:
+    """
+    从后端读取企业知识库列表。
+
+    函数说明：
+    1. knowledge_base_id 表示员工提问和管理员上传的业务范围。
+    2. session_id 只表示当前聊天会话，不再代表知识库本身。
+    3. 请求失败时返回空列表，由 app.py 使用默认企业知识库兜底。
+
+    :return: 知识库字典列表；请求失败或结构异常时返回空列表
+    """
+    try:
+        response = requests.get(
+            f"{BACKEND_BASE_URL}/knowledge_bases",
+            timeout=3
+        )
+    except requests.RequestException:
+        return []
+
+    if response.status_code != 200:
+        return []
+
+    knowledge_bases = response.json().get("knowledge_bases", [])
+    if not isinstance(knowledge_bases, list):
+        return []
+
+    return [
+        knowledge_base
+        for knowledge_base in knowledge_bases
+        if isinstance(knowledge_base, dict)
+    ]
+
+
 def index_uploaded_document(
     session_id: str,
     file_name: str,
     document_text: str,
+    knowledge_base_id: str | None = None,
+    user_role: str | None = None,
     knowledge_base_type: str | None = None,
     department: str | None = None,
 ) -> tuple[bool, str]:
@@ -217,6 +285,8 @@ def index_uploaded_document(
     :param session_id: 当前会话 ID
     :param file_name: 上传文件名
     :param document_text: 提取出来的完整文档文本
+    :param knowledge_base_id: 本轮文档要写入的企业知识库 ID
+    :param user_role: 当前演示角色；kb_admin/admin 才允许上传
     :param knowledge_base_type: 本轮上传选择的知识库分类，例如 hr、finance、it、product
     :param department: 本轮上传选择的部门展示名，例如 HR、财务、IT、产品
     :return: (True, 成功提示) 或 (False, 错误提示)
@@ -231,6 +301,12 @@ def index_uploaded_document(
     # 如果前端显式选择了知识库分类，则写入请求体，后端会保存到 documents 表
     if knowledge_base_type:
         payload["knowledge_base_type"] = knowledge_base_type
+    # knowledge_base_id 用于把文档写入企业公共知识库，而不是只挂在当前 session 下
+    if knowledge_base_id:
+        payload["knowledge_base_id"] = knowledge_base_id
+    # user_role 是当前演示级权限边界，后端会用它拒绝普通员工上传
+    if user_role:
+        payload["user_role"] = user_role
     # department 是展示给用户看的来源分类，例如 HR、财务、IT、产品
     if department:
         payload["department"] = department
@@ -302,7 +378,13 @@ def post_stream_request(payload: dict, task_type: str):
     )
 
 
-def get_rag_preview(session_id: str, query: str, knowledge_base_type_filter: str, top_k: int) -> list[dict]:
+def get_rag_preview(
+    session_id: str,
+    query: str,
+    knowledge_base_type_filter: str | None,
+    top_k: int,
+    knowledge_base_id: str | None = None,
+) -> list[dict]:
     """
     获取当前 query 的 RAG 命中引用和原文片段。
 
@@ -313,6 +395,7 @@ def get_rag_preview(session_id: str, query: str, knowledge_base_type_filter: str
 
     :param session_id: 当前会话ID
     :param query: 当前用户问题或检索 query
+    :param knowledge_base_id: 本轮检索使用的企业知识库 ID
     :param top_k: 需要返回的命中片段数量
     :return: RAG 命中引用片段列表；请求失败时返回空列表
     """
@@ -322,6 +405,7 @@ def get_rag_preview(session_id: str, query: str, knowledge_base_type_filter: str
             json={
                 "session_id": session_id, # 当前会话ID
                 "query": query, # 当前问题
+                "knowledge_base_id": knowledge_base_id, # 企业知识库范围
                 "knowledge_base_type_filter": knowledge_base_type_filter, # 知识库分类
                 "top_k": top_k # 检索数量
             },
@@ -351,7 +435,7 @@ def get_rag_preview(session_id: str, query: str, knowledge_base_type_filter: str
     return chunks
 
 
-def get_rag_status(session_id: str) -> dict:
+def get_rag_status(session_id: str, knowledge_base_id: str | None = None) -> dict:
     """
     获取当前 session 的数据库 RAG 文档状态。
 
@@ -360,12 +444,15 @@ def get_rag_status(session_id: str) -> dict:
     - 查询当前会话是否已有索引文档、文档名列表、文档数量、chunk 总数和过期时间
 
     :param session_id: 当前会话ID
+    :param knowledge_base_id: 企业知识库 ID；传入后查询公共知识库状态
     :return: 成功时返回 RAG 状态字典；请求失败时返回空字典
     """
     try:
+        params = {"knowledge_base_id": knowledge_base_id} if knowledge_base_id else None
         # 调用后端状态查询接口
         response = requests.get(
             f"{BACKEND_BASE_URL}/rag_status/{session_id}",
+            params=params,
             timeout=10
         )
     # 如果请求异常，返回空字典
