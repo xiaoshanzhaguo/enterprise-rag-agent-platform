@@ -87,6 +87,90 @@ ROUTE_TYPE_LABELS = {
     AgentRouteType.IRRELEVANT: "无关问题",
 }
 
+# Agent 路由类型和知识库分类的固定映射。
+# 当前核心逻辑是：当 Agent 已经判断出业务类型时，不再默认检索全部分类，
+# 而是优先限定到更可能命中的分类，减少无关 chunk 干扰。
+ROUTE_TYPE_TO_KNOWLEDGE_BASE_TYPE = {
+    AgentRouteType.IT_SUPPORT: "it",
+    AgentRouteType.FINANCE_PROCESS: "finance",
+    AgentRouteType.PRODUCT_DOC: "product",
+}
+
+# 知识库分类展示名，专门用于 Agent 步骤说明，不影响数据库真实字段。
+KNOWLEDGE_BASE_TYPE_LABELS = {
+    "hr": "HR",
+    "finance": "财务",
+    "it": "IT",
+    "product": "产品",
+}
+
+
+def _resolve_process_apply_knowledge_base_type_filter(question: str) -> tuple[str | None, str]:
+    """
+    根据流程申请类问题进一步判断应优先检索哪个知识库分类。
+
+    :param question: 用户原始问题
+    :return: 二元组，第一项是知识库分类；第二项是用于前端展示的说明
+    """
+    normalized_question = question.lower()
+
+    process_apply_keyword_map = {
+        "hr": ["请假", "入职", "转正", "远程办公", "补卡"],
+        "it": ["GitLab", "VPN", "账号", "权限", "设备"],
+        "finance": ["报销", "付款", "发票", "差旅", "费用"],
+    }
+
+    for knowledge_base_type, keywords in process_apply_keyword_map.items():
+        if any(keyword.lower() in normalized_question for keyword in keywords):
+            label = KNOWLEDGE_BASE_TYPE_LABELS.get(knowledge_base_type, knowledge_base_type)
+            return (
+                knowledge_base_type,
+                f"流程申请问题命中 {label} 关键词，已自动限定检索分类为：{label}。",
+            )
+
+    return (
+        None,
+        "流程申请问题暂未命中细分关键词，本轮不自动限定分类，将检索全部分类。",
+    )
+
+
+def _resolve_agent_knowledge_base_type_filter(
+    route_type: AgentRouteType,
+    question: str,
+    selected_filter: str | None,
+) -> tuple[str | None, str]:
+    """
+    根据 Agent 路由结果决定本轮检索使用的知识库分类过滤条件。
+
+    优先级：
+    1. 如果前端已经手动选择了检索分类，则尊重用户选择。
+    2. 如果路由类型能明确对应分类，则自动限定到该分类。
+    3. 如果是流程申请，则进入关键词细分逻辑。
+    4. 其他情况不限定分类，仍检索全部知识库。
+
+    :param route_type: Agent 判断出的路由类型
+    :param question: 用户原始问题
+    :param selected_filter: 前端手动选择的分类过滤条件；None 表示全部
+    :return: 二元组，第一项是实际分类过滤条件，第二项是说明文案
+    """
+    if selected_filter:
+        label = KNOWLEDGE_BASE_TYPE_LABELS.get(selected_filter, selected_filter)
+        return selected_filter, f"已使用前端手动选择的检索分类：{label}。"
+
+    if route_type in ROUTE_TYPE_TO_KNOWLEDGE_BASE_TYPE:
+        knowledge_base_type = ROUTE_TYPE_TO_KNOWLEDGE_BASE_TYPE[route_type]
+        label = KNOWLEDGE_BASE_TYPE_LABELS.get(knowledge_base_type, knowledge_base_type)
+        route_type_label = ROUTE_TYPE_LABELS.get(route_type, route_type.value)
+        return (
+            knowledge_base_type,
+            f"Agent 路由为{route_type_label}，已自动限定检索分类为：{label}。",
+        )
+
+    if route_type == AgentRouteType.PROCESS_APPLY:
+        return _resolve_process_apply_knowledge_base_type_filter(question)
+
+    return None, "当前路由未绑定固定知识库分类，本轮检索全部分类。"
+
 
 def _format_retrieval_mode_for_display(retrieval_mode: str) -> str:
     """
@@ -599,6 +683,14 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             need_knowledge_base = route_decision.should_use_rag
             decision_reason = route_decision.reason
             retrieval_query = route_decision.rewritten_query
+            # 前端如果手动选择了分类，就会传入 knowledge_base_type_filter。
+            # 如果前端选择“全部”，这里拿到的是 None，后端会根据 Agent 路由自动补分类过滤。
+            selected_knowledge_base_type_filter = request.user_options.get("knowledge_base_type_filter", None)
+            knowledge_base_type_filter, knowledge_base_type_filter_note = _resolve_agent_knowledge_base_type_filter(
+                route_type=route_type,
+                question=request.input_text,
+                selected_filter=selected_knowledge_base_type_filter,
+            )
             # 组装判断步骤展示文本
             judge_text = (
                 f"路由类型：{route_type_label} {route_type.value}\n\n"
@@ -607,7 +699,16 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             )
             # 如果需要知识库，则展示本轮实际用于检索的 query，兼容 query rewrite 和判断失败兜底两种来源
             if need_knowledge_base:
-                judge_text += f"\n\n本轮检索问题：{retrieval_query}"
+                actual_filter_label = (
+                    KNOWLEDGE_BASE_TYPE_LABELS.get(knowledge_base_type_filter, knowledge_base_type_filter)
+                    if knowledge_base_type_filter
+                    else "全部"
+                )
+                judge_text += (
+                    f"\n\n本轮检索问题：{retrieval_query}"
+                    f"\n\n本轮检索分类：{actual_filter_label}"
+                    f"\n\n分类依据：{knowledge_base_type_filter_note}"
+                )
             # 保存判断步骤结果
             final_result[STEP_JUDGE_KNOWLEDGE] = judge_text
             # 通知前端：判断步骤完成
@@ -638,8 +739,6 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             effective_retrieval_query = retrieval_query
             # 默认没有额外检索说明；只有发生 query fallback 时才展示
             retrieval_note = ""
-            # 获取检索的知识库分类
-            knowledge_base_type_filter = request.user_options.get("knowledge_base_type_filter", None)
             # 如果判断需要知识库，则执行 RAG 检索
             if need_knowledge_base:
                 # 调用 Agent 检索链路，优先使用改写 query，改写无命中时回退原始问题
@@ -683,6 +782,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                         f"检索方式：{retrieval_mode_display}"
                     )
                 # 如果发生了 query fallback，则把说明追加到检索步骤中，方便用户理解为什么检索问题变化
+                if knowledge_base_type_filter_note:
+                    retrieve_text += f"\n\n分类说明：{knowledge_base_type_filter_note}"
                 if retrieval_note:
                     retrieve_text += f"\n\n说明：{retrieval_note}"
             else:
