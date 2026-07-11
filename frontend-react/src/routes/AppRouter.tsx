@@ -7,8 +7,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { MainLayout } from '../layouts/MainLayout'
 import { ChatPage } from '../pages/ChatPage'
+// 评测结果页面。
+import { EvaluationResultPage } from '../pages/EvaluationResultPage'
+// 执行日志页面。
+import { ExecutionLogPage } from '../pages/ExecutionLogPage'
 import { KnowledgeAdminPage } from '../pages/KnowledgeAdminPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+// 流程助手页面。
+import { ProcessAssistantPage } from '../pages/ProcessAssistantPage'
 
 // 定义一个 React 函数组件，并将这个组件导出
 export function AppRouter() {
@@ -27,6 +33,12 @@ export function AppRouter() {
           <Route index element={<Navigate to="/chat" replace />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin/knowledge" element={<KnowledgeAdminPage />} />
+          {/* 流程助手路由。 */}
+          <Route path="/workflow" element={<ProcessAssistantPage />} />
+          {/* 执行日志路由。 */}
+          <Route path="/logs" element={<ExecutionLogPage />} />
+          {/* 评测结果路由。 */}
+          <Route path="/eval" element={<EvaluationResultPage />} />
           {/* *表示：匹配所有没有被前面 Route 匹配到的路径。整行含义：如果用户访问了不存在的页面，就显示 NotFoundPage。*/}
           <Route path="*" element={<NotFoundPage />} />
         </Route>

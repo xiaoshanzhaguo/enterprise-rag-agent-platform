@@ -53,6 +53,13 @@ a {
   min-height: 100vh;
 }
 
+/* 右侧内容外壳：顶部栏和主内容区都放在这里。 */
+.content-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
 /* 左侧导航栏。 */
 .sidebar {
   display: flex;
@@ -169,6 +176,59 @@ a {
 .main-panel {
   min-width: 0;
   padding: 32px;
+}
+
+/* 顶部栏：展示当前控制台标题、搜索入口和用户角色入口。 */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  border-bottom: 1px solid #dce3da;
+  background: #ffffff;
+  padding: 18px 32px;
+}
+
+/* 顶部栏标题，尺寸比页面标题小，避免和业务页面标题抢层级。 */
+.topbar h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+/* 顶部栏右侧操作区。 */
+.topbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* 顶部搜索占位入口，后续可接全局搜索。 */
+.topbar-search {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 180px;
+  border: 1px solid #dce3da;
+  border-radius: 8px;
+  background: #f6f7f4;
+  color: #68756d;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+
+/* 次级按钮，用于设置、角色切换等低频操作。 */
+.ghost-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd6cf;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #24352b;
+  padding: 9px 12px;
+  font-weight: 700;
 }
 
 /* 页面内部纵向堆叠布局。 */
@@ -391,6 +451,76 @@ a {
   flex-wrap: wrap;
 }
 
+/* 简单表格列表，用于日志等线性数据展示。 */
+.table-list {
+  display: grid;
+  border: 1px solid #e1e7e3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 表格中的单行记录。 */
+.table-row {
+  display: grid;
+  grid-template-columns: 90px 160px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  border-bottom: 1px solid #e9eee9;
+  background: #ffffff;
+  padding: 12px 14px;
+}
+
+/* 最后一行不需要底部分割线。 */
+.table-row:last-child {
+  border-bottom: 0;
+}
+
+/* 日志时间列。 */
+.table-row span {
+  color: #68756d;
+  font-size: 13px;
+}
+
+/* 日志类型列。 */
+.table-row strong {
+  color: #24352b;
+}
+
+/* 日志描述列。 */
+.table-row p {
+  margin: 0;
+  color: #5d6b62;
+}
+
+/* 指标卡片网格，用于评测结果。 */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* 单个评测指标卡片。 */
+.metric-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e1e7e3;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 16px;
+}
+
+/* 指标名称。 */
+.metric-card span {
+  color: #68756d;
+  font-size: 13px;
+}
+
+/* 指标值。 */
+.metric-card strong {
+  color: #1d6f56;
+  font-size: 24px;
+}
+
 /* 404 等空状态页面。 */
 .empty-state {
   display: grid;
@@ -410,7 +540,45 @@ a {
     border-bottom: 1px solid #dce3da;
   }
 
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 18px 20px;
+  }
+
+  .topbar-actions {
+    width: 100%;
+  }
+
+  .topbar-search {
+    flex: 1;
+    min-width: 0;
+  }
+
   .workspace-grid {
     grid-template-columns: 1fr;
   }
+
+  .table-row,
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.role-select-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd6cf;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 12px;
+}
+
+.role-select-control select {
+  border: 0;
+  background: transparent;
+  color: #24352b;
+  font-weight: 700;
+  outline: none;
 }
