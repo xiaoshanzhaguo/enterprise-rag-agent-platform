@@ -1,0 +1,416 @@
+/*
+ * React 前端全局样式。
+ *
+ * 功能说明：
+ * 1. 定义企业后台工作台的基础视觉风格。
+ * 2. 提供布局、侧边栏、表单、面板、列表、按钮等通用 class。
+ * 3. 页面组件只写结构，具体外观尽量统一放在这里维护。
+ */
+
+/* 页面全局变量和基础字体设置。 */
+:root {
+  color: #17211b;
+  background: #f6f7f4;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 所有元素使用 border-box，避免 padding 撑大元素宽度。 */
+* {
+  box-sizing: border-box;
+}
+
+/* body 是整个页面最外层，去掉浏览器默认外边距。 */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* 表单和按钮继承全局字体，避免不同浏览器显示不一致。 */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* 链接默认继承文字颜色，导航样式由具体 class 控制。 */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 应用整体布局：左侧固定导航，右侧自适应内容。 */
+.app-shell {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+/* 左侧导航栏。 */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  border-right: 1px solid #dce3da;
+  background: #fbfcf8;
+  padding: 24px;
+}
+
+/* 顶部品牌区域，包含图标和系统名称。 */
+.brand-block {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+/* 品牌图标和小方块图标共用样式。 */
+.brand-mark,
+.small-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #1d6f56;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+/* 系统名称在侧边栏里不能太大，避免挤压导航。 */
+.brand-block h1 {
+  margin: 2px 0 0;
+  max-width: 190px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+/* 小号说明文字，例如 Enterprise Agent、员工侧、管理员侧。 */
+.eyebrow {
+  margin: 0;
+  color: #5d6b62;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+/* 侧边栏导航列表。 */
+.nav-list {
+  display: grid;
+  gap: 10px;
+}
+
+/* 单个导航项。 */
+.nav-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 12px;
+  color: #37443c;
+}
+
+/* 鼠标悬停和当前激活路由使用同一套强调样式。 */
+.nav-item:hover,
+.nav-item.active {
+  border-color: #b9d4c8;
+  background: #edf6f1;
+}
+
+/* 导航项里的标题和说明上下排列。 */
+.nav-item span {
+  display: grid;
+  gap: 3px;
+}
+
+/* 辅助说明文字统一使用弱化颜色。 */
+.nav-item small,
+.muted-text {
+  color: #68756d;
+}
+
+/* 侧边栏底部状态卡片，用于显示当前 API 地址。 */
+.sidebar-status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: auto;
+  border: 1px solid #dce3da;
+  border-radius: 8px;
+  padding: 12px;
+  color: #4f5d54;
+}
+
+/* 状态卡里的文字上下排列。 */
+.sidebar-status div {
+  display: grid;
+}
+
+/* 状态卡里的标签文字。 */
+.sidebar-status span {
+  font-size: 12px;
+}
+
+/* API 地址可能较长，需要允许换行。 */
+.sidebar-status strong {
+  font-size: 13px;
+  word-break: break-all;
+}
+
+/* 右侧主内容区域。 */
+.main-panel {
+  min-width: 0;
+  padding: 32px;
+}
+
+/* 页面内部纵向堆叠布局。 */
+.page-stack {
+  display: grid;
+  gap: 24px;
+}
+
+/* 页面标题区。 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+/* 页面主标题。 */
+.page-header h2 {
+  margin: 4px 0 8px;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+/* 页面标题下的说明文字。 */
+.page-header p {
+  max-width: 720px;
+  margin: 0;
+  color: #5d6b62;
+}
+
+/* 两列工作区：左侧主操作，右侧状态或证据。 */
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 20px;
+  align-items: start;
+}
+
+/* 通用面板样式。 */
+.panel {
+  display: grid;
+  gap: 18px;
+  border: 1px solid #dce3da;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 20px;
+}
+
+/* 面板标题区，通常是图标 + 标题说明。 */
+.panel-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* 面板标题。 */
+.panel-heading h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+/* 面板说明文字。 */
+.panel-heading p {
+  margin: 0;
+  color: #66736b;
+}
+
+/* 表单字段容器，包含 label 文本和输入控件。 */
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+/* 表单字段标题。 */
+.field span {
+  color: #39463e;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* 表单输入、选择框、文本域的统一外观。 */
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid #cbd6cf;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #17211b;
+  padding: 11px 12px;
+}
+
+/* 文本域允许用户手动调整高度。 */
+.field textarea {
+  resize: vertical;
+}
+
+/* 表单控件获得焦点时显示绿色描边，帮助用户确认当前输入位置。 */
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: #1d6f56;
+  outline: 3px solid #d8eee5;
+}
+
+/* 主按钮样式，用于发送、上传、返回等主要动作。 */
+.primary-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  border: 1px solid #1d6f56;
+  border-radius: 8px;
+  background: #1d6f56;
+  color: #ffffff;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+/* 禁用按钮样式，提示当前功能尚未接入或条件不满足。 */
+.primary-button:disabled {
+  border-color: #aab8af;
+  background: #aab8af;
+  cursor: not-allowed;
+}
+
+/* 通用提示框。 */
+.alert {
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+/* 错误提示框，用于接口失败等场景。 */
+.alert.error {
+  border: 1px solid #ebb7a1;
+  background: #fff2ed;
+  color: #8a3a1d;
+}
+
+/* 元信息列表，例如文档数、chunk 数。 */
+.meta-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+/* 元信息卡片和配置行共用浅色块样式。 */
+.meta-list div,
+.config-row {
+  border: 1px solid #e1e7e3;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcf8;
+}
+
+/* 元信息标题，例如“知识库”。 */
+.meta-list dt {
+  color: #68756d;
+  font-size: 12px;
+}
+
+/* 元信息值，例如文档数。 */
+.meta-list dd {
+  margin: 4px 0 0;
+  font-weight: 800;
+}
+
+/* 文件列表、配置列表、标签列表的基础间距。 */
+.file-list,
+.config-list,
+.tag-list {
+  display: grid;
+  gap: 10px;
+}
+
+/* 单个文件行，左侧图标，中间文件名，右侧分类。 */
+.file-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #edf1ee;
+  padding-bottom: 10px;
+}
+
+/* 文件名过长时用省略号，避免撑破布局。 */
+.file-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 文件分类和标签胶囊样式。 */
+.file-row small,
+.tag {
+  border-radius: 999px;
+  background: #e9f1fb;
+  color: #295b8a;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 配置行内容上下排列。 */
+.config-row {
+  display: grid;
+  gap: 4px;
+}
+
+/* 配置行里的说明文字。 */
+.config-row span {
+  color: #66736b;
+}
+
+/* 标签列表横向排列，空间不足时自动换行。 */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* 404 等空状态页面。 */
+.empty-state {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  min-height: 60vh;
+}
+
+/* 小屏幕适配：侧边栏改成顶部区域，主内容改为单列。 */
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #dce3da;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
