@@ -30,6 +30,10 @@ const PREVIEW_SESSION_ID = 'react-preview-session'
 // 智能问答页使用的会话 ID。当前先固定，后续接历史会话时可以由后端创建或从 URL 中读取。
 const CHAT_SESSION_ID = 'react-chat-session'
 
+// 员工聊天页默认只展示最终答案，不展示 Agent 路由、检索、生成等中间步骤。
+// 这些步骤仍然会保存在 message.steps 中，后续可以放到“执行日志”或调试开关里展示。
+const SHOULD_SHOW_AGENT_STEPS = false
+
 // 生成前端消息 ID。这里用时间戳 + 随机数，足够支撑当前演示版消息列表。
 // 它主要用于前端消息列表里的 key，或者用于区分每一条聊天消息。
 function buildChatMessageId(prefix: string) {
@@ -456,6 +460,7 @@ export function ChatPage() {
           </div>
 
           {/* 聊天窗口：展示用户问题、AI 回答和 Agent 执行过程。 */}
+          {/* 当前员工侧默认隐藏 Agent 执行过程，只把最终答案作为聊天正文展示。 */}
           <div className="chat-window">
             {messages.length === 0 ? (
               <div className="chat-empty">
@@ -472,7 +477,7 @@ export function ChatPage() {
                   </div>
 
                   {/* 可选链?. 它的意思是：如果 message.steps 存在，就继续访问它的 length；如果 message.steps 是 undefined 或 null，就直接返回 undefined，不报错。 */}
-                  {message.steps?.length ? (
+                  {SHOULD_SHOW_AGENT_STEPS && message.steps?.length ? (
                     <ul className="chat-steps">
                       {message.steps.map((step, index) => (
                         <li key={`${message.id}-step-${index}`}>{step}</li>
