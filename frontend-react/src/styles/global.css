@@ -529,6 +529,105 @@ a {
   min-height: 60vh;
 }
 
+/* 聊天窗口容器：固定一个最小高度，让消息为空或流式生成时页面不会明显跳动。 */
+.chat-window {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 320px;
+  max-height: 520px;
+  overflow-y: auto;
+  border: 1px solid #e1e7e3;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 14px;
+}
+
+/* 聊天空状态：还没有消息时给用户一个可提问示例。 */
+.chat-empty {
+  display: grid;
+  gap: 6px;
+  align-content: center;
+  min-height: 280px;
+  color: #68756d;
+  text-align: center;
+}
+
+/* 空状态标题文字。 */
+.chat-empty strong {
+  color: #24352b;
+}
+
+/* 单条聊天消息气泡：默认是 AI 助手消息，靠左展示。 */
+.chat-message {
+  display: grid;
+  gap: 8px;
+  max-width: min(86%, 720px);
+  border: 1px solid #dce3da;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+/* 用户消息靠右展示，用浅绿区分提问和回答。 */
+.chat-message.user {
+  justify-self: end;
+  border-color: #b9d4c8;
+  background: #edf6f1;
+}
+
+/* AI 消息靠左展示，保持白底，便于阅读长回答和引用内容。 */
+.chat-message.assistant {
+  justify-self: start;
+}
+
+/* 消息头部：显示发送方和当前生成状态。 */
+.chat-message-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #68756d;
+  font-size: 12px;
+}
+
+/* 消息发送方名称。 */
+.chat-message-meta strong {
+  color: #24352b;
+}
+
+/* 生成中、失败等状态标签。 */
+.chat-message-meta span {
+  border-radius: 999px;
+  background: #e9f1fb;
+  color: #295b8a;
+  padding: 2px 8px;
+  font-weight: 700;
+}
+
+/* 聊天正文：保留换行，避免后端返回的分段回答挤成一行。 */
+.chat-message p {
+  margin: 0;
+  color: #24352b;
+  white-space: pre-wrap;
+}
+
+/* Agent 执行步骤列表：用于展示判断路由、检索证据、生成回答等中间过程。 */
+.chat-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  border-left: 3px solid #b9d4c8;
+  padding: 0 0 0 12px;
+  color: #5d6b62;
+  font-size: 13px;
+}
+
+/* 单条 Agent 步骤。 */
+.chat-steps li {
+  list-style: none;
+}
+
 /* 小屏幕适配：侧边栏改成顶部区域，主内容改为单列。 */
 @media (max-width: 900px) {
   .app-shell {
@@ -562,6 +661,10 @@ a {
   .table-row,
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .chat-message {
+    max-width: 100%;
   }
 }
 

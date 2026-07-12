@@ -5,24 +5,39 @@
  * 1. 员工在这里选择企业知识库和检索分类。
  * 2. 页面会从后端读取知识库列表、分类列表、当前知识库的 RAG 文档状态。
  * 3. 后续再接入真正的提问和流式回答。
+ * 4. 当前已经接入 POST SSE 流式问答，用于展示 Agent 判断、检索过程和 AI 回答。
  */
 
 // Bot             机器人图标，用于提问区
 // Database        数据库图标，用于文档或知识库
 // FileSearch      文件检索图标，用于检索上下文区域
 // SendHorizontal  发送图标，用于发送按钮
-import { Bot, Database, FileSearch, SendHorizontal } from 'lucide-react'
+import { Bot, Database, FileSearch, SendHorizontal, Delete } from 'lucide-react'
 // useState 保存知识库列表、分类列表、当前选中项、RAG 状态、loading、错误信息。
 // useEffect 页面加载时请求接口，或知识库切换时重新请求状态。
 // useMemo 根据当前 ID 从列表里找出当前选中的完整对象。
 import { useEffect, useMemo, useState } from 'react'
+// streamAgentAnswer 负责调用后端 /agent_stream，并用 ReadableStream 逐步解析 SSE 事件。
+import { streamAgentAnswer } from '../api/chatApi'
 import { fetchKnowledgeBaseCategories, fetchKnowledgeBases, fetchRagStatus } from '../api/knowledgeBaseApi'
+import type { AgentStreamEvent, ChatMessage } from '../types/chat'
 import type { KnowledgeBaseCategory, KnowledgeBaseItem, RagStatusResponse } from '../types/knowledgeBase'
 
 
 // 当前 React 页面只是预览版，还没有真正创建聊天 session。所以先写死一个 session_id，用它去调用 RAG 状态接口。
 // 后续真正接入聊天功能后，可能会由后端创建真实会话 ID。
 const PREVIEW_SESSION_ID = 'react-preview-session'
+// 智能问答页使用的会话 ID。当前先固定，后续接历史会话时可以由后端创建或从 URL 中读取。
+const CHAT_SESSION_ID = 'react-chat-session'
+
+// 生成前端消息 ID。这里用时间戳 + 随机数，足够支撑当前演示版消息列表。
+// 它主要用于前端消息列表里的 key，或者用于区分每一条聊天消息。
+function buildChatMessageId(prefix: string) {
+  // prefix 通常用来表示这条消息属于谁：user 用户消息；assistant AI 回复消息；system 系统消息。
+  // toString(16) 表示：把随机小数转换成 16 进制字符串。如：0.6391827364 -> 0.a3f91c8e2b
+  // slice(2) 从下标 2 开始截取到末尾，即不要前面的0.
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
 
 // ChatPage 是员工问答页面组件。
 export function ChatPage() {
@@ -43,6 +58,12 @@ export function ChatPage() {
 
   // 保存用户输入的问题
   const [question, setQuestion] = useState('')
+
+  // 保存聊天窗口里的消息列表。
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+
+  // 标记当前是否正在等待后端流式回答。
+  const [isStreaming, setIsStreaming] = useState(false)
 
   // 页面首次加载接口时展示禁用状态。
   const [isLoading, setIsLoading] = useState(true)
@@ -196,6 +217,207 @@ export function ChatPage() {
     [categories, selectedCategoryId],
   )
 
+  // 把后端 SSE 返回的一条条事件，合并到当前 AI 回复消息里。
+  // assistantMessageId 表示当前正在生成的 AI 消息 ID。因为页面里可能有很多条消息，前端需要知道：后端这条流式事件，应该更新哪一条 assistant 消息。
+  // event：表示后端 SSE 返回的一条事件。
+  function applyStreamEventToAssistantMessage(assistantMessageId: string, event: AgentStreamEvent) {
+    // delta 是模型真正生成的增量文本，需要拼接到回答正文里。
+    // 如果这是模型生成的增量文本，并且内容不为空，就把它拼接到 AI 回复正文里。
+    if (event.event_type === 'delta' && event.content) {
+      // 基于最新的 currentMessages 来计算新的 messages。
+      // 为什么不用 setMessages([...messages, xxx)? 因为流式输出时，事件会连续快速到达。使用函数式更新更安全，可以避免拿到旧状态。
+      setMessages((currentMessages) =>
+        // 这一行遍历当前消息数组。currentMessages 是当前所有消息。map会返回一个新的数组。
+        // 这里的目标是：找到当前正在生成的 assistant 消息，然后更新它；其他消息保持不变。
+        currentMessages.map((message) =>
+          // 这一行判断当前遍历到的消息，是否就是要更新的 AI 消息。
+          // 如果当前消息的 id 等于传进来的 assistantMessageId，说明找到了目标消息。
+          message.id === assistantMessageId
+            ? {
+                // 对象展开语法。意思是：先复制原来的 message 里所有字段。这样做是为了保留原有字段，不要把其他字段丢掉。
+                ...message,
+                // 更新 content 字段。意思是：把原来的回答正文 message.content 和新收到的 event.content 拼接起来。
+                content: message.content + event.content,
+              }
+            // 如果当前消息不是目标 AI 消息，就原样返回。也就是说：只更新 assistantMessageId 对应的那一条消息；其他消息不动。
+            : message,
+        ),
+      )
+      // 处理完 delta 后直接返回。因为一个事情只需要走一种处理逻辑。
+      // 如果已经处理了 delta，就不需要继续往下判断 step_start、final、error。
+      return
+    }
+
+    // step_start / step_complete / workflow_start 是过程事件，放到 steps 里，便于页面展示 Agent 执行过程。
+    // 这一行判断当前事件是不是 Agent 执行过程事件。这三个事件分别表示：workflow_start: 工作流开始；step_start: 某个步骤开始; step_complete: 某个步骤完成。
+    // 整体意思：如果事件有内容，并且它是工作流开始、步骤开始、步骤完成这类过程事件，就把它加入 steps。
+    if (event.content && ['workflow_start', 'step_start', 'step_complete'].includes(event.event_type)) {
+      setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+          message.id === assistantMessageId
+            // 如果是目标 AI 消息，就返回一个新对象。
+            ? {
+                ...message,
+                // 更新 steps 字段。它的作用是：把当前事件的 content 追加到 steps 数组末尾。
+                // message.steps ?? [] 含义：如果 message.steps 有值，就用 message.steps；如果 message.steps 是 null 或 undefined，就用空数组 []。
+                // [...(message.steps ?? []), event.content ?? '']：先复制原来的 steps，再追加当前事件内容 event.content。
+                // 这里为什么不用 message.steps.push(event.content)？因为 React 状态更新要尽量保持不可变更新。也就是不要直接修改原数组，而是创建一个新数组。
+                steps: [...(message.steps ?? []), event.content ?? ''],
+              }
+            // 不是目标消息，就原样返回。
+            : message,
+        ),
+      )
+      return
+    }
+
+    // final 表示本轮流式输出结束。它不是正文增量，而是一个结束信号。
+    if (event.event_type === 'final') {
+      setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                // 把这条 AI 消息的状态改成：'complete'，表示：这条 AI 回复已经生成完成。
+                // 这通常会影响页面展示，比如：隐藏 loading 动画、隐藏“生成中”、显示完整回答状态。
+                status: 'complete',
+              }
+            // 其他消息不变
+            : message,
+        ),
+      )
+      return
+    }
+
+    // error 表示后端在流式过程中报错。比如：模型调用失败、知识库检索失败、参数错误、服务器异常。
+    if (event.event_type === 'error') {
+      // 更新消息列表
+      setMessages((currentMessages) =>
+        // 遍历所有消息
+        currentMessages.map((message) =>
+          // 找到正在生成的 AI 消息
+          message.id === assistantMessageId
+            // 如果是目标消息，就返回更新后的新消息对象。
+            ? {
+                // 复制原来的消息字段
+                ...message,
+                // 这一行设置错误时显示的内容。它用了逻辑或 || 做兜底。
+                content: event.error_message || event.content || '流式问答失败，请稍后重试。',
+                // 页面可以根据这个状态显示错误样式。
+                status: 'error',
+              }
+            // 不是目标消息就原样返回。
+            : message,
+        ),
+      )
+    }
+  }
+
+  // 点击发送按钮后，创建用户消息和 AI 占位消息，然后调用后端流式接口，边接收边更新页面。
+  async function handleSendQuestion() {
+    // 去掉首尾空格，避免把空问题发给后端。
+    const trimmedQuestion = question.trim()
+
+    // 空问题或正在生成时不重复提交。
+    if (!trimmedQuestion || isStreaming) {
+      return
+    }
+
+    // 先生成两条消息：一条用户消息，一条待填充的 AI 消息。
+    const userMessage: ChatMessage = {
+      id: buildChatMessageId('user'), // 这个 ID 用于区分不同消息、React map 渲染时作为 key、后续更新消息时定位。
+      role: 'user', // 页面可以根据 role 决定消息显示在左边还是右边，或者使用不同样式。
+      content: trimmedQuestion, // 消息内容就是用户输入的问题。使用 trimmedQuestion 可以避免把首尾空格也显示到页面上。
+      status: 'complete',  // 用户消息一创建就是完整的。因为用户输入的内容已经确定，不需要流式生成。
+    }
+    // 生成 AI 消息的 ID。为什么要单独保存这个 ID? 因为后面后端流式返回事件时，需要不断更新这条 AI 消息。后续 delta、step、final、error 都根据这个 assistantMessageId 找到这条 AI 消息。
+    const assistantMessageId = buildChatMessageId('assistant')
+    // 创建 AI 占位消息。
+    // 这里创建一条 AI 消息列表。这条消息一开始是空的，因为真正内容要等后端流式返回。
+    const assistantMessage: ChatMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',  // AI 消息正文一开始是空字符串。后面收到 delta 事件后，会不断执行 message.content + event.content 把内容拼进去。
+      steps: [],    // 初始化执行步骤为空数组。后面收到 workflow_start、step_start、step_complete 这些过程事件时，会把内容追加到 steps 里。
+      status: 'streaming',  // 设置状态为正在生成。页面可以根据这个状态展示：生成中、loading、光标闪烁、禁用发送按钮。
+    }
+
+    // 先把消息显示到页面上，让用户马上看到发送结果。
+    // 把用户消息和 AI 占位消息追加到消息列表末尾。
+    // (currentMessages) => ... 表示基于当前最新消息列表更新。
+    // [...currentMessages, userMessage, assistantMessage]: 表示创建一个数组，先复制原来的所有消息，再追加 userMessage，再追加 assistantMessage。
+    // 这样做的好处：用户点击发送后，页面马上显示问题；同时出现一条 AI 正在生成的消息，不用等后端返回。
+    setMessages((currentMessages) => [...currentMessages, userMessage, assistantMessage])
+
+    // 清空输入框。
+    setQuestion('')
+
+    // 进入流式生成状态。
+    // 把 isStreaming 设置为 true，表示当前正在等待后端生成回答。它通常用于：禁用发送按钮、显示生成中状态、防止重复提交。
+    setIsStreaming(true)
+
+    // 调用后端流式接口
+    // 因为调用后端接口可能失败，比如：网络断开、后端报错、HTTP 500、流式读取失败，所以用 try/catch 捕获错误。
+    try {
+      // 调用前面封装的流式请求函数 streamAgentAnswer, 前面的 await 表示：等待整个流式请求结束。
+      // 注意这里不是等一个普通 JSON 返回，而是：等待 SSE 流全部读完。
+      await streamAgentAnswer(
+        // 开始传入请求体对象，这个对象会发送给后端 /agent_stream。
+        {
+          session_id: CHAT_SESSION_ID,  // 指定当前聊天会话ID。CHAT_SESSION_ID：后端可以用它保存：聊天记录、检索记录、上下文信息。
+          task_type: 'agent',  // 当前任务类型固定为: 'agent'，表示这次调用的是 Agent 智能问答流程。
+          input_text: trimmedQuestion,  // 发送给后端的用户原始问题，这里使用清理过空格的 trimmedQuestion。
+          mode: '企业知识库问答',  // 当前问答模式。后端可以根据 mode 决定不同处理流程。
+          history: [],  // 历史消息列表，当前先传空数组。意思是：第一版暂时不带多轮上下文。后续如果要支持多轮对话，可以把之前的用户消息和 AI 消息整理后放进去。
+          use_rag: true,  // 表示启用 RAG。即：回答问题时，需要检索企业知识库。
+          rag_top_k: 3,  // 表示最多检索返回 3 个相关片段。top_k 可以理解为：从向量库或知识库中找最相关的前 k 条内容。
+          // 用户配置项。这些是前端给后端的补充参数。
+          user_options: {
+            display_text: trimmedQuestion,  // 前端展示文本。这个字段的作用通常是：让后端知道前端展示用的文本是什么。
+            knowledge_base_id: selectedKnowledgeBaseId || undefined,  // 指定当前选择的知识库 ID。为什么不直接传空字符串？为什么不直接传空字符串？因为对后端来说：undefined / 不传 表示没有指定知识库，空字符串：可能被误认为传了一个无效 ID。所以这里用 undefined 更干净。
+            knowledge_base_type_filter: selectedCategoryId === 'all' ? undefined : selectedCategoryId,  // 指定知识库分类过滤条件。undefined: 意思是不限制分类，让后端检索全部分类。
+            user_role: 'employee', // 告诉后端当前用户角色是普通员工。后端可以根据角色做权限判断。
+          },
+        },
+        // 第二个参数：事件回调函数。
+        // 每当后端返回一条 SSE 事件，streamAgentAnswer 就会调用这个函数。参数 event 就是解析后的 AgentStreamEvent。
+        (event) => {
+          // 把这条事件应用到当前 AI 消息上。
+          // 这里传了两个参数。assistantMessageId: 表示要更新哪条 AI 消息，event: 表示后端返回的流式事件。
+          // 这一行的作用：每收到一条后端事件，就更新 assistantMessageId 对应的那条 AI 消息。
+          applyStreamEventToAssistantMessage(assistantMessageId, event)
+        },
+      )
+    } catch (error) {
+      // 网络错误或后端非 2xx 错误会进入这里。
+      // 可能出错的地方包括：fetch 请求失败、后端返回非 2xx、response.body 不存在、ReadableStream 读取失败。这些错误会被捕获到 error 变量里。
+      // 开始更新消息列表。这里要把刚才创建的 AI 占位消息改成错误状态。
+      setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                // 设置错误消息内容。如果 error 是标准 Error 对象，就显示 error.message；否则显示默认错误文案。
+                content: error instanceof Error ? error.message : '流式问答请求失败。',
+                // 把 AI 消息状态改成错误。页面可以根据这个状态显示红色错误样式。
+                status: 'error',
+              }
+            // 其他消息保持不变。
+            : message,
+        ),
+      )
+    } finally {
+      // 不管成功还是失败，都退出生成状态。
+      // 把流式生成状态改回 false。这样页面可以：恢复发送按钮、隐藏生成中状态、允许用户继续提问。
+      setIsStreaming(false)
+    }
+  }
+
+  // 清空对话按钮会清空当前前端消息列表
+  function handleDeleteChat() {
+    setMessages([])
+  }
+
   // 返回页面结构。说明下面进入 JSX 页面结构。
   // return ( 表示 ChatPage 组件要返回页面 JSX。
   return (
@@ -229,8 +451,39 @@ export function ChatPage() {
             {/* 包裹标题和描述。 */}
             <div>
               <h3>提问区</h3>
-              <p>Day 8 先搭页面骨架，流式回答会在后续任务接入。</p>
+              <p>支持通过 fetch + ReadableStream 读取后端 POST SSE 流式回答。</p>
             </div>
+          </div>
+
+          {/* 聊天窗口：展示用户问题、AI 回答和 Agent 执行过程。 */}
+          <div className="chat-window">
+            {messages.length === 0 ? (
+              <div className="chat-empty">
+                <strong>还没有对话</strong>
+                <span>选择知识库后输入问题，例如“怎么报销？”或“VPN 连不上怎么办？”。</span>
+              </div>
+            ) : (
+              messages.map((message) => (
+                <article className={`chat-message ${message.role}`} key={message.id}>
+                  <div className="chat-message-meta">
+                    <strong>{message.role === 'user' ? '员工' : 'AI 助手'}</strong>
+                    {message.status === 'streaming' ? <span>生成中</span> : null}
+                    {message.status === 'error' ? <span>失败</span> : null}
+                  </div>
+
+                  {/* 可选链?. 它的意思是：如果 message.steps 存在，就继续访问它的 length；如果 message.steps 是 undefined 或 null，就直接返回 undefined，不报错。 */}
+                  {message.steps?.length ? (
+                    <ul className="chat-steps">
+                      {message.steps.map((step, index) => (
+                        <li key={`${message.id}-step-${index}`}>{step}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  <p>{message.content || (message.status === 'streaming' ? '正在等待后端返回内容...' : '')}</p>
+                </article>
+              ))
+            )}
           </div>
 
           {/* 知识库选择：决定本轮问题在哪个企业知识库范围内检索。 */}
@@ -281,9 +534,14 @@ export function ChatPage() {
           </label>
 
           {/* 发送按钮：等你接入 question 状态和 SSE 请求后再取消 disabled。 */}
-          <button className="primary-button" type="button" disabled={!question.trim()}>
+          <button className="primary-button" type="button" disabled={!question.trim() || isStreaming} onClick={handleSendQuestion}>
             <SendHorizontal aria-hidden="true" size={18} />
-            发送问题
+            {isStreaming ? '生成中...' : '发送问题'}
+          </button>
+
+          <button className="primary-button" type="button" disabled={!messages.length || isStreaming} onClick={handleDeleteChat}>
+            <Delete aria-hidden="true" size={18} />
+            {isStreaming ? '生成中...' : '清空对话'}
           </button>
         </section>
 
