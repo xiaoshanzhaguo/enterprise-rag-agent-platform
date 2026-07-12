@@ -53,8 +53,9 @@ from backend.schema.chat_schema import ChatRequest, StreamEvent
 from backend.services.session_title import generate_session_title
 # SSE 格式化工具
 from backend.utils.stream_helper import to_sse
-# 轻量 Agent 路由模块
-from backend.services.agent_router import route_question, AgentRouteType
+# 轻量 Agent 路由模块。
+# _extract_json_object 用于复用 Router 里的 JSON 提取逻辑，避免 Agent 历史过滤和最终回答清理时重复写解析代码。
+from backend.services.agent_router import route_question, AgentRouteType, _extract_json_object
 
 # Agent 第一步：判断是否需要知识库
 STEP_JUDGE_KNOWLEDGE = "judge_knowledge"
