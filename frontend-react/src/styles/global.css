@@ -628,6 +628,162 @@ a {
   list-style: none;
 }
 
+/* Agent 过程总面板：放在右侧，用于解释本轮为什么检索、命中了什么。 */
+.agent-trace-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #e1e7e3;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 14px;
+}
+
+/* Agent 状态条：展示等待、执行中、已完成或失败。 */
+.agent-trace-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Agent 状态条左侧标题。 */
+.agent-trace-status strong {
+  color: #24352b;
+}
+
+/* Agent 状态标签。 */
+.agent-trace-status span {
+  border-radius: 999px;
+  background: #edf6f1;
+  color: #1d6f56;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Agent 过程小节列表。 */
+.agent-trace-sections {
+  display: grid;
+  gap: 12px;
+}
+
+/* 单个 Agent 过程小节。 */
+.trace-section {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #e1e7e3;
+  padding-top: 12px;
+}
+
+/* Agent 过程小节标题。 */
+.trace-section h4 {
+  margin: 0;
+  color: #24352b;
+  font-size: 14px;
+}
+
+/* Agent 判断结果的结构化字段列表。 */
+.trace-meta-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+/* Agent 判断字段容器。 */
+.trace-meta-list div {
+  border: 1px solid #e1e7e3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px;
+}
+
+/* Agent 判断字段名。 */
+.trace-meta-list dt {
+  color: #68756d;
+  font-size: 12px;
+}
+
+/* Agent 判断字段值。 */
+.trace-meta-list dd {
+  margin: 3px 0 0;
+  color: #24352b;
+  font-size: 13px;
+  font-weight: 800;
+  word-break: break-word;
+}
+
+/* Agent 过程说明文本：保留换行，方便阅读后端 step_complete 返回内容。 */
+.trace-text {
+  margin: 0;
+  color: #4f5d54;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+/* 引用 chunk 列表。 */
+.citation-list {
+  display: grid;
+  gap: 10px;
+}
+
+/* 单个引用 chunk 卡片。 */
+.citation-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dce3da;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+/* 引用 chunk 顶部：左侧排名，右侧来源文档。 */
+.citation-card-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+/* 引用 chunk 排名。 */
+.citation-card-header strong {
+  color: #1d6f56;
+}
+
+/* 引用 chunk 来源文档名。 */
+.citation-card-header span {
+  overflow: hidden;
+  color: #24352b;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 引用 chunk 标签区域。 */
+.citation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 引用 chunk 标签。 */
+.citation-tags small {
+  border-radius: 999px;
+  background: #e9f1fb;
+  color: #295b8a;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 引用 chunk 预览文本。 */
+.citation-card p {
+  margin: 0;
+  color: #5d6b62;
+  font-size: 13px;
+}
+
 /* 小屏幕适配：侧边栏改成顶部区域，主内容改为单列。 */
 @media (max-width: 900px) {
   .app-shell {
@@ -665,6 +821,10 @@ a {
 
   .chat-message {
     max-width: 100%;
+  }
+
+  .trace-meta-list {
+    grid-template-columns: 1fr;
   }
 }
 

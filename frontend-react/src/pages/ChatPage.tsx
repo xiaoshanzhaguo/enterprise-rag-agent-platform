@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from 'react'
 // streamAgentAnswer 负责调用后端 /agent_stream，并用 ReadableStream 逐步解析 SSE 事件。
 import { streamAgentAnswer } from '../api/chatApi'
 import { fetchKnowledgeBaseCategories, fetchKnowledgeBases, fetchRagStatus } from '../api/knowledgeBaseApi'
-import type { AgentStreamEvent, ChatMessage } from '../types/chat'
+import type { AgentStreamEvent, AgentTracePanelState, ChatMessage, RagPreviewChunk } from '../types/chat'
 import type { KnowledgeBaseCategory, KnowledgeBaseItem, RagStatusResponse } from '../types/knowledgeBase'
 
 
@@ -34,6 +34,23 @@ const CHAT_SESSION_ID = 'react-chat-session'
 // 这些步骤仍然会保存在 message.steps 中，后续可以放到“执行日志”或调试开关里展示。
 const SHOULD_SHOW_AGENT_STEPS = false
 
+// 后端判断知识库步骤名称，对应 backend/services/agent_service.py 里的 judge_knowledge。
+const STEP_JUDGE_KNOWLEDGE = 'judge_knowledge'
+
+// 后端检索证据步骤名称，对应 backend/services/agent_service.py 里的 retrieve_evidence。
+const STEP_RETRIEVE_EVIDENCE = 'retrieve_evidence'
+
+// 后端生成回答步骤名称，对应 backend/services/agent_service.py 里的 generate_answer。
+const STEP_GENERATE_ANSWER = 'generate_answer'
+
+// agentTrace 状态标签映射表
+const agentTraceStatusLabelMap: Record<AgentTracePanelState['status'], string> = {
+  idle: '等待提问',
+  running: '执行中',
+  complete: '已完成',
+  error: '失败'
+}
+
 // 生成前端消息 ID。这里用时间戳 + 随机数，足够支撑当前演示版消息列表。
 // 它主要用于前端消息列表里的 key，或者用于区分每一条聊天消息。
 function buildChatMessageId(prefix: string) {
@@ -41,6 +58,67 @@ function buildChatMessageId(prefix: string) {
   // toString(16) 表示：把随机小数转换成 16 进制字符串。如：0.6391827364 -> 0.a3f91c8e2b
   // slice(2) 从下标 2 开始截取到末尾，即不要前面的0.
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+// 创建一份新的 Agent 过程面板初始状态。
+function buildInitialAgentTrace(): AgentTracePanelState {
+  // 返回 running 状态，让右侧面板在用户点击发送后立即显示“正在执行”。
+  return {
+    status: 'running', // 当前 Agent 正在运行。
+    workflowText: '等待 Agent 启动。', // 工作流启动前的占位文案。
+    judgeText: '等待 Agent 判断是否需要知识库。', // 判断步骤占位文案。
+    retrieveText: '等待检索证据。', // 检索步骤占位文案。
+  }
+}
+
+// 把后端检索方式转换成更适合页面展示的中文标签。
+function formatRetrievalMode(mode?: string) {
+  // vector 表示向量语义检索。
+  if (mode === 'vector') {
+    return '向量检索'
+  }
+
+  // keyword 表示关键词兜底检索。
+  if (mode === 'keyword') {
+    return '关键词检索'
+  }
+
+  // no_hit 表示没有可靠命中。
+  if (mode === 'no_hit') {
+    return '未命中'
+  }
+
+  // hybrid 表示混合检索。
+  if (mode === 'hybrid') {
+    return '混合检索'
+  }
+
+  // rerank 表示重排序、重排，完整的说法：检索结果重排。
+  // rerank 的意思不是普通地“重新排序一下”，而是对已经召回的候选文档 / chunk 按相关性再次打分排序。
+  if (mode === 'rerank') {
+    return '重排序'
+  }
+
+  return mode || '未知'
+}
+
+// 根据检索方式显示分数含义。
+function formatChunkScore(chunk: RagPreviewChunk) {
+  // 读取后端返回的分数；向量检索里通常是相似度，关键词检索里通常是命中分。
+  const score = chunk.score ?? 0
+
+  // 向量检索分数用“相似度”描述，更贴近语义检索语境。
+  if (chunk.retrieval_mode === 'vector') {
+    return `相似度 ${score}`
+  }
+
+  // 关键词检索分数用“命中分”描述，避免误以为它也是向量相似度。
+  if (chunk.retrieval_mode === 'keyword') {
+    return `命中分 ${score}`
+  }
+
+  // 其他检索方式暂时使用通用分数文案。
+  return `分数 ${score}`
 }
 
 // ChatPage 是员工问答页面组件。
@@ -65,6 +143,9 @@ export function ChatPage() {
 
   // 保存聊天窗口里的消息列表。
   const [messages, setMessages] = useState<ChatMessage[]>([])
+
+  // 保存右侧 Agent 过程与引用来源面板的数据。
+  const [agentTrace, setAgentTrace] = useState<AgentTracePanelState | null>(null)
 
   // 标记当前是否正在等待后端流式回答。
   const [isStreaming, setIsStreaming] = useState(false)
@@ -221,6 +302,153 @@ export function ChatPage() {
     [categories, selectedCategoryId],
   )
 
+  // 从 Agent 过程状态里取出结构化路由信息。
+  // agentTrace 是右侧 Agent 过程面板的状态。metadata 是后端 final 事件返回的结构化数据。
+  // agent_route 通常表示 Agent 的路由判断结果。比如：是否需要检索知识库、选择了哪个知识库、选择了哪种检索方式、为什么这么判断。
+  const currentAgentRoute = agentTrace?.metadata?.agent_route
+
+  // 从 Agent 过程状态里取出本轮命中的引用 chunk 列表。
+  // rag_preview_chunks 通常表示本轮 RAG 检索命中的知识片段列表。
+  const currentRagPreviewChunks = agentTrace?.metadata?.rag_preview_chunks ?? []
+
+  // 把后端 SSE 事件同步到右侧 Agent 过程面板。
+  // AgentTrace = Agent 过程状态
+  // event: AgentStreamEvent 表示传进来的 event 是后端 SSE 解析出来的一条事件。
+  function applyStreamEventToAgentTrace(event: AgentStreamEvent) {
+    // workflow_start 表示本轮 Agent 流程已经开始。
+    if (event.event_type === 'workflow_start') {
+      // 用函数式更新，避免流式事件连续到达时拿到旧状态。
+      // currentTrace：表示最新的 agentTrace 状态。
+      setAgentTrace((currentTrace) => ({
+        ...(currentTrace ?? buildInitialAgentTrace()), // 如果当前还没有状态，就先创建一份初始状态。
+        status: 'running', // 标记右侧面板处于运行中。
+        workflowText: event.content || 'Agent 已开始。', // 保存工作流启动文案。
+      }))
+      // 当前事件处理完后直接返回，避免继续往下判断。
+      return
+    }
+
+    // step_start 表示某个步骤开始，右侧面板可以展示更及时的状态。
+    // step_start 表示 Agent 的某个步骤开始执行了。比如：开始判断是否需要知识库、开始检索证据、开始生成回答。
+    if (event.event_type === 'step_start') {
+      // 用函数式更新，确保不会覆盖其他已经到达的步骤信息。
+      setAgentTrace((currentTrace) => {
+        // 没有旧状态时创建初始状态。
+        // 确保后面一定有一个可用的 AgentTrace 状态对象。
+        const nextTrace = currentTrace ?? buildInitialAgentTrace()
+
+        // 判断步骤开始时，更新判断区域文案。
+        // 判断当前开始的是不是“判断是否需要知识库”
+        if (event.step_name === STEP_JUDGE_KNOWLEDGE) {
+          // 如果当前是判断步骤，就返回一个新的 AgentTrace 状态对象。
+          return {
+            ...nextTrace,  // 先复制已有状态。即保留 workflowText、retrieveText、generateText、metadata 等已有字段。
+            status: 'running',  // 标记 Agent 仍然处于运行中。
+            judgeText: event.content || '正在判断是否需要知识库。',  // 更新判断步骤的展示文案。
+          }
+        }
+
+        // 检索步骤开始时，更新检索区域文案。
+        // 判断当前开始的是不是“检索证据”步骤。STEP_RETRIEVE_EVIDENCE 可能表示 retrieve_evidence，也就是从知识库里检索相关 chunk / 证据片段。
+        if (event.step_name === STEP_RETRIEVE_EVIDENCE) {
+          return {
+            ...nextTrace,
+            status: 'running',
+            retrieveText: event.content || '正在检索证据。',
+          }
+        }
+
+        // 生成步骤开始时，只更新生成状态，不把内容放进聊天气泡。（右侧面板只展示“正在生成回答”这类过程信息；真正的聊天气泡内容，通常由 delta 事件单独追加。）
+        // 判断当前开始的是不是“生成回答”步骤。STEP_GENERATE_ANSWER 表示：大模型开始生成最终回答。
+        if (event.step_name === STEP_GENERATE_ANSWER) {
+          return {
+            ...nextTrace,
+            status: 'running',
+            generateText: event.content || '正在生成回答。',
+          }
+        }
+
+        // 未知步骤暂时保持原状态。
+        // 这是一种兜底逻辑：后端传了未知步骤，前端先不报错，也不乱展示。
+        return nextTrace
+      })
+      // 当前事件处理完后直接返回。
+      // 表示 step_start 事件处理完毕，直接结束函数。
+      return
+    }
+
+    // step_complete 表示某个步骤完成，后端 content 里通常有可解释的文本。
+    // step_complete 表示某个 Agent 步骤已经执行完成。比如：判断完成、检索完成、回答生成完成。
+    // 后端的 content 通常会带一些解释文本，比如：已判断该问题需要检索企业知识库。或者 已召回 3 个相关知识片段。
+    if (event.event_type === 'step_complete') {
+      // 用函数式更新，把步骤完成内容放到右侧面板对应区域。
+      setAgentTrace((currentTrace) => {
+        // 没有旧状态时创建初始状态。
+        const nextTrace = currentTrace ?? buildInitialAgentTrace()
+
+        // 判断步骤完成时，保存 Agent 路由判断结果。
+        // 判断当前完成的是不是“知识库判断步骤”
+        if (event.step_name === STEP_JUDGE_KNOWLEDGE) {
+          // 如果判断步骤完成，就更新 judgeText
+          return {
+            ...nextTrace,  // 保留已有状态。
+            status: 'running', // 虽然某个步骤完成了，但整个 Agent 流程还没结束，所以仍然是 running。
+            judgeText: event.content || nextTrace.judgeText, // 步骤完成时，如果没有新的 content，就不要覆盖原来的文案。
+          }
+        }
+
+        // 检索步骤完成时，保存命中数量、检索方式、优先证据等文本。
+        // 判断当前完成的是不是“检索证据”步骤。检索步骤完成后，后端可能返回：已命中 3 个知识片段，使用混合检索，最高相关度 0.86，所以右侧面板可以展示检索结果摘要。
+        if (event.step_name === STEP_RETRIEVE_EVIDENCE) {
+          return {
+            ...nextTrace,
+            status: 'running',
+            retrieveText: event.content || nextTrace.retrieveText,
+          }
+        }
+
+        // 生成步骤完成时，保存完成状态，但默认不在右侧展示完整答案，避免重复阅读负担。（最终答案已经会显示在聊天气泡里；右侧面板没必要再展示一遍完整答案；否则用户要重复阅读。）
+        // 判断当前完成的是不是“生成回答”步骤。
+        if (event.step_name === STEP_GENERATE_ANSWER) {
+          return {
+            ...nextTrace,
+            status: 'running',  // 虽然生成步骤完成了，但整个 SSE 流可能还会发送 final 事件，所以这里仍然保持 running。
+            generateText: event.content ? '回答已生成。' : nextTrace.generateText,
+          }
+        }
+
+        // 未知步骤暂时保持原状态。
+        return nextTrace
+      })
+      // 当前事件处理完后直接返回。
+      return
+    }
+
+    // final 表示后端已经返回完整元数据，右侧面板可以展示引用 chunk。
+    // final 表示本轮 Agent 流程最终结束。通常会在 final 事件里返回结构化元数据，例如：agent_route、rag_preview_chunks、引用来源、检索方式、命中文档。
+    if (event.event_type === 'final') {
+      // 写入 final metadata，里面包含 agent_route 和 rag_preview_chunks。
+      setAgentTrace((currentTrace) => ({
+        ...(currentTrace ?? buildInitialAgentTrace()), // 如果没有旧状态，仍然补一份初始结构。这样可以避免 final 事件异常地先到时，前端状态为空导致报错。
+        status: 'complete', // 标记本轮 Agent 执行完成。页面可以根据这个状态显示：已完成、取消 loading、展示最终引用来源、恢复发送按钮。
+        metadata: event.metadata, // 保存结构化元数据，供右侧面板渲染引用来源。把后端 final 事件里的结构化元数据保存到 AgentTrace 里。
+      }))
+      // 当前事件处理完后直接返回。
+      return
+    }
+
+    // error 表示后端流式过程失败，右侧面板展示错误信息。
+    // error 表示：后端流式执行过程中出错。比如：模型调用失败、知识库检索失败、SSE 流中断、后端异常、参数错误。
+    if (event.event_type === 'error') {
+      // 写入错误状态。
+      setAgentTrace((currentTrace) => ({
+        ...(currentTrace ?? buildInitialAgentTrace()), // 如果没有旧状态，仍然补一份初始结构。
+        status: 'error', // 标记本轮 Agent 执行失败。页面可以根据这个状态显示错误样式。
+        errorMessage: event.error_message || event.content || 'Agent 执行失败。', // 保存错误文案。
+      }))
+    }
+  }
+
   // 把后端 SSE 返回的一条条事件，合并到当前 AI 回复消息里。
   // assistantMessageId 表示当前正在生成的 AI 消息 ID。因为页面里可能有很多条消息，前端需要知道：后端这条流式事件，应该更新哪一条 assistant 消息。
   // event：表示后端 SSE 返回的一条事件。
@@ -353,6 +581,9 @@ export function ChatPage() {
     // 这样做的好处：用户点击发送后，页面马上显示问题；同时出现一条 AI 正在生成的消息，不用等后端返回。
     setMessages((currentMessages) => [...currentMessages, userMessage, assistantMessage])
 
+    // 重置右侧 Agent 过程面板，准备展示本轮判断、检索和引用来源。
+    setAgentTrace(buildInitialAgentTrace())
+
     // 清空输入框。
     setQuestion('')
 
@@ -386,6 +617,9 @@ export function ChatPage() {
         // 第二个参数：事件回调函数。
         // 每当后端返回一条 SSE 事件，streamAgentAnswer 就会调用这个函数。参数 event 就是解析后的 AgentStreamEvent。
         (event) => {
+          // 把这条事件同步到右侧 Agent 过程面板。
+          applyStreamEventToAgentTrace(event)
+
           // 把这条事件应用到当前 AI 消息上。
           // 这里传了两个参数。assistantMessageId: 表示要更新哪条 AI 消息，event: 表示后端返回的流式事件。
           // 这一行的作用：每收到一条后端事件，就更新 assistantMessageId 对应的那条 AI 消息。
@@ -419,7 +653,10 @@ export function ChatPage() {
 
   // 清空对话按钮会清空当前前端消息列表
   function handleDeleteChat() {
+    // 清空聊天消息列表。
     setMessages([])
+    // 同时清空右侧 Agent 过程面板，避免残留上一轮引用证据。
+    setAgentTrace(null)
   }
 
   // 返回页面结构。说明下面进入 JSX 页面结构。
@@ -558,11 +795,125 @@ export function ChatPage() {
             <FileSearch aria-hidden="true" size={20} />
             {/* 包裹右侧面板标题。 */}
             <div>
-              <h3>当前检索上下文</h3>
-              <p>这里帮助你确认“问答范围”是否已经从 session 独立到企业知识库。</p>
+              <h3>Agent 过程与引用来源</h3>
+              <p>这里展示本轮 Agent 判断、检索证据、来源文档和命中分数。</p>
             </div>
           </div>
 
+          {/* Agent 过程面板：展示本轮问答的路由判断、检索结果和生成状态。 */}
+          <div className="agent-trace-panel">
+            {/* 面板顶部状态条：告诉用户当前 Agent 是等待、运行、完成还是失败。 */}
+            <div className="agent-trace-status">
+              {/* 左侧状态名称。 */}
+              <strong>本轮 Agent 状态</strong>
+              {/* 右侧状态标签。 */}
+              {/* 如果 agentTrace 没有 status，返回 undefined，最终会显示“等待提问”。 */}
+              <span>{agentTraceStatusLabelMap[agentTrace?.status ?? 'idle']}</span>
+            </div>
+
+            {/* 没有开始提问时，展示空状态提示。 */}
+            {!agentTrace ? (
+              <p className="muted-text">发送问题后，这里会展示 Agent 判断结果、检索到的 chunk 和来源文档。</p>
+            ) : null}
+
+            {/* 有 Agent 过程数据时，展示判断与检索详情。 */}
+            {agentTrace ? (
+              <div className="agent-trace-sections">
+                {/* Agent 判断结果：展示是否需要知识库、检索 query、判断理由等。 */}
+                <section className="trace-section">
+                  {/* 小节标题。 */}
+                  <h4>Agent 判断结果</h4>
+                  {/* 结构化路由字段，比纯文本更适合快速扫描。 */}
+                  <dl className="trace-meta-list">
+                    {/* 是否需要知识库。 */}
+                    <div>
+                      <dt>是否检索</dt>
+                      <dd>{currentAgentRoute ? (currentAgentRoute.need_knowledge_base ? '需要知识库' : '不需要知识库') : '判断中'}</dd>
+                    </div>
+                    {/* 实际检索方式。 */}
+                    <div>
+                      <dt>检索方式</dt>
+                      <dd>{formatRetrievalMode(currentAgentRoute?.retrieval_mode)}</dd>
+                    </div>
+                    {/* 最终用于检索的问题。 */}
+                    <div>
+                      <dt>检索问题</dt>
+                      <dd>{currentAgentRoute?.effective_retrieval_query || currentAgentRoute?.rewritten_query || '暂无'}</dd>
+                    </div>
+                    {/* 分类过滤条件。 */}
+                    <div>
+                      <dt>检索分类</dt>
+                      <dd>{currentAgentRoute?.knowledge_base_type_filter || '全部'}</dd>
+                    </div>
+                  </dl>
+                  {/* 后端 step_complete 返回的判断说明，保留给需要排查路由时查看。 */}
+                  <p className="trace-text">{agentTrace.judgeText || currentAgentRoute?.reason || '等待 Agent 判断结果。'}</p>
+                </section>
+
+                {/* 检索证据：展示命中数量、检索方式、优先证据等解释信息。 */}
+                <section className="trace-section">
+                  {/* 小节标题。 */}
+                  <h4>检索命中信息</h4>
+                  {/* 检索过程说明文本。 */}
+                  <p className="trace-text">{agentTrace.retrieveText || '等待检索结果。'}</p>
+                </section>
+
+                {/* 引用来源：展示本轮真正用于回答的 chunk。 */}
+                <section className="trace-section">
+                  {/* 小节标题。 */}
+                  <h4>引用来源 Chunk</h4>
+                  {/* 如果有命中 chunk，就逐条展示来源、分数和预览文本。 */}
+                  {currentRagPreviewChunks.length ? (
+                    <div className="citation-list">
+                      {/* 遍历本轮命中的引用 chunk。 */}
+                      {currentRagPreviewChunks.map((chunk) => (
+                        // 单个引用 chunk 卡片。
+                        <article className="citation-card" key={`${chunk.source}-${chunk.rank}`}>
+                          {/* chunk 顶部信息：排名和来源。 */}
+                          <div className="citation-card-header">
+                            {/* 排名。 */}
+                            <strong>#{chunk.rank ?? '-'}</strong>
+                            {/* 来源文档和 chunk 编号。 */}
+                            <span>{chunk.source || `${chunk.file_name ?? '未知文档'}#chunk-${chunk.chunk_id ?? '-'}`}</span>
+                          </div>
+
+                          {/* chunk 标签区：检索方式、分数、分类。 */}
+                          <div className="citation-tags">
+                            {/* 检索方式标签。 */}
+                            <small>{formatRetrievalMode(chunk.retrieval_mode)}</small>
+                            {/* 相似度或命中分标签。 */}
+                            <small>{formatChunkScore(chunk)}</small>
+                            {/* 知识库分类标签。 */}
+                            <small>{chunk.knowledge_base_type || 'general'}</small>
+                          </div>
+
+                          {/* chunk 预览正文。 */}
+                          <p>{chunk.text_preview || '暂无片段预览。'}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    // 没有命中 chunk 时展示空状态。
+                    <p className="muted-text">本轮暂时没有可展示的引用 chunk。</p>
+                  )}
+                </section>
+
+                {/* 生成状态：说明最终回答是否已经生成，避免和聊天气泡正文重复。 */}
+                <section className="trace-section">
+                  {/* 小节标题。 */}
+                  <h4>生成状态</h4>
+                  {/* 生成状态文本。 */}
+                  <p className="trace-text">
+                    {agentTrace.status === 'error'
+                    ? agentTrace.errorMessage || '生成回答失败。'
+                    : agentTrace.generateText || '等待生成回答。'}
+                  </p>
+                </section>
+              </div>
+            ) : null}
+          </div>
+
+          {/* 当前知识库状态：保留原来的文档数、chunk 数和文档列表，帮助确认检索范围。 */}
           {/* 用 dl 展示键值对信息，例如文档数、chunk 数。 */}
           {/* 用 dl 展示元信息。dl 是 HTML 的描述列表。适合展示：字段名：字段值 */}
           <dl className="meta-list">

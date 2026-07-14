@@ -28,6 +28,54 @@ export interface ChatMessage {
   status?: 'streaming' | 'complete' | 'error' // 当前 AI 消息状态，用于展示生成中或错误。
 }
 
+// Agent 路由判断元数据，对应后端 metadata.agent_route。
+export interface AgentRouteMetadata {
+  need_knowledge_base?: boolean // Agent 判断本轮是否需要查询知识库。
+  route_result?: string // 后端记录的路由结果，例如 use_knowledge_base 或 skip_knowledge_base。
+  reason?: string // Agent 判断理由，用于右侧过程面板解释为什么检索或跳过检索。
+  rewritten_query?: string // Agent 改写后的检索问题。
+  effective_retrieval_query?: string // 最终真正用于检索的 query，可能是改写 query，也可能回退成原问题。
+  retrieval_mode?: string // 实际检索方式，例如 vector、keyword、no_hit。
+  knowledge_base_id?: string | null // 本轮检索限定的知识库 ID。
+  knowledge_base_type_filter?: string | null // 本轮检索限定的知识库分类，例如 finance、it。
+}
+
+// 右侧引用来源面板里的单个命中 chunk。
+export interface RagPreviewChunk {
+  rank?: number // 检索排名，数字越小表示越靠前。
+  file_name?: string | null // 来源文件名。
+  chunk_id?: number | string | null // 文本块编号。
+  score?: number // 相似度或关键词命中分数。
+  retrieval_mode?: string // 当前 chunk 的检索方式，例如 vector 或 keyword。
+  source?: string // 后端拼好的引用来源，例如 财务制度.md#chunk-3。
+  text?: string // chunk 原文，后续做展开详情时可以使用。
+  text_preview?: string // chunk 预览文本，右侧面板默认展示这个字段。
+  text_length?: number // chunk 原文长度。
+  knowledge_base_id?: string | null // chunk 所属知识库 ID。
+  knowledge_base_type?: string | null // chunk 所属知识库分类。
+  department?: string | null // 业务部门字段。
+  process_type?: string | null // 流程类型字段。
+  process_status?: string | null // 流程状态字段。
+}
+
+// 后端 final 事件里返回的 Agent 元数据。
+export interface AgentStreamMetadata {
+  agent_route?: AgentRouteMetadata // Agent 判断结果。
+  rag_preview_chunks?: RagPreviewChunk[] // 本轮实际命中的引用 chunk 列表。
+  rag_status_info?: unknown // 后端附带的知识库状态，当前右侧面板暂时不用展开。
+}
+
+// 右侧 Agent 过程面板使用的前端状态。
+export interface AgentTracePanelState {
+  status: 'idle' | 'running' | 'complete' | 'error' // 当前 Agent 执行状态。idle 表示 空闲状态/ 初始状态 / 尚未开始执行。
+  workflowText?: string // workflow_start 事件内容。
+  judgeText?: string // 判断是否需要知识库步骤的说明文本。
+  retrieveText?: string // 检索证据步骤的说明文本。
+  generateText?: string // 生成回答步骤的完成文本，默认不在员工聊天气泡中展示。
+  errorMessage?: string // 流式错误信息。
+  metadata?: AgentStreamMetadata // final 事件里的结构化元数据。
+}
+
 // 后端 SSE 事件结构，对应 backend.schema.chat_schema.StreamEvent。
 export interface AgentStreamEvent {
   event_type: 'workflow_start' | 'step_start' | 'delta' | 'step_complete' | 'final' | 'error' // 当前事件类型。
@@ -35,7 +83,7 @@ export interface AgentStreamEvent {
   task_type?: string | null // 当前任务类型，智能问答页一般是 agent。
   step_name?: string | null // 当前步骤名称，例如判断知识库、检索证据、生成回答。
   content?: string // 当前事件携带的文本内容。
-  metadata?: Record<string, unknown> // 后端附带的扩展数据，例如引用片段、路由结果。
+  metadata?: AgentStreamMetadata // 后端附带的扩展数据，例如引用片段、路由结果。
   is_final?: boolean // 是否为最后一条事件。
   error_message?: string | null // error 事件里的错误信息。
 }
