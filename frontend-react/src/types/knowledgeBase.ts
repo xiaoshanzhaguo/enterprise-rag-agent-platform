@@ -36,6 +36,31 @@ export interface KnowledgeBaseCategoryListResponse {
   categories: KnowledgeBaseCategory[] // 可上传、可检索过滤的分类列表。
 }
 
+// /index_document 接口请求体。
+export interface IndexDocumentRequest {
+  session_id: string // 当前上传动作使用的会话 ID；企业知识库上传时主要用于兼容后端接口。
+  document_text: string // 前端从文件中读取出的完整文本内容。
+  file_name?: string // 上传文件名，后端会保存到 documents.file_name。
+  knowledge_base_id?: string // 目标企业知识库 ID；传入后写入企业公共知识库。
+  user_role?: string // 当前用户角色；后端要求 kb_admin/admin 才能写入企业知识库。
+  knowledge_base_type?: string // 文档分类，例如 hr、finance、it、product。
+  department?: string | null // 分类对应部门，前端从分类配置里带过去，便于后端保存展示字段。
+  process_type?: string // 流程类型；当前页面暂时不强制填写。
+  process_status?: string // 流程状态；当前默认 active。
+}
+
+// /index_document 接口响应体。
+export interface IndexDocumentResponse {
+  session_id: string // 后端返回的会话 ID。
+  knowledge_base_id: string // 本次文档写入的知识库范围。
+  file_name?: string | null // 后端保存的文件名。
+  chunk_count: number // 后端切分出的 chunk 数量。
+  knowledge_base_type: string // 后端最终保存的文档分类。
+  department?: string | null // 后端最终保存的部门字段。
+  process_type?: string | null // 后端最终保存的流程类型。
+  process_status: string // 后端最终保存的流程状态。
+}
+
 // RAG 状态里单个文档的摘要信息。
 export interface RagStatusDocument {
   document_id?: number // SQLite documents 表里的文档 ID；有些旧数据可能没有，所以可选。

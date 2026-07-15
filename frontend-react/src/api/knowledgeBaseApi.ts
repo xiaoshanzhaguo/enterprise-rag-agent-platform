@@ -7,11 +7,13 @@
  * 3. 如果后端接口路径变化，优先改这里，不要到页面里到处找。
  */
 
-// 引入统一 GET 请求函数，避免每个接口重复写 fetch 和错误处理。
-import { apiGet } from './httpClient'
+// 引入统一 GET / POST 请求函数，避免每个接口重复写 fetch 和错误处理。
+import { apiGet, apiPost } from './httpClient'
 
 // 引入接口返回值类型，让调用方能获得字段提示。
 import type {
+  IndexDocumentRequest,
+  IndexDocumentResponse,
   KnowledgeBaseCategoryListResponse,
   KnowledgeBaseListResponse,
   RagStatusResponse,
@@ -27,6 +29,14 @@ export function fetchKnowledgeBases() {
 export function fetchKnowledgeBaseCategories() {
   // 后端返回结构是 { categories: [...] }。
   return apiGet<KnowledgeBaseCategoryListResponse>('/knowledge_base_categories')
+}
+
+// 上传并索引企业知识库文档。
+export function indexKnowledgeBaseDocument(request: IndexDocumentRequest) {
+  // 后端 /index_document 接收 JSON，不是 multipart；前端需要先把文件读成 document_text。
+  // <IndexDocumentRequest, IndexDocumentResponse> 不是普通参数，而是 TypeScript 泛型参数，它们只是 TypeScript 编译阶段用来检查类型的，不会作为真实代码传到浏览器运行时。
+  // 它的意思是：告诉 apiPost 这次请求体的类型是 IndexDocuemntRequest, 这次后端响应的类型是 IndexDocumentResponse。
+  return apiPost<IndexDocumentRequest, IndexDocumentResponse>('/index_document', request)
 }
 
 // 获取某个 session 或企业知识库下的 RAG 文档状态。

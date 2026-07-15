@@ -784,6 +784,57 @@ a {
   font-size: 13px;
 }
 
+/* 上传结果卡片：展示 /index_document 返回的 chunk 数、分类等结果。 */
+.upload-result-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #b9d4c8;
+  border-radius: 8px;
+  background: #edf6f1;
+  color: #24352b;
+  padding: 12px;
+}
+
+/* 上传结果标题。 */
+.upload-result-card strong {
+  color: #1d6f56;
+}
+
+/* 上传结果字段。 */
+.upload-result-card span {
+  color: #4f5d54;
+  font-size: 13px;
+}
+
+/* 管理员知识库状态头部：左侧当前知识库，右侧刷新按钮。 */
+.admin-status-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e1e7e3;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 12px;
+}
+
+/* 管理员状态头部左侧文案。 */
+.admin-status-header div {
+  display: grid;
+  gap: 3px;
+}
+
+/* 当前知识库名称。 */
+.admin-status-header strong {
+  color: #24352b;
+}
+
+/* 文档状态辅助文字。 */
+.admin-status-header span {
+  color: #68756d;
+  font-size: 13px;
+}
+
 /* 小屏幕适配：侧边栏改成顶部区域，主内容改为单列。 */
 @media (max-width: 900px) {
   .app-shell {
