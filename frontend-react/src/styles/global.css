@@ -835,6 +835,73 @@ a {
   font-size: 13px;
 }
 
+/* 流程字段提取面板：承载 AI 整理后的申请字段，与下方常见流程列表分开。 */
+.process-extraction-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #b9d4c8;
+  border-radius: 8px;
+  background: #f5faf7;
+  padding: 14px;
+}
+
+/* 流程字段提取标题区：左侧使用图标，右侧展示标题和当前状态。 */
+.process-extraction-heading {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: #1d6f56;
+}
+
+/* 标题区文字纵向排列，避免说明文字与标题挤在同一行。 */
+.process-extraction-heading div {
+  display: grid;
+  gap: 2px;
+}
+
+/* 提取结果主标题使用较深颜色，保持企业工具界面的信息层级。 */
+.process-extraction-heading strong {
+  color: #24352b;
+}
+
+/* 提取状态说明使用较弱颜色，减少对结构化字段的干扰。 */
+.process-extraction-heading span {
+  color: #68756d;
+  font-size: 13px;
+}
+
+/* 结构化申请字段列表：桌面端按两列展示，提高信息扫描效率。 */
+.process-field-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+/* 单个申请字段使用白色底块，与提取面板背景形成轻微层级。 */
+.process-field-list div {
+  min-width: 0;
+  border: 1px solid #dce3da;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+/* 申请字段名称使用小号弱化文字。 */
+.process-field-list dt {
+  color: #68756d;
+  font-size: 12px;
+}
+
+/* 申请字段值允许长项目名换行，防止撑破右侧面板。 */
+.process-field-list dd {
+  margin: 4px 0 0;
+  color: #24352b;
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 /* 小屏幕适配：侧边栏改成顶部区域，主内容改为单列。 */
 @media (max-width: 900px) {
   .app-shell {
@@ -875,6 +942,11 @@ a {
   }
 
   .trace-meta-list {
+    grid-template-columns: 1fr;
+  }
+
+  /* 小屏幕下申请字段改为单列，确保每个字段都有足够阅读宽度。 */
+  .process-field-list {
     grid-template-columns: 1fr;
   }
 }
