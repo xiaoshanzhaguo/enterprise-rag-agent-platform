@@ -139,7 +139,7 @@ export const KnowledgeAdminPage = () => {
     // 3. 将来如果你加了“请清空知识库”的空选项，用户可能手动选回‘’
     if (!selectedKnowledgeBaseId) {
       // 清空状态，避免页面显示上一个知识库的旧文档。
-      setRagStatus(null)
+      // 状态清空已移动到 handleKnowledgeBaseChange，避免在 effect 中同步 setState。
       // 直接结束本次 effect。
       return
     }
@@ -195,6 +195,19 @@ export const KnowledgeAdminPage = () => {
   // 根据 selectedKnowledgeBaseId 找到当前选中的知识库对象。
   const selectedKnowledgeBase = knowledgeBases.find((item) => item.knowledge_base_id === selectedKnowledgeBaseId)
 
+  // 切换目标知识库时，先清空旧状态，再保存新的知识库 ID。
+  // 这样右侧不会短暂展示上一个知识库的数据，也能避免在 useEffect 中同步调用 setState。
+  function handleKnowledgeBaseChange(event: ChangeEvent<HTMLSelectElement>) {
+    // 读取下拉框当前选中的知识库 ID。
+    const nextKnowledgeBaseId = event.target.value
+    // 清空旧知识库状态，等待后续 useEffect 请求新知识库数据。
+    setRagStatus(null)
+    // 清空上一轮上传结果，避免它和新知识库范围混在一起展示。
+    setUploadResult(null)
+    // 保存新知识库 ID，触发上面的状态加载 effect。
+    setSelectedKnowledgeBaseId(nextKnowledgeBaseId)
+  }
+
   // 主动刷新当前选中知识库的文档状态。
   // 使用场景：点击“刷新”按钮，或上传文档成功后重新拉取最新文档数、chunk 数和文件列表。
   // 注意：useEffect 只会在 selectedKnowledgeBaseId 变化时自动刷新；
@@ -230,6 +243,24 @@ export const KnowledgeAdminPage = () => {
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     // 读取用户选择的第一个文件。
     const file = event.target.files?.[0] ?? null
+
+    if (!file) {
+      setSelectedFile(null)
+      return
+    }
+
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+    const allowedExtensions = [".md", ".txt"]
+
+    // allowedExtensions.includes(extension): 判断“允许列表里是否包含当前文件扩展名”。
+    if (!allowedExtensions.includes(extension)) {
+      setSelectedFile(null)
+      setErrorMessage('只允许选择 .md 和 .txt 文件，类型不合适，请重新选择。')
+      event.target.value = ''
+      return
+    }
+
+    setErrorMessage('')
     // 保存文件对象，后续点击上传时读取文本内容。
     setSelectedFile(file)
     // 重新选择文件后，清空上一轮上传结果。
@@ -342,7 +373,7 @@ export const KnowledgeAdminPage = () => {
           <label className="field">
             <span>目标知识库</span>
             {/* disabled={isLoading} 表示：isLoading 为 true 时，下拉框禁用；isLoading 为 false 时，下拉框可用。*/}
-            <select disabled={isLoading || isUploading} value={selectedKnowledgeBaseId} onChange={(event) => setSelectedKnowledgeBaseId(event.target.value)}>
+            <select disabled={isLoading || isUploading} value={selectedKnowledgeBaseId} onChange={handleKnowledgeBaseChange}>
               {knowledgeBases.map((item) => (
                 <option key={item.knowledge_base_id} value={item.knowledge_base_id}>
                   {item.name}
