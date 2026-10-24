@@ -9,7 +9,7 @@
 5. 保存用户消息、Agent 最终结果和当前回答对应的引用元数据。
 
 说明：
-- 当前模块是轻量 Agent / Workflow，只有模型调用层接入 LangChain ChatModel，不引入复杂多 Agent。
+- 当前模块是轻量 Agent / Workflow，使用 LangChain ChatModel 和知识库查询 Tool，不引入复杂多 Agent。
 - Agent 判断阶段使用模型做意图分类和检索 query 改写，不再维护关键词判断规则。
 - Agent 流程固定为：判断是否需要知识库 -> 检索证据 -> 生成回答。
 - 如果知识库证据不足，Agent 不会强行回答，而是明确说明缺少依据。
@@ -47,8 +47,9 @@ from backend.rag.service import (
     NO_RAG_EVIDENCE_MESSAGE,
     build_rag_context_from_chunks,
     build_source_label,
-    retrieve_rag_chunks_with_mode,
 )
+# 当前请求范围内的知识库查询工具。
+from backend.rag.tools import create_knowledge_search_tool
 # 请求模型和流式事件模型
 from backend.schema.chat_schema import ChatRequest, StreamEvent
 # 生成侧边栏历史会话标题
@@ -510,14 +511,15 @@ def _retrieve_agent_rag_chunks(
     if not primary_query:
         return [], NO_HIT_RETRIEVAL_MODE, "", ""
 
-    # 第一次检索使用模型改写后的 query
-    matched_chunks, retrieval_mode = retrieve_rag_chunks_with_mode(
+    # 为本轮请求绑定检索范围，主查询和原问题重试复用同一个工具。
+    knowledge_tool = create_knowledge_search_tool(
         session_id=session_id,
-        query=primary_query,
         knowledge_base_type_filter=knowledge_base_type_filter,
         knowledge_base_id=knowledge_base_id,
         top_k=top_k,
     )
+    result = knowledge_tool.invoke({"query": primary_query})
+    matched_chunks, retrieval_mode = result["chunks"], result["retrieval_mode"]
     # 如果改写 query 已经命中，直接返回结果
     if matched_chunks:
         return matched_chunks, retrieval_mode, primary_query, ""
@@ -527,13 +529,9 @@ def _retrieve_agent_rag_chunks(
         return matched_chunks, retrieval_mode, primary_query, ""
 
     # 改写 query 没命中时，用用户原始问题再检索一次，避免 query rewrite 丢失原句关键词
-    fallback_chunks, fallback_mode = retrieve_rag_chunks_with_mode(
-        session_id=session_id,
-        query=normalized_original_question,
-        knowledge_base_type_filter=knowledge_base_type_filter,
-        knowledge_base_id=knowledge_base_id,
-        top_k=top_k,
-    )
+    fallback_result = knowledge_tool.invoke({"query": normalized_original_question})
+    fallback_chunks = fallback_result["chunks"]
+    fallback_mode = fallback_result["retrieval_mode"]
     # 如果原始问题命中，则返回 fallback 结果，并给前端展示一条说明
     if fallback_chunks:
         return (
