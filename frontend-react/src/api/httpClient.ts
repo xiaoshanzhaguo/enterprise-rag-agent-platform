@@ -10,7 +10,7 @@
 // 配置后端 API 基础地址
 // ?? 为 空值合并运算符，意思是：如果左边是 null 或 undefined，就使用右边的默认值。
 // .replace(/\/$/, ''): 去掉地址最后的 /, 避免后面拼接路径时出现双斜杠。
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL?.trim() || '/api').replace(
   /\/$/,
   '',
 )

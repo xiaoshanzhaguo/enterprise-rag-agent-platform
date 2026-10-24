@@ -6,11 +6,27 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException
 
 from backend.db.process_repository import get_process_execution
+from backend.llm.client import get_client
+from backend.schema.process_schema import ProcessExtractionRequest, ProcessExtractionResult
 from backend.schema.process_submission_schema import ProcessExecutionRecord, ProcessSubmissionRequest, ProcessSubmissionResponse
+from backend.services.process_extraction import extract_process_fields
 from backend.services.process_submission import ProcessSubmissionError, submit_process_application
 
 
 router = APIRouter(tags=["流程申请"])
+
+
+@router.post("/process_fields/extract", response_model=ProcessExtractionResult)
+def extract_application_fields(request: ProcessExtractionRequest):
+    """只提取字段，不提交申请或创建执行记录。"""
+    try:
+        client = get_client()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="字段提取模型暂不可用，请检查后端模型配置。") from exc
+    result = extract_process_fields(request.input_text, client)
+    if result.status == "failed":
+        raise HTTPException(status_code=502, detail=result.error or "字段提取失败，请重试。")
+    return result
 
 
 @router.post("/process_applications", response_model=ProcessSubmissionResponse)

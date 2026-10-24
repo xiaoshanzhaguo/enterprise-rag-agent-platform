@@ -1,5 +1,24 @@
 # React + TypeScript + Vite
 
+## 本地连接后端
+
+FastAPI 在项目根目录运行：
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 18000
+```
+
+React 在本目录运行 `npm run dev`。浏览器默认请求 `/api`，Vite 将其代理到 `http://127.0.0.1:18000`，供智能问答和知识库管理共同使用。
+
+需要切换后端地址时，在本目录 `.env.local` 中设置后重启 Vite：
+
+```dotenv
+VITE_API_BASE_URL=/api
+BACKEND_PROXY_TARGET=http://127.0.0.1:18000
+```
+
+可用前端地址下的 `/api/knowledge_bases` 和 `/api/knowledge_base_categories` 验证代理，预期返回 JSON。生产构建需要由部署服务器提供 `/api` 转发，或配置 `VITE_API_BASE_URL` 及相应跨域规则；Vite 开发代理不会打包进静态文件。
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

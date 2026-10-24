@@ -1,278 +1,215 @@
-/*
- * 流程助手页面。
- *
- * 功能说明：
- * 1. 目前先作为企业系统布局中的业务入口。
- * 2. 后续会承接“流程类问题提取表单字段 -> n8n 触发通知/工单”的闭环。
- * 3. 当前只展示流程助手的页面骨架，不接真实提交接口。
- * 4. 先实现轻量字段提取：用户输入 GitLab 权限申请后，页面展示结构化申请字段。
- * 5. 当前字段提取使用前端规则完成，后续可把 extractProcessFields 替换为真实 Agent 接口。
- */
+/** 流程申请：提取 → 人工确认 → 显式提交 → 查询执行记录。 */
+import { CheckCircle2, ClipboardList, Search, SendHorizontal, WandSparkles } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ApiError } from '../api/httpClient'
+import { extractApplicationFields, fetchApplicationExecution, submitApplication } from '../api/processApi'
+import type { ProcessFields, ProcessReceipt, ProcessSubmission } from '../types/process'
 
-// ClipboardList：流程/清单图标，用在“流程申请草稿”标题处。
-// SendHorizontal：发送图标，用在“提交流程”按钮里。
-// WandSparkles：字段提取图标，用在右侧“AI 提取结果”标题处。
-import { ClipboardList, SendHorizontal, WandSparkles } from 'lucide-react'
-// useState：保存员工输入、提取结果和输入校验错误。
-import { useState } from 'react'
-
-// 流程卡片静态数据。
-// 当前先写在前端，目的是让页面有可视化内容；后续如果后端提供流程类型列表，可以替换成接口返回。
-const processCards = [
-  {
-    // title：流程名称，显示在右侧“常见流程”卡片中。
-    title: '报销申请',
-    // description：流程说明，提示这个流程大概会抽取哪些字段。
-    description: '提取金额、发票、事由、审批人等字段。',
-  },
-  {
-    title: 'IT 支持',
-    description: '记录故障类型、影响范围、联系方式。',
-  },
-  {
-    title: '权限申请',
-    description: '收集系统名称、权限范围、到期时间。',
-  },
+const STORAGE_KEY = 'enterprise-process-pending-v1'
+const fieldDefinitions: { key: keyof ProcessFields; label: string; required?: boolean }[] = [
+  { key: 'application_type', label: '申请类型', required: true },
+  { key: 'applicant', label: '申请人', required: true },
+  { key: 'department', label: '部门', required: true },
+  { key: 'permission_level', label: '权限级别' },
+  { key: 'approver', label: '审批人' },
+  { key: 'additional_info', label: '补充信息' },
 ]
+interface SavedApplication extends ProcessSubmission { input_text: string }
 
-// ProcessFieldExtraction：流程助手从员工自然语言中提取出的结构化申请字段。
-// 这些字段先服务于前端展示，后续也可以直接作为后端流程接口的请求参数。
-interface ProcessFieldExtraction {
-  // processType：申请属于哪一种企业流程，例如权限申请或普通流程申请。
-  processType: string
-  // targetSystem：员工需要申请权限或支持的目标系统，例如 GitLab、VPN。
-  targetSystem: string
-  // permissionScope：本次申请希望获得的权限范围。
-  permissionScope: string
-  // projectName：权限对应的项目名称。
-  projectName: string
-  // reason：员工提出申请的原因或用途。
-  reason: string
-  // urgency：申请的紧急程度，当前默认使用“普通”。
-  urgency: string
-  // applicant：申请人，登录用户体系接入前暂时标记为“待补充”。
-  applicant: string
-  // status：流程草稿当前所处状态。
-  status: string
+function restoreApplication(): SavedApplication | null {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null')
+    if (!saved || typeof saved.request_id !== 'string'
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saved.request_id)
+      || typeof saved.input_text !== 'string' || !saved.fields) return null
+    if (fieldDefinitions.some(({ key }) => saved.fields[key] !== null && typeof saved.fields[key] !== 'string')) return null
+    return saved as SavedApplication
+  } catch { return null }
 }
 
-// extractProjectName：从“项目是 xxx”或“项目名称为 xxx”一类表达中提取项目名。
-function extractProjectName(text: string) {
-  // 正则允许项目名包含英文、数字、下划线、点、斜杠和短横线，覆盖常见仓库命名方式。
-  const projectMatch = text.match(/项目(?:名称)?(?:是|为|:|：)\s*([A-Za-z0-9_.\-/]+)/i)
-
-  // 找到项目名时返回第一个捕获组；没有找到时明确提示用户后续补充。
-  // 为什么取[1]，不是取[0]？因为 text.match(...) 返回的是一个数组。这个数组里，下标 0：表示整个正则匹配到的完整内容。、下标 1：表示第一个捕获组匹配到的内容。
-  return projectMatch?.[1] ?? '待补充'
-}
-
-// extractReason：从“因为、用于、方便、为了”后面的文本中提取申请原因。
-function extractReason(text: string) {
-  // 原因遇到句号或分号时结束，避免把后续其他字段一起放进申请原因。
-  const reasonMatch = text.match(/(?:因为|用于|方便|为了)\s*([^。；;]+)/)
-
-  if (!reasonMatch) {
-    if (text.includes('参与') && text.includes('项目开发')) {
-      return '参与项目开发'
-    }
-
-    if (text.includes('排查') && text.includes('线上问题')) {
-      return '排查线上问题'
-    }
+function errorText(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    const detail = (error.payload as { detail?: unknown } | null)?.detail
+    if (typeof detail === 'string') return detail
+    return `${fallback}（HTTP ${error.status}）`
   }
-
-  // 当前没有识别到原因时返回“待补充”，让结果面板清楚暴露缺失字段。
-  // trim 的作用：去掉字符串开头和结尾的空格、换行、Tab。
-  // 为什么要 trim()? 因为原因捕获组 ([^。；;]+) 会匹配比较宽泛的内容，可能把原因前后的空格、换行也一起提取出来。
-  return reasonMatch?.[1]?.trim() ?? '待补充'
+  return fallback
 }
 
-// extractProcessFields：把员工输入转换成页面需要展示的结构化申请字段。
-function extractProcessFields(inputText: string): ProcessFieldExtraction {
-  // 转成小写后再判断英文系统名，兼容 GitLab、gitlab 等不同写法。
-  const normalizedInput = inputText.toLowerCase()
-  // 优先识别 GitLab，其次识别 VPN；都没有命中时等待员工补充目标系统。
-  const targetSystem = normalizedInput.includes('gitlab')
-    ? 'GitLab'
-    : normalizedInput.includes('vpn')
-      ? 'VPN'
-      : '待补充'
-  // 识别到目标系统时，本次需求通常属于权限申请。
-  const processType = targetSystem !== '待补充' ? '权限申请' : '流程申请'
-  // GitLab 权限通常绑定具体项目；其他系统的权限范围暂时等待补充。
-  const permissionScope = targetSystem === 'GitLab' ? '项目权限' : '待补充'
-
-  // 返回统一结构，右侧结果面板只负责展示，不需要再次判断业务规则。
-  return {
-    processType,
-    targetSystem,
-    permissionScope,
-    projectName: extractProjectName(inputText),
-    reason: extractReason(inputText),
-    urgency: '普通',
-    applicant: '待补充',
-    status: '草稿',
-  }
+function clearSavedApplication() {
+  try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* 不影响已经记录的申请。 */ }
 }
 
-// ProcessAssistantPage：流程助手页面组件。
-// 当前页面只负责展示入口，真正的字段提取和 n8n 触发后续再接。
 export function ProcessAssistantPage() {
-  // processInput：保存 textarea 中当前输入的员工需求。
-  const [processInput, setProcessInput] = useState('')
-  // extractedFields：保存最近一次字段提取结果；null 表示还没有执行提取。
-  const [extractedFields, setExtractedFields] = useState<ProcessFieldExtraction | null>(null)
-  // errorMessage：保存输入校验错误，避免空内容进入提取逻辑。
-  const [errorMessage, setErrorMessage] = useState('')
+  const [pending, setPending] = useState<SavedApplication | null>(restoreApplication)
+  const [processInput, setProcessInput] = useState(pending?.input_text ?? '')
+  const [fields, setFields] = useState<ProcessFields | null>(pending?.fields ?? null)
+  const [busy, setBusy] = useState<'extract' | 'submit' | 'query' | null>(null)
+  // 同步锁阻止 React 更新按钮状态之前发生的第二次点击。
+  const busyRef = useRef(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState(pending ? '已恢复申请编号，请查询执行状态，不要重复提交。' : '')
+  const [receipt, setReceipt] = useState<ProcessReceipt | null>(null)
+  const [allowNew, setAllowNew] = useState(false)
+  const missingRequired = fieldDefinitions.filter(({ key, required }) => required && !fields?.[key]?.trim())
 
-  // handleExtractFields：点击按钮后校验输入，并生成结构化申请字段。
-  function handleExtractFields() {
-    // trim 去掉首尾空格，避免只输入空格时仍然执行字段提取。
-    const trimmedInput = processInput.trim()
+  async function handleExtract() {
+    if (busyRef.current || pending || !processInput.trim()) return
+    busyRef.current = true
+    setBusy('extract')
+    setError('')
+    setNotice('')
+    setFields(null)
+    try {
+      const result = await extractApplicationFields(processInput.trim())
+      if (result.status !== 'extracted') throw new Error('提取失败')
+      setFields(result.fields)
+      setNotice('字段已提取。请核对姓名、部门和权限，补充后确认提交。')
+    } catch (err) {
+      setError(errorText(err, '字段提取失败，请检查后端连接后重试。'))
+    } finally { busyRef.current = false; setBusy(null) }
+  }
 
-    // 空输入不执行提取，并向用户展示可理解的错误提示。
-    if (!trimmedInput) {
-      setErrorMessage('请先输入需要办理的流程，例如：我要申请 GitLab 权限。')
-      setExtractedFields(null)
+  async function handleSubmit() {
+    if (busyRef.current || pending || !fields || missingRequired.length) return
+    busyRef.current = true
+    setBusy('submit')
+    setError('')
+    setNotice('')
+    let application: SavedApplication
+    try {
+      application = {
+        request_id: crypto.randomUUID(), input_text: processInput,
+        fields: Object.fromEntries(fieldDefinitions.map(({ key }) => [key, fields[key]?.trim() || null])) as unknown as ProcessFields,
+      }
+      // 必须在发送前保存编号。刷新页面后只查询，不自动重发。
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(application))
+      setPending(application)
+    } catch {
+      setError('无法在浏览器中保存申请编号，本次未提交。请允许会话存储后重试。')
+      busyRef.current = false
+      setBusy(null)
       return
     }
+    try {
+      const result = await submitApplication({ request_id: application.request_id, fields: application.fields })
+      if (result.status !== 'simulated' || result.request_id !== application.request_id || !result.ticket_id) throw new Error('无效回执')
+      setReceipt(result)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        clearSavedApplication()
+        setPending(null)
+        setError('申请字段校验未通过，本次未触发流程。请检查必填字段后重新提交。')
+      } else {
+        setError(errorText(err, '连接中断或回执异常，执行结果未知。请查询执行状态，勿重复提交。'))
+      }
+    } finally { busyRef.current = false; setBusy(null) }
+  }
 
-    // 输入合法后清除旧错误，再保存本次提取结果。
-    setErrorMessage('')
-    setExtractedFields(extractProcessFields(trimmedInput))
+  async function handleQuery() {
+    if (busyRef.current || !pending) return
+    busyRef.current = true
+    setBusy('query')
+    setError('')
+    setNotice('')
+    try {
+      const record = await fetchApplicationExecution(pending.request_id)
+      if (record.request_id !== pending.request_id) throw new Error('申请编号不匹配')
+      if (record.status === 'simulated' && record.output?.request_id === pending.request_id && record.output.ticket_id) {
+        setReceipt(record.output)
+      } else {
+        const descriptions = {
+          running: '申请已记录，流程仍在执行或结果尚待核对。稍后可再次查询，请勿重复提交。',
+          timeout: '申请已记录，但调用超时，是否执行成功尚不确定。请在 n8n 核对此申请编号。',
+          failed: `申请调用失败，失败记录已保存。${record.error_message || ''} 请先核对 n8n 再决定是否另建申请。`,
+          simulated: '流程记录存在，但回执不完整，请核对 n8n 执行记录。',
+        }
+        setNotice(descriptions[record.status] || '执行状态未知，请核对 n8n。')
+      }
+    } catch (err) {
+      setError(err instanceof ApiError && err.status === 404
+        ? '暂未查到申请记录，不能据此确认未执行。请核对后端和 n8n 后再决定是否另建申请。'
+        : errorText(err, '执行状态查询失败，已保留申请编号，请稍后再次查询。'))
+    } finally { busyRef.current = false; setBusy(null) }
+  }
+
+  function handleNewApplication() {
+    if (busyRef.current || (pending && !receipt && !allowNew)) return
+    clearSavedApplication()
+    setPending(null)
+    setFields(null)
+    setProcessInput('')
+    setReceipt(null)
+    setError('')
+    setNotice('')
+    setAllowNew(false)
   }
 
   return (
-    // page-stack：页面纵向布局容器，让标题区和内容区保持统一间距。
     <section className="page-stack">
-      {/* 页面标题区：告诉用户当前页面属于“流程侧”能力。 */}
       <header className="page-header">
         <div>
-          <p className="eyebrow">流程侧</p>
+          <p className="eyebrow">流程侧 · 申请办理</p>
           <h2>流程助手</h2>
-          <p>用于把员工的流程类问题转换成结构化申请，后续再触发 n8n 通知或工单。</p>
+          <p>描述申请需求，核对字段后提交，并查看流程执行记录。</p>
         </div>
       </header>
-
-      {/* workspace-grid：左右两列布局。左侧写流程需求，右侧展示常见流程。 */}
+      <ol className="process-steps" aria-label="办理步骤">
+        <li><span>01</span> 描述需求</li><li><span>02</span> 核对字段</li><li><span>03</span> 提交与记录</li>
+      </ol>
       <div className="workspace-grid">
-        {/* 左侧主面板：流程申请草稿。 */}
-        <section className="panel">
-          {/* 面板标题区：图标 + 标题 + 简短说明。 */}
+        <section className="panel process-form-panel">
           <div className="panel-heading">
-            {/* aria-hidden 表示图标只是装饰，屏幕阅读器不用读它。 */}
             <ClipboardList aria-hidden="true" size={20} />
-            <div>
-              <h3>流程申请草稿</h3>
-              <p>当前先搭建入口，下一步再接 Agent 字段提取和提交接口。</p>
-              {/* 当前先在前端完成轻量字段提取，暂不提交真实流程。 */}
-              <p>输入自然语言需求，系统会先整理成可确认的申请字段。</p>
-            </div>
+            <div><h3>流程申请草稿</h3><p>字段提取不会提交申请；确认后才触发流程。</p></div>
           </div>
-
-          {/* 员工需求输入框：后续可以把这里的内容提交给 Agent 做字段提取。 */}
           <label className="field">
-            <span>员工需求</span>
-            {/* 当前 textarea 还不是受控组件，后续接提交逻辑时可以加 useState 保存输入内容。 */}
-            {/* textarea 已改为受控组件，输入内容保存在 processInput 状态中。 */}
-            <textarea
-              placeholder="例如：我要申请 GitLab 项目权限，项目是 enterprise-rag-agent-platform。"
-              rows={7}
-              value={processInput}
-              onChange={(event) => setProcessInput(event.target.value)}
-            />
+            <span>申请描述</span>
+            <textarea rows={5} maxLength={20000} value={processInput} disabled={!!busy || !!pending}
+              placeholder="例如：我是研发部张三，申请 VPN 只读权限，用于远程办公，审批人为李经理。"
+              onChange={(event) => { setProcessInput(event.target.value); setFields(null); setError(''); setNotice('') }} />
           </label>
-
-          {/* 输入为空时显示错误提示；没有错误时不占用页面空间。 */}
-          {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
-
-          {/* 当前按钮先禁用，等接入字段提取和提交流程接口后再启用。 */}
-          {/* 扩展：按钮现在只触发字段提取，不会真正创建或提交工单。 */}
-          <button className="primary-button" type="button" disabled={!processInput.trim()} onClick={handleExtractFields}>
-            <SendHorizontal aria-hidden="true" size={18} />
-            提取申请字段
+          <button className="primary-button" type="button" onClick={handleExtract} disabled={!processInput.trim() || !!busy || !!pending}>
+            <WandSparkles aria-hidden="true" size={18} />{busy === 'extract' ? '正在提取字段…' : fields ? '重新提取字段' : '提取申请字段'}
           </button>
+          {fields && <section className="process-extraction-panel" aria-label="申请字段">
+            <div className="process-extraction-heading"><WandSparkles aria-hidden="true" size={18} /><div>
+              <strong>核对申请字段</strong><span>标记 * 的字段为提交必填项，其余可留空。</span>
+            </div></div>
+            <div className="process-field-list">
+              {fieldDefinitions.map(({ key, label, required }) => <label className="field" key={key}>
+                <span>{label}{required ? ' *' : ''}</span>
+                {key === 'additional_info' ? <textarea aria-label={label} rows={3} value={fields[key] ?? ''} disabled={!!busy || !!pending}
+                  placeholder="原因、用途、时间等补充信息，可选填"
+                  onChange={(event) => setFields({ ...fields, [key]: event.target.value || null })} /> : <input aria-label={label} required={required} value={fields[key] ?? ''} disabled={!!busy || !!pending}
+                  placeholder={required ? '请补充' : '未提供，可选填'}
+                  onChange={(event) => setFields({ ...fields, [key]: event.target.value || null })} />}
+              </label>)}
+            </div>
+            {!pending && missingRequired.length > 0 && <p className="muted-text">待补充：{missingRequired.map(f => f.label).join('、')}。</p>}
+            <button className="primary-button" type="button" onClick={handleSubmit} disabled={!!busy || !!pending || missingRequired.length > 0}>
+              <SendHorizontal aria-hidden="true" size={18} />{busy === 'submit' ? '正在提交，请勿重复操作…' : pending ? '本申请已提交，勿重复提交' : '确认提交'}
+            </button>
+          </section>}
+          {error && <div className="alert error" role="alert">{error}</div>}
+          {notice && <p className="process-notice" role="status">{notice}</p>}
         </section>
-
-        {/* 右侧辅助面板：展示常见流程类型，帮助用户理解这个页面能处理什么。 */}
-        <aside className="panel">
-          {/* 面板标题区。 */}
-          <div className="panel-heading">
-            {/* WF 是 workflow 的缩写，这里作为文字图标使用。 */}
-            <div className="small-icon">WF</div>
-            <div>
-              <h3>常见流程</h3>
-              <p>这些入口后续可以和 Agent Router 的流程类型对应。</p>
-            </div>
-          </div>
-
-          {/* 扩展：字段提取后优先展示结构化结果，便于员工确认缺失信息。 */}
-          {/* aria-live 是一个无障碍属性。它的作用是告诉屏幕阅读器：这个区域的内容可能会动态变化；如果内容变了，请在合适的时候提醒用户；但不要打断用户当前正在听的内容。 */}
-          {/* 放到代码里，意思是：AI 提取结果这个区域是一个动态更新区域。当 extractedFields 从无到有，页面展示出提取结果时，屏幕阅读器可以温和地提醒用户这里有新内容。 */}
-          {/* aria-live="polite"：字段提取结果更新时，允许屏幕阅读器在不打断用户的情况下播报变化。 */}
-          <section className="process-extraction-panel" aria-live="polite">
-            {/* 提取结果标题区：图标只用于辅助识别，不重复朗读。 */}
-            <div className="process-extraction-heading">
-              <WandSparkles aria-hidden="true" size={18} />
-              <div>
-                <strong>AI 提取结果</strong>
-                <span>{extractedFields ? '字段已整理，请确认待补充内容。' : '等待提取申请字段。'}</span>
-              </div>
-            </div>
-
-            {/* 有提取结果时展示字段列表；首次进入页面时展示简洁空状态。 */}
-            {extractedFields ? (
-              <dl className="process-field-list">
-                {/* 每一个 div 表示一个“字段名 + 字段值”的结构化申请字段。 */}
-                <div>
-                  <dt>流程类型</dt>
-                  <dd>{extractedFields.processType}</dd>
-                </div>
-                <div>
-                  <dt>目标系统</dt>
-                  <dd>{extractedFields.targetSystem}</dd>
-                </div>
-                <div>
-                  <dt>权限范围</dt>
-                  <dd>{extractedFields.permissionScope}</dd>
-                </div>
-                <div>
-                  <dt>项目名称</dt>
-                  <dd>{extractedFields.projectName}</dd>
-                </div>
-                <div>
-                  <dt>申请原因</dt>
-                  <dd>{extractedFields.reason}</dd>
-                </div>
-                <div>
-                  <dt>紧急程度</dt>
-                  <dd>{extractedFields.urgency}</dd>
-                </div>
-                <div>
-                  <dt>申请人</dt>
-                  <dd>{extractedFields.applicant}</dd>
-                </div>
-                <div>
-                  <dt>当前状态</dt>
-                  <dd>{extractedFields.status}</dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="muted-text">输入“我要申请 GitLab 权限”，点击提取后可查看结构化字段。</p>
-            )}
-          </section>
-
-          {/* config-list：复用知识库管理页里的列表样式。 */}
-          <div className="config-list">
-            {/* 遍历静态流程卡片数组，每一项渲染成一行说明。 */}
-            {processCards.map((item) => (
-              // key 使用 title，因为当前静态数据里 title 唯一。
-              <div className="config-row" key={item.title}>
-                <strong>{item.title}</strong>
-                <span>{item.description}</span>
-              </div>
-            ))}
-          </div>
+        <aside className="panel process-result-panel" aria-label="流程执行结果">
+          <div className="panel-heading"><Search aria-hidden="true" size={20} /><div><h3>流程执行结果</h3><p>提交后可查询已保存的执行状态。</p></div></div>
+          {receipt ? <div className="process-success" role="status">
+            <CheckCircle2 aria-hidden="true" size={24} /><div><strong>流程已触发 / 已记录</strong><p>模拟流程执行完成，回执已保存至 SQLite。</p></div>
+          </div> : <p className="muted-text">{pending ? '已保留申请编号。结果不明时先查询，不自动重发。' : '确认提交后，这里将显示申请编号和执行结果。'}</p>}
+          {pending && <>
+            <dl className="process-record-details"><div><dt>申请编号</dt><dd>{pending.request_id}</dd></div>
+              <div><dt>模拟工单编号</dt><dd>{receipt?.ticket_id || '等待有效回执'}</dd></div></dl>
+            <button className="primary-button" type="button" disabled={!!busy} onClick={handleQuery}>
+              <Search aria-hidden="true" size={16} />{busy === 'query' ? '正在查询…' : '查询执行状态'}
+            </button>
+            {!receipt && <label className="process-new-confirm"><input type="checkbox" checked={allowNew} disabled={!!busy}
+              onChange={event => setAllowNew(event.target.checked)} />我已核对原申请结果，确认需要另建申请。</label>}
+            <button className="process-secondary-button" type="button" onClick={handleNewApplication} disabled={!!busy || (!receipt && !allowNew)}>新建另一份申请</button>
+          </>}
+          <p className="process-simulation-note">当前为模拟流程：生成表格记录、通知内容和模拟工单，不会真实发送通知或授予权限。</p>
         </aside>
       </div>
     </section>

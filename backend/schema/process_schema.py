@@ -28,3 +28,8 @@ class ProcessExtractionResult(BaseModel):
     missing_fields: list[str]
     status: Literal["extracted", "failed"] = "extracted"
     error: str | None = None
+
+
+class ProcessExtractionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    input_text: str = Field(min_length=1, max_length=20000)
