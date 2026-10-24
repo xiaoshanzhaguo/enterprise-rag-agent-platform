@@ -9,7 +9,7 @@
 5. 保存用户消息、Agent 最终结果和当前回答对应的引用元数据。
 
 说明：
-- 当前模块是轻量 Agent / Workflow 改造，不引入 LangChain 或复杂多 Agent。
+- 当前模块是轻量 Agent / Workflow，只有模型调用层接入 LangChain ChatModel，不引入复杂多 Agent。
 - Agent 判断阶段使用模型做意图分类和检索 query 改写，不再维护关键词判断规则。
 - Agent 流程固定为：判断是否需要知识库 -> 检索证据 -> 生成回答。
 - 如果知识库证据不足，Agent 不会强行回答，而是明确说明缺少依据。
@@ -29,6 +29,8 @@ from fastapi.responses import StreamingResponse
 
 # 项目配置对象，用于读取模型名称和引用预览长度
 from backend.config import settings
+# LangChain ChatModel 流式适配函数；Agent 的 SSE 事件顺序仍由当前模块控制。
+from backend.llm.chat_model import stream_chat_model
 # 数据库持久化函数，用于保存聊天会话、读取标题、保存消息和 RAG 查询日志
 from backend.db.repository import (
     ensure_chat_session,
@@ -564,25 +566,12 @@ def _stream_model_answer(
     2. 过滤空 delta。
     3. 通过生成器逐段产出模型新增文本，供 Agent SSE 事件复用。
 
-    :param client: OpenAI 兼容客户端
+    :param client: LangChain ChatModel
     :param messages: 已组装好的模型上下文
     :return: 生成器，每次产出一段模型增量文本
     """
-    # 调用模型接口，开启流式输出
-    response = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=messages,
-        stream=True,
-    )
-
-    # 遍历模型流式响应
-    for chunk in response:
-        # 读取当前增量文本
-        delta = chunk.choices[0].delta.content
-        # 空内容没有展示价值，直接跳过
-        if not delta:
-            continue
-        # 产出当前增量文本
+    # LangChain stream_chat_model 已负责过滤空 chunk，这里继续按原生成器协议产出 delta。
+    for delta in stream_chat_model(client=client, messages=messages):
         yield delta
 
 
@@ -600,7 +589,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
     7. 将三个阶段作为前端可见步骤返回。
 
     :param request: 当前 Agent 请求对象
-    :param client: OpenAI/DeepSeek 客户端
+    :param client: LangChain ChatModel
     :return: StreamingResponse, 返回标准 SSE 事件流
     """
 

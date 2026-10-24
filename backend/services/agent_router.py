@@ -14,8 +14,8 @@ from typing import Any
 from dataclasses import dataclass
 # 导入Enum枚举类。作用：限制某个字段只能取几个固定值。
 from enum import Enum
-# 项目配置对象，用于读取模型名称和引用预览长度
-from backend.config import settings
+# LangChain ChatModel 非流式适配函数，用于意图分类和 query rewrite。
+from backend.llm.chat_model import invoke_chat_model
 # 数据库文档状态查询函数，用于保存历史消息中的引用模块状态
 from backend.rag.store import get_document_status
 
@@ -132,7 +132,7 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
     3. 如果模型输出不合规或调用失败，则返回 None，让外层保守兜底。
 
     :param question: 用户当前输入的问题
-    :param client: OpenAI 兼容客户端
+    :param client: LangChain ChatModel
     :return: 三元组，依次表示是否需要知识库、判断理由、检索 query；失败时返回 None
     """
     # 如果没有可用客户端，则无法进行模型决策
@@ -140,9 +140,9 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
         return None
 
     try:
-        # 调用模型做一次非流式轻量决策，避免前端还没判断就先检索
-        response = client.chat.completions.create(
-            model=settings.llm_model,
+        # 通过 LangChain ChatModel 做一次非流式轻量决策，避免前端还没判断就先检索。
+        decision_text = invoke_chat_model(
+            client=client,
             messages=[
                 {
                     "role": "system",
@@ -171,11 +171,8 @@ def _decide_need_knowledge_base_by_llm(question: str, client) -> tuple[bool, str
         # 模型决策失败不能中断 Agent 主流程，后续交给保守兜底
         return None
 
-    try:
-        # 读取模型返回文本
-        decision_text = response.choices[0].message.content or ""
-    except (AttributeError, IndexError):
-        # 如果模型响应结构异常，则交给保守兜底
+    # LangChain 适配层已经统一返回字符串；空文本仍交给规则兜底。
+    if not decision_text:
         return None
     # 从模型输出中解析 JSON
     decision_json = _extract_json_object(decision_text)
@@ -412,7 +409,7 @@ def route_question(
 
     :param question: 用户当前输入的问题
     :param use_rag: 前端是否开启 RAG
-    :param client: OpenAI 兼容客户端，用于执行轻量 Agent 意图分类和 query rewrite
+    :param client: LangChain ChatModel，用于执行轻量 Agent 意图分类和 query rewrite
     :param session_id: 当前会话 ID，用于模型判断失败时检查是否已有可检索文档
     :param knowledge_base_id: 企业知识库 ID，用于模型判断失败时检查公共知识库是否已有文档
     :return: AgentRouteDecision，包含路由类型、判断原因、是否开启 RAG、改写后的query

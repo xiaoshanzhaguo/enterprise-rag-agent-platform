@@ -252,7 +252,7 @@ def chat_stream(request: ChatRequest):
 
     接收前端聊天请求，初始化模型客户端，并调用聊天服务返回 SSE 事件流响应。
     """
-    client = get_client()  # 创建统一的大模型客户端
+    client = get_client()  # 创建统一的 LangChain ChatModel，路由和 SSE 返回结构保持不变
     return chat_with_ai(request, client)  # 将请求交给聊天服务处理
 
 
@@ -263,7 +263,7 @@ def workflow_stream(request: ChatRequest):
 
     接收前端工作流请求，初始化模型客户端，并调用工作流服务返回 SSE 事件流响应。
     """
-    client = get_client()  # 创建统一的大模型客户端
+    client = get_client()  # 创建统一的 LangChain ChatModel，路由和 SSE 返回结构保持不变
     return run_workflow_stream(request, client)  # 将请求交给工作流服务处理
 
 
@@ -274,7 +274,7 @@ def agent_stream(request: ChatRequest):
 
     接收前端 Agent 请求，初始化模型客户端，并调用轻量 Agent 服务返回 SSE 事件流响应。
     """
-    client = get_client()  # 创建统一的大模型客户端
+    client = get_client()  # 创建统一的 LangChain ChatModel，路由和 SSE 返回结构保持不变
     return run_agent_stream(request, client)  # 将请求交给轻量 Agent 服务处理
 
 

@@ -13,8 +13,8 @@
 - 本地兜底逻辑不维护业务关键词表，只从用户首条输入中提炼通用短标题。
 """
 
-# 导入项目配置对象，用于读取当前大模型名称
-from backend.config import settings
+# LangChain ChatModel 非流式适配函数，用于生成会话标题文本。
+from backend.llm.chat_model import invoke_chat_model
 
 
 # 本地标题兜底时需要移除的常见开头表达，避免侧边栏标题像完整口语请求
@@ -153,7 +153,7 @@ def generate_session_title(user_text: str, mode: str, client) -> str:
 
     :param user_text: 用户首条展示文本
     :param mode: 当前功能模式
-    :param client: OpenAI 兼容客户端
+    :param client: LangChain ChatModel
     :return: 可用于 chat_sessions.title 的标题
     """
     # 本地兜底标题，保证模型不可用时仍然有可展示标题
@@ -163,9 +163,9 @@ def generate_session_title(user_text: str, mode: str, client) -> str:
         return fallback_title
 
     try:
-        # 调用大模型生成短标题；非流式即可，避免复杂化主流程
-        response = client.chat.completions.create(
-            model=settings.llm_model,
+        # 通过 LangChain ChatModel 生成短标题；非流式即可，避免复杂化主流程。
+        generated_title = invoke_chat_model(
+            client=client,
             messages=[
                 {
                     "role": "system",
@@ -189,11 +189,8 @@ def generate_session_title(user_text: str, mode: str, client) -> str:
         # 标题生成失败不能影响正常对话，直接使用兜底标题
         return fallback_title
 
-    try:
-        # 读取模型返回的标题正文
-        generated_title = response.choices[0].message.content or ""
-    except (AttributeError, IndexError):
-        # 响应结构异常时使用兜底标题
+    # LangChain 适配层统一返回字符串；模型返回空文本时使用兜底标题。
+    if not generated_title:
         return fallback_title
 
     # 清理模型标题

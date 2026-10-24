@@ -25,8 +25,8 @@
 # FastAPI 流式响应对象，用于返回 SSE 事件流
 from fastapi.responses import StreamingResponse
 
-# 项目配置对象
-from backend.config import settings
+# LangChain ChatModel 流式适配函数；SSE 事件包装仍由当前 Service 负责。
+from backend.llm.chat_model import stream_chat_model
 # 确保会话存在、保存聊天记录、读取会话标题
 from backend.db.repository import (
     ensure_chat_session,
@@ -134,7 +134,7 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
     7. 保存模型回复
 
     :param request: 当前聊天请求对象
-    :param client: OpenAI/DeepSeek 客户端实例
+    :param client: LangChain ChatModel 实例
     :return: StreamingResponse, 返回标准 SSE 事件流
     """
 
@@ -233,21 +233,8 @@ def chat_with_ai(request: ChatRequest, client) -> StreamingResponse:
                 {"role": "user", "content": model_input_text}
             )
 
-            # 调用模型接口，开启流式输出
-            response = client.chat.completions.create(
-                model=settings.llm_model,
-                messages=messages,
-                stream=True
-            )
-
-            # 持续读取模型返回的增量内容
-            for chunk in response:
-                # 获取本次新增内容
-                delta = chunk.choices[0].delta.content
-
-                if not delta:
-                    continue
-
+            # 通过 LangChain ChatModel 开启流式输出；外层 SSE 主流程保持不变。
+            for delta in stream_chat_model(client=client, messages=messages):
                 # 累计完整文本
                 full_text += delta
 

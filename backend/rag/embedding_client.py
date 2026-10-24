@@ -11,7 +11,7 @@ Embedding 客户端模块。
 说明：
 - local 模式会通过 sentence-transformers 加载本地开源模型。
 - openai 模式会优先读取 EMBEDDING_BASE_URL / EMBEDDING_API_KEY。
-- 如果没有单独配置云端 embedding 地址和 Key，则回退复用项目已有的大模型客户端。
+- 如果没有单独配置云端 embedding 地址和 Key，则回退复用项目已有的 OpenAI 兼容配置。
 - EMBEDDING_MODEL 控制使用哪个 embedding 模型。
 """
 
@@ -26,8 +26,9 @@ from openai import OpenAI
 
 # 导入统一配置对象，读取 embedding 提供方、模型名和云端配置
 from backend.config import settings
-# 导入项目已有的大模型客户端创建函数，避免重复维护 OpenAI 客户端初始化逻辑
-from backend.llm.client import get_client
+# 导入专供云端 Embedding 使用的 OpenAI 兼容客户端创建函数。
+# 聊天模型已经改为 LangChain ChatModel，因此这里不能再复用 get_client()。
+from backend.llm.client import get_openai_compatible_client
 
 
 # 云端 embedding 单批次最大文本数量。
@@ -66,7 +67,7 @@ def get_remote_embedding_client():
 
     函数说明：
     1. 优先读取 EMBEDDING_BASE_URL 和 EMBEDDING_API_KEY。
-    2. 如果没有单独配置 embedding 云端服务，则复用项目已有 get_client()。
+    2. 如果没有单独配置 embedding 云端服务，则复用项目已有 OpenAI 兼容配置。
     3. 返回 OpenAI 兼容客户端，用于调用 embeddings.create。
 
     :return: OpenAI 兼容客户端
@@ -76,9 +77,9 @@ def get_remote_embedding_client():
     # 读取云端 embedding 独立 Key；为空时表示复用大模型客户端
     api_key = settings.embedding_api_key
 
-    # 如果没有单独配置云端 embedding 地址和 Key，则复用已有大模型客户端创建逻辑
+    # 如果没有单独配置云端 embedding 地址和 Key，则复用已有 OpenAI 兼容配置。
     if not base_url and not api_key:
-        return get_client()
+        return get_openai_compatible_client()
 
     # 如果只配置了一半，就主动报错，避免请求时才出现更难定位的问题
     if not base_url or not api_key:

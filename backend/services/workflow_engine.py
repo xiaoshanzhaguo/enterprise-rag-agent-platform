@@ -26,8 +26,8 @@ import re
 # 导入 FastAPI 流式响应对象，用于返回 SSE 事件流
 from fastapi.responses import StreamingResponse
 
-# 导入项目配置对象，用于读取模型名称等运行配置
-from backend.config import settings
+# 导入 LangChain ChatModel 流式适配函数，统一读取模型文本增量。
+from backend.llm.chat_model import stream_chat_model
 # 导入数据库持久化函数，用于确保会话存在、读取标题并保存聊天信息
 from backend.db.repository import (
     ensure_chat_session,
@@ -114,7 +114,7 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
     7. 保存最终工作流结果
 
     :param request: 当前工作流请求对象
-    :param client: OpenAI/DeepSeek 客户端
+    :param client: LangChain ChatModel
     :return: StreamingResponse, 返回标准 SSE 工作事件流
     """
 
@@ -274,20 +274,9 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
                 # 加入当前步骤提示词
                 messages.append({"role": "user", "content": step["prompt"]})
 
-                # 调用模型接口，开启当前步骤的流式输出
-                response = client.chat.completions.create(
-                    model=settings.llm_model,
-                    messages=messages,
-                    stream=True
-                )
-
-                # 持续读取当前步骤的增量输出
-                for chunk in response:
-                    delta = chunk.choices[0].delta.content
-
-                    if not delta:
-                        continue
-
+                # 通过 LangChain ChatModel 读取当前步骤的文本增量。
+                # 当前 generate() 仍负责把 delta 包装成原有 SSE StreamEvent。
+                for delta in stream_chat_model(client=client, messages=messages):
                     step_text += delta
 
                     # 向前端发送当前步骤的增量内容

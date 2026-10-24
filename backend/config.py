@@ -120,6 +120,8 @@ class Settings:
     api_key: str | None = os.getenv("DEEPSEEK_API_KEY")
     # 配置项：模型服务地址
     base_url: str | None = os.getenv("BASE_URL")
+    # 最大重试次数
+    max_retries: int = _get_int_env("LLM_MAX_RETRIES", 2)
     # RAG 存储的 TTL（生存时间），单位是秒。表示一份 RAG 缓存最多保留多久。默认是1小时。
     rag_store_ttl_seconds: int = _get_int_env("RAG_STORE_TTL_SECONDS", 3600)
     # RAG 存储最多保留多少个 session。防止内存无限增长。
