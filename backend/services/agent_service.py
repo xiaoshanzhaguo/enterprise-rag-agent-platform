@@ -54,6 +54,7 @@ from backend.rag.tools import create_knowledge_search_tool
 from backend.schema.chat_schema import ChatRequest, StreamEvent
 # 生成侧边栏历史会话标题
 from backend.services.session_title import generate_session_title
+from backend.services.process_extraction import extract_process_fields
 # SSE 格式化工具
 from backend.utils.stream_helper import to_sse
 # 轻量 Agent 路由模块。
@@ -581,8 +582,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
     1. 保存用户消息。
     2. 判断当前问题是否需要企业知识库。
     3. 需要知识库时执行 RAG 检索并记录 rag_queries / rag_hits。
-    4. 证据充足时生成带引用答案。
-    5. 证据不足时明确拒答，不基于常识强答。
+    4. 流程类问题提取本次输入字段，输出经过校验的 JSON。
+    5. 其他问题在证据充足时生成引用答案，证据不足时明确拒答。
     6. 不需要知识库时跳过检索，走普通对话。
     7. 将三个阶段作为前端可见步骤返回。
 
@@ -804,9 +805,21 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
 
             # 累计最终回答正文
             answer_text = ""
+            process_result = None
 
-            # 需要知识库但没有可靠证据时，不调用模型强答
-            if need_knowledge_base and not matched_chunks:
+            # 流程类输出经过校验的 JSON；只提取原文，不从知识库或历史猜测申请信息。
+            if route_type in {AgentRouteType.PROCESS_APPLY, AgentRouteType.FINANCE_PROCESS}:
+                process_result = extract_process_fields(request.input_text, client)
+                answer_text = process_result.model_dump_json(indent=2)
+                yield to_sse(
+                    StreamEvent(
+                        event_type="delta", session_id=request.session_id,
+                        task_type=request.task_type, step_name=STEP_GENERATE_ANSWER,
+                        content=answer_text,
+                    )
+                )
+            # 其他问题需要知识库但没有可靠证据时，不调用模型强答。
+            elif need_knowledge_base and not matched_chunks:
                 answer_text = f"{NO_RAG_EVIDENCE_MESSAGE}。请补充更具体的问题，或上传包含该规则的企业文档后再提问。"
                 # 以 delta 形式发送，保证前端生成回答步骤能看到内容
                 yield to_sse(
@@ -870,7 +883,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     )
 
             # 清理模型可能误返回的 JSON 或完整步骤文本，只保留最终回答正文
-            answer_text = _normalize_agent_answer_text(answer_text)
+            if process_result is None:
+                answer_text = _normalize_agent_answer_text(answer_text)
             # 保存生成回答步骤结果
             final_result[STEP_GENERATE_ANSWER] = answer_text
             # 通知前端：生成回答步骤完成
@@ -898,6 +912,9 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 knowledge_base_id=knowledge_base_id,
                 knowledge_base_type_filter=knowledge_base_type_filter,
             )
+            if process_result is not None:
+                assistant_metadata = assistant_metadata or {}
+                assistant_metadata["process_extraction"] = process_result.model_dump()
             # 保存 assistant 消息；如果本轮有引用片段，则把引用模块元数据一起保存
             save_chat_message(
                 session_id=request.session_id,

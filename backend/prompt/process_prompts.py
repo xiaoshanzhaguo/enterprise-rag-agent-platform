@@ -1,4 +1,4 @@
-"""流程字段提取模板，供后续申请流程调用，不绑定具体表单字段。"""
+"""流程字段提取模板，字段定义由调用方提供。"""
 
 import json
 from collections.abc import Mapping

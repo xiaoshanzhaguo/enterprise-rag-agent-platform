@@ -331,6 +331,16 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
             rewritten_query=""
         )
 
+    if "申请" in normalized_question and any(
+        keyword in normalized_question for keyword in ["vpn", "gitlab", "账号", "权限"]
+    ):
+        return AgentRouteDecision(
+            route_type=AgentRouteType.PROCESS_APPLY,
+            reason="问题明确提出账号或权限申请，属于流程申请",
+            should_use_rag=True,
+            rewritten_query=normalized_question,
+        )
+
     if any(keyword in normalized_question for keyword in ["vpn", "gitlab", "账号", "权限", "电脑", "网络", "登录失败"]):
         return AgentRouteDecision(
             route_type=AgentRouteType.IT_SUPPORT,
@@ -383,7 +393,7 @@ def route_question(
     根据用户问题判断 Agent 路由类型。
 
     函数说明：
-    1. 如果前端没有开启 RAG，直接判定为不需要知识库。
+    1. 即使未开启 RAG 也进行业务分类；关闭 RAG 时禁止知识库检索。
     2. 优先使用大模型做路由类型分类、意图分类和 query rewrite。
     3. 如果模型决策失败，则使用保守兜底，保证流程稳定。
 
@@ -395,16 +405,6 @@ def route_question(
     :return: AgentRouteDecision，包含路由类型、判断原因、是否开启 RAG、改写后的query
     """
     normalized_question = question.strip()
-
-    # 如果前端没有开启 RAG，则尊重用户设置，走普通对话。
-    # 这个判断放在最前面，可以避免无意义调用 LLM 做意图分类。
-    if not use_rag:
-        return AgentRouteDecision(
-            route_type=AgentRouteType.KNOWLEDGE_QA,
-            reason="当前未开启 RAG，按普通对话处理。",
-            should_use_rag=False,
-            rewritten_query="",
-        )
 
     # 处理空问题，返回 IRRELEVANT
     if not normalized_question:
@@ -423,12 +423,26 @@ def route_question(
     
     # 模型决策成功时直接使用模型结论
     if llm_decision is not None:
+        # 关闭 RAG 只禁用检索，仍保留流程分类以支持字段提取。
+        if not use_rag:
+            llm_decision.should_use_rag = False
+            llm_decision.rewritten_query = ""
         return llm_decision
 
     # LLM 不可用时的规则兜底 Router
     rule_decision = route_question_by_rules(normalized_question)
     if rule_decision.route_type != AgentRouteType.IRRELEVANT:
+        if not use_rag:
+            rule_decision.should_use_rag = False
+            rule_decision.rewritten_query = ""
         return rule_decision
+
+    if not use_rag:
+        return AgentRouteDecision(
+            route_type=AgentRouteType.KNOWLEDGE_QA,
+            reason="当前未开启 RAG，按普通对话处理。",
+            should_use_rag=False,
+        )
 
     # 模型决策失败时进入兜底逻辑。
     # 兜底函数会根据 session_id 再查一次数据库：有文档就用原问题检索，没有文档就按普通对话处理。

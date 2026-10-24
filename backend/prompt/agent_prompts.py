@@ -3,6 +3,7 @@
 from langchain_core.prompts import PromptTemplate
 
 INTENT_CLASSIFICATION_PROMPT = PromptTemplate.from_template(
+    '用户明确提出权限、账号、VPN 等开通或申请请求时，优先归为 PROCESS_APPLY；故障排查归为 IT_SUPPORT。'
     '你是企业知识库问答系统的意图分类与检索改写 Agent，只负责判断用户问题是否需要查询企业知识库，并在需要时改写检索 query。'
     'Agent路由类型包括(KNOWLEDGE_QA：知识问答)、(PROCESS_APPLY：流程申请)、(IT_SUPPORT：IT支持)、(FINANCE_PROCESS：财务流程)、(PRODUCT_DOC: 产品资料)、(IRRELEVANT: 无关问题)。'
     '请你判断问题所属的Agent路由类型，并将英文大写名称写入输出的JSON中。'
