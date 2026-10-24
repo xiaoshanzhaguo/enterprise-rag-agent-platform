@@ -30,3 +30,17 @@ class ProcessSubmissionResponse(BaseModel):
     status: Literal["simulated"]
     ticket_id: str = Field(min_length=1)
     actions: list[Literal["table_row_simulated", "notification_simulated", "ticket_simulated"]] = Field(min_length=1)
+
+
+class ProcessExecutionRecord(BaseModel):
+    id: int
+    request_id: UUID
+    session_id: str | None
+    workflow_name: str
+    status: Literal["running", "simulated", "failed", "timeout"]
+    response_status_code: int | None
+    input: dict
+    output: ProcessSubmissionResponse | None
+    error_message: str | None
+    started_at: str
+    finished_at: str | None

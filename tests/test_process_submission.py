@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
@@ -13,12 +15,21 @@ from fastapi.testclient import TestClient
 import httpx
 
 from backend.api.processes import router
+from backend.db.init_db import init_database
 from backend.schema.process_submission_schema import ProcessSubmissionRequest, ProcessSubmissionResponse
 from backend.services.process_submission import ProcessSubmissionError, submit_process_application
 
 
 class ProcessSubmissionTests(unittest.TestCase):
     def setUp(self):
+        self.database_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.database_directory.cleanup)
+        self.database_settings = SimpleNamespace(database_url="sqlite:///" + str(Path(self.database_directory.name) / "test.db"))
+        self.database_patch = patch("backend.db.connection.settings", self.database_settings)
+        self.database_patch.start()
+        self.addCleanup(self.database_patch.stop)
+        init_database()
+        self.transport_calls = 0
         self.request = ProcessSubmissionRequest(fields={
             "application_type": "VPN权限", "applicant": "张三", "department": "研发部",
         })
@@ -34,8 +45,12 @@ class ProcessSubmissionTests(unittest.TestCase):
         self.settings.n8n_webhook_timeout_seconds = 10
 
     def run_with_transport(self, handler):
+        # 每个传输故障场景使用独立数据库，避免相同编号触发重复提交保护。
+        self.transport_calls += 1
+        database_url = "sqlite:///" + str(Path(self.database_directory.name) / f"transport-{self.transport_calls}.db")
+        init_database(database_url)
         client = httpx.Client(transport=httpx.MockTransport(handler))
-        with patch("backend.services.process_submission.httpx.Client", return_value=client):
+        with patch.object(self.database_settings, "database_url", database_url), patch("backend.services.process_submission.httpx.Client", return_value=client):
             return submit_process_application(self.request)
 
     def test_webhook_body_header_and_ack(self):
@@ -59,6 +74,7 @@ class ProcessSubmissionTests(unittest.TestCase):
                  ("n8n_webhook_token", ""), ("n8n_webhook_timeout_seconds", -1),
                  ("n8n_webhook_timeout_seconds", float("nan"))]
         for name, value in cases:
+            self.request.request_id = uuid4()
             original = getattr(self.settings, name)
             with self.subTest(name=name), patch("backend.services.process_submission.httpx.Client") as client:
                 setattr(self.settings, name, value)

@@ -80,7 +80,7 @@ FastAPI 发送的 Webhook body 包含 `event: "process_application.submitted"`�
 | 504 | Webhook 超时，下游可能已执行，需要先核对 request_id |
 | 502 | 网络失败、HTTP 错误、非预期 JSON 或回执编号不匹配 |
 
-不自动重试，不跟随重定向，不返回含 Token 或 Webhook URL 的底层错误。request_id 目前用于关联和核对，不提供持久化去重；不要将重复提交当作安全重试。真实表格或工单接入时应另行实现幂等记录和权限控制。
+不自动重试，不跟随重定向，不返回含 Token 或 Webhook URL 的底层错误。第 20 天已增加 SQLite 执行记录和 request_id 唯一约束，同一编号重复提交返回 409；可通过 `GET /process_applications/{request_id}` 查询执行状态。详见 `docs/day20_n8n_sqlite.md`。真实表格或工单接入时仍需设计下游幂等及权限控制。
 
 ```powershell
 .venv/Scripts/python.exe -m unittest discover -s tests -v

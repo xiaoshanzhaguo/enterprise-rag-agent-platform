@@ -17,6 +17,8 @@
 典型调用流程：启动项目 -> init_database() -> 创建表 -> 创建索引 -> 数据库初始化完成
 """
 
+from contextlib import closing
+
 from backend.db.connection import get_connection, resolve_sqlite_path
 # 导入建表 SQL 和建索引 SQL
 from backend.db.schema import CREATE_INDEX_SQL, CREATE_TABLE_SQL, TABLE_COLUMN_MIGRATIONS
@@ -80,7 +82,7 @@ def init_database(database_url: str | None = None) -> None:
     :return: None
     """
     # 获取数据库连接
-    with get_connection(database_url) as connection:
+    with closing(get_connection(database_url)) as connection, connection:
         # 依次执行所有建表 SQL
         for statement in CREATE_TABLE_SQL:
             connection.execute(statement)
