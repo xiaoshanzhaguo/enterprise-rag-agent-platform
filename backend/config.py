@@ -122,6 +122,10 @@ class Settings:
     base_url: str | None = os.getenv("BASE_URL")
     # 最大重试次数
     max_retries: int = _get_int_env("LLM_MAX_RETRIES", 2)
+    # n8n 流程申请 Webhook；未配置时提交接口返回 503。
+    n8n_webhook_url: str | None = _get_optional_str_env("N8N_WEBHOOK_URL")
+    n8n_webhook_token: str | None = _get_optional_str_env("N8N_WEBHOOK_TOKEN")
+    n8n_webhook_timeout_seconds: float = _get_float_env("N8N_WEBHOOK_TIMEOUT_SECONDS", 10.0)
     # RAG 存储的 TTL（生存时间），单位是秒。表示一份 RAG 缓存最多保留多久。默认是1小时。
     rag_store_ttl_seconds: int = _get_int_env("RAG_STORE_TTL_SECONDS", 3600)
     # RAG 存储最多保留多少个 session。防止内存无限增长。

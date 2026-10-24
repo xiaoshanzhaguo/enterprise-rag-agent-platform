@@ -1,0 +1,158 @@
+{
+  "name": "Enterprise Process Application - Simulation",
+  "active": false,
+  "nodes": [
+    {
+      "id": "receive-application",
+      "name": "Receive Application",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "enterprise-process-application",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-application",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "step-1",
+      "name": "Validate Application",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const body = $input.first().json.body;\nif (!body || body.event !== 'process_application.submitted') throw new Error('Invalid event');\nif (typeof body.request_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.request_id)) throw new Error('Invalid request_id');\nconst fields = body.fields;\nif (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new Error('Invalid fields');\nconst names = ['application_type', 'applicant', 'department', 'permission_level', 'approver', 'additional_info'];\nif (Object.keys(fields).some(k => !names.includes(k))) throw new Error('Unknown field');\nfor (const name of names) {\n  if (fields[name] !== null && fields[name] !== undefined && typeof fields[name] !== 'string') throw new Error('Invalid field type');\n}\nfor (const name of ['application_type', 'applicant', 'department']) {\n  if (typeof fields[name] !== 'string' || !fields[name].trim()) throw new Error('Missing ' + name);\n}\nreturn [{json: {request_id: body.request_id, session_id: body.session_id ?? null, fields}}];"
+      }
+    },
+    {
+      "id": "step-2",
+      "name": "Simulate Table Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const data = $input.first().json;\nreturn [{json: {...data, simulated_row: {request_id: data.request_id, ...data.fields}, actions: ['table_row_simulated']}}];"
+      }
+    },
+    {
+      "id": "step-3",
+      "name": "Simulate Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const data = $input.first().json;\nreturn [{json: {...data, simulated_notification: {recipient: data.fields.approver || '待指定审批人', message: `${data.fields.applicant}（${data.fields.department}）申请${data.fields.application_type}，编号 ${data.request_id}`}, actions: [...data.actions, 'notification_simulated']}}];"
+      }
+    },
+    {
+      "id": "step-4",
+      "name": "Simulate Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const data = $input.first().json;\nreturn [{json: {request_id: data.request_id, status: 'simulated', ticket_id: `SIM-${data.request_id}`, actions: [...data.actions, 'ticket_simulated']}}];"
+      }
+    },
+    {
+      "id": "respond",
+      "name": "Respond to FastAPI",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1250,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Receive Application": {
+      "main": [
+        [
+          {
+            "node": "Validate Application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Application": {
+      "main": [
+        [
+          {
+            "node": "Simulate Table Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Table Row": {
+      "main": [
+        [
+          {
+            "node": "Simulate Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Notification": {
+      "main": [
+        [
+          {
+            "node": "Simulate Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Ticket": {
+      "main": [
+        [
+          {
+            "node": "Respond to FastAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

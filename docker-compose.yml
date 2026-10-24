@@ -11,6 +11,9 @@ services:
       BASE_URL: ${BASE_URL:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
+      N8N_WEBHOOK_TOKEN: ${N8N_WEBHOOK_TOKEN:-}
+      N8N_WEBHOOK_TIMEOUT_SECONDS: ${N8N_WEBHOOK_TIMEOUT_SECONDS:-10}
 
       # Embedding 与向量检索配置
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
@@ -47,3 +50,18 @@ services:
     volumes:
       # 前端也挂载 data，保证导入和状态读取路径一致
       - ./data:/app/data
+
+  n8n:
+    image: n8nio/n8n:stable
+    profiles: [automation]
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      TZ: Asia/Shanghai
+      GENERIC_TIMEZONE: Asia/Shanghai
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:

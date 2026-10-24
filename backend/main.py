@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 
 from backend.config import settings
 from backend.api.chat import router as chat_router
+from backend.api.processes import router as process_router
 from backend.db import init_database
 from backend.db.init_db import check_database_connection, get_database_location
 from backend.rag.vector_store import resolve_vector_store_dir
@@ -35,6 +36,7 @@ app = FastAPI(
 
 # 注册聊天、工作流、RAG 相关接口
 app.include_router(chat_router)
+app.include_router(process_router)
 
 
 def check_vector_store_writable() -> tuple[bool, str, str | None]:
