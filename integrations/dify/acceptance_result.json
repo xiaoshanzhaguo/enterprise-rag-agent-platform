@@ -1,0 +1,57 @@
+{
+  "executed_at_utc": "2026-10-26T10:24:10.425591+00:00",
+  "mode": "real_dify_api",
+  "passed": true,
+  "results": [
+    {
+      "id": "leave_notice",
+      "query": "员工申请年假需要提前几个工作日？",
+      "answer": "根据《HR-01 员工请假与休假制度》，年假需要至少提前 **3 个工作日**在 HR 系统提交申请。",
+      "sources": [
+        "leave_policy.md",
+        "gitlab_access_request.md",
+        "gitlab_access_request.md"
+      ],
+      "passed": true
+    },
+    {
+      "id": "reimbursement_deadline",
+      "query": "日常费用发生后，报销申请需要在多久内提交？",
+      "answer": "根据《FIN-01 日常费用报销制度》，员工发生费用后，需要在费用发生后的 **15 个工作日内**提交报销申请。\n\n补充说明：\n- 跨月费用应尽量在**次月 5 日前**提交，避免影响财务结账。\n- 超过 15 个工作日未提交的报销，需要在申请中说明延迟原因，并由**部门负责人补充审批**。",
+      "sources": [
+        "reimbursement_policy.md",
+        "gitlab_access_request.md",
+        "gitlab_access_request.md"
+      ],
+      "passed": true
+    },
+    {
+      "id": "gitlab_maintainer",
+      "query": "申请 GitLab Maintainer 权限需要谁审批？",
+      "answer": "申请 GitLab Maintainer 权限时，需要**直属主管先审批**，还需要**项目技术负责人审批**。审批完成后，IT 支持人员会在 1 个工作日内开通权限。\n\n来源：《IT-02 GitLab 权限申请与代码仓库规范》",
+      "sources": [
+        "gitlab_access_request.md",
+        "gitlab_access_request.md",
+        "reimbursement_policy.md"
+      ],
+      "passed": true
+    },
+    {
+      "id": "vpn_720",
+      "query": "VPN 提示 720 错误应该如何处理？",
+      "answer": "VPN 提示 720 错误时，可按以下步骤处理：\n\n1. 重启电脑。\n2. 打开网络设置，禁用并重新启用 VPN 适配器。\n3. 如果仍无法恢复，联系 IT 支持人员重装 VPN 客户端。\n\n来源：《IT-01 VPN 使用与故障排查指南》",
+      "sources": [
+        "vpn_troubleshooting.md",
+        "vpn_troubleshooting.md"
+      ],
+      "passed": true
+    },
+    {
+      "id": "unknown_bonus",
+      "query": "星辰科技2027年度董事长奖金的准确金额是多少？",
+      "answer": "知识库中没有找到依据。缺少星辰科技2027年度董事长奖金金额相关的资料，无法确认准确金额。",
+      "sources": [],
+      "passed": true
+    }
+  ]
+}

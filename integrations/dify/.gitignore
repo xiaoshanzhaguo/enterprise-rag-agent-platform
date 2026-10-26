@@ -1,0 +1,4 @@
+# 官方部署文件副本、容器数据及本机凭据不提交。
+.runtime/
+.env.local
+local-access.json

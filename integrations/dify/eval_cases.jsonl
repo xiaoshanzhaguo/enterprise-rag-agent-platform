@@ -1,0 +1,5 @@
+{"id":"leave_notice","query":"员工申请年假需要提前几个工作日？","source":"leave_policy.md","expected_keywords":["3","工作日"],"should_refuse":false}
+{"id":"reimbursement_deadline","query":"日常费用发生后，报销申请需要在多久内提交？","source":"reimbursement_policy.md","expected_keywords":["15","工作日"],"should_refuse":false}
+{"id":"gitlab_maintainer","query":"申请 GitLab Maintainer 权限需要谁审批？","source":"gitlab_access_request.md","expected_keywords":["直属主管","项目技术负责人"],"should_refuse":false}
+{"id":"vpn_720","query":"VPN 提示 720 错误应该如何处理？","source":"vpn_troubleshooting.md","expected_keywords":["重启","适配器"],"should_refuse":false}
+{"id":"unknown_bonus","query":"星辰科技2027年度董事长奖金的准确金额是多少？","source":null,"expected_keywords":["知识库中没有找到依据"],"should_refuse":true}

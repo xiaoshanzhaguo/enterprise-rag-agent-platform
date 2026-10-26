@@ -1,0 +1,37 @@
+# 叠加官方固定版本 Compose；绑定数据在忽略目录，插件数据在独立命名卷。
+# 使用 Compose 2.24.4+ 的 !override，避免默认端口与本机服务冲突。
+services:
+  # 本任务只做原生知识库问答，不启动新版 Agent 执行环境。
+  api:
+    depends_on: !override
+      init_permissions:
+        condition: service_completed_successfully
+      db_postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+  worker:
+    depends_on: !override
+      init_permissions:
+        condition: service_completed_successfully
+      db_postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+  agent_backend:
+    profiles: [full-agent]
+  local_sandbox:
+    profiles: [full-agent]
+  agent_ssrf_proxy:
+    profiles: [full-agent]
+  nginx:
+    ports: !override
+      - "127.0.0.1:18080:80"
+  plugin_daemon:
+    ports: !reset []
+    # uv 依赖缓存需要 Linux 文件重命名语义，避免 Windows 绑定目录权限错误。
+    volumes: !override
+      - dify_plugin_data:/app/storage
+
+volumes:
+  dify_plugin_data:

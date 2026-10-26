@@ -1,0 +1,26 @@
+{
+  "dataset_name": "第22天-企业制度简化知识库",
+  "indexing_technique": "economy",
+  "documents": [
+    {
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "filename": "leave_policy.md",
+      "sha256": "095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2"
+    },
+    {
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "filename": "reimbursement_policy.md",
+      "sha256": "cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "filename": "gitlab_access_request.md",
+      "sha256": "dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "filename": "vpn_troubleshooting.md",
+      "sha256": "43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714"
+    }
+  ]
+}
