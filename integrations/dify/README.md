@@ -59,4 +59,6 @@
 
 页面验收记录见 [第 22 天验收说明](../../docs/day22_dify_acceptance.md)。本次应用只做知识问答；流程申请继续通过原系统与 n8n 完成。
 
+两种实现的适用场景与差异见 [第 23 天：FastAPI 版与 Dify 版对比](../../docs/day23_fastapi_vs_dify.md)。
+
 参考：[官方 Docker 部署](https://docs.dify.ai/en/self-host/deploy/quick-start/docker-compose)、[Dify 1.18.0 源码](https://github.com/langgenius/dify/tree/1.18.0/docker)。
