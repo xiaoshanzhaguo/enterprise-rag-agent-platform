@@ -19,6 +19,7 @@ import { Bot, Database, FileSearch, SendHorizontal, Delete } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 // streamAgentAnswer 负责调用后端 /agent_stream，并用 ReadableStream 逐步解析 SSE 事件。
 import { streamAgentAnswer } from '../api/chatApi'
+import { formatApiError } from '../api/httpClient'
 import { fetchKnowledgeBaseCategories, fetchKnowledgeBases, fetchRagStatus } from '../api/knowledgeBaseApi'
 import type { AgentStreamEvent, AgentTracePanelState, ChatMessage, RagPreviewChunk } from '../types/chat'
 import type { KnowledgeBaseCategory, KnowledgeBaseItem, RagStatusResponse } from '../types/knowledgeBase'
@@ -213,7 +214,7 @@ export function ChatPage() {
         // 如果 try 里的请求失败，就进入 catch。error是捕获到的错误对象。
         // 接口失败时，把错误信息展示到页面上。
         // 接口失败时，尽量展示真实错误信息；拿不到标准错误时，展示兜底错误文案。
-        setErrorMessage(error instanceof Error ? error.message : '加载知识库配置失败')
+        setErrorMessage(formatApiError(error, '加载知识库配置失败，请检查服务连接后刷新页面。'))
       } finally {
         // finally 表示无论成功还是失败，最后都会执行。这里用于结束 loading。
         // 组件还存在时才结束 loading。
@@ -671,13 +672,13 @@ export function ChatPage() {
         <div>
           <p className="eyebrow">员工侧</p>
           <h2>企业知识问答</h2>
-          <p>第一版 React 先承接核心闭环：选择知识库、限定分类、向后端发起 Agent + RAG 问答。</p>
+          <p>从企业资料中查找答案，核对引用来源，让每一个结论都有依据。</p>
         </div>
       </header>
 
       {/* 如果接口加载失败，就在页面顶部展示错误。 */}
       {/* 这是 JSX 条件渲染。逻辑是：如果 errorMessage 有内容，就显示错误框；如果 errorMessage 是空字符串，就什么都不显示。  */}
-      {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
+      {errorMessage ? <div className="alert error" role="alert">{errorMessage}</div> : null}
 
       {/* workspace-grid 把左侧提问区和右侧检索上下文分成两列。 */}
       {/* 定义一个布局容器。workspace-grid 通常用 CSS Grid 把页面分成两列。 */}
@@ -692,7 +693,7 @@ export function ChatPage() {
             {/* 包裹标题和描述。 */}
             <div>
               <h3>提问区</h3>
-              <p>支持通过 fetch + ReadableStream 读取后端 POST SSE 流式回答。</p>
+              <p>提问制度、流程或产品问题，回答会逐步呈现。</p>
             </div>
           </div>
 

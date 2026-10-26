@@ -44,3 +44,24 @@ class ProcessExecutionRecord(BaseModel):
     error_message: str | None
     started_at: str
     finished_at: str | None
+
+
+class ProcessExecutionSummary(BaseModel):
+    id: int
+    request_id: UUID
+    status: Literal['running', 'simulated', 'failed', 'timeout']
+    application_type: str | None
+    applicant: str | None
+    department: str | None
+    ticket_id: str | None
+    response_status_code: int | None
+    started_at: str
+    finished_at: str | None
+
+
+class ProcessExecutionPage(BaseModel):
+    items: list[ProcessExecutionSummary]
+    total: int
+    page: int
+    page_size: int
+    status_counts: dict[str, int]

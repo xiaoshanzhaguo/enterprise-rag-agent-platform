@@ -63,11 +63,12 @@ async function parseResponse<TResponse>(response: Response): Promise<TResponse> 
 
 // GET 请求封装
 // 定义并导出一个 GET 请求函数。这是一个异步函数，最终返回接口数据。
-export async function apiGet<TResponse>(path: string): Promise<TResponse> {
+export async function apiGet<TResponse>(path: string, signal?: AbortSignal): Promise<TResponse> {
   // 发送 HTTP 请求
   // fetch: 浏览器内置的网络请求函数，它会向后端发送请求。fetch 默认是 GET 请求。
   // await: 表示等待请求完成
   const response = await fetch(buildApiUrl(path), {
+    signal: signal ?? AbortSignal.timeout(15000),
     headers: {
       Accept: 'application/json', // 告诉后端，我希望你返回 JSON 格式的数据。Accept 是 HTTP 请求头。
     },
@@ -79,6 +80,20 @@ export async function apiGet<TResponse>(path: string): Promise<TResponse> {
   // 判断 response.ok
   // 成功就返回数据，失败就抛出 ApiError
   return parseResponse<TResponse>(response)
+}
+
+export function formatApiError(error: unknown, fallback = '暂时无法连接服务，请稍后重试。') {
+  if (error instanceof ApiError) {
+    if (typeof error.payload === 'object' && error.payload && 'detail' in error.payload
+      && typeof error.payload.detail === 'string') return error.payload.detail
+    if (error.status === 502 || error.status === 503) return '后端服务暂不可用，请确认服务已启动后重试。'
+    if (error.status === 422) return '填写内容或筛选条件不正确，请检查后重试。'
+    return `请求未完成（${error.status}），请稍后重试。`
+  }
+  if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+    return '查询超时，请稍后刷新。查询不会重复提交流程。'
+  }
+  return fallback
 }
 
 // POST 请求封装。

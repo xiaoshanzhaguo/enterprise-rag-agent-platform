@@ -70,3 +70,38 @@ def get_process_execution(request_id: str) -> dict[str, Any] | None:
     output = result.pop("output_json")
     result["output"] = json.loads(output) if output else None
     return result
+
+
+def list_process_executions(*, page: int = 1, page_size: int = 20,
+                            status: str | None = None, request_id: str | None = None) -> dict[str, Any]:
+    """只读分页查询；统计覆盖全部有效流程记录，不随列表筛选变化。"""
+    base = "workflow_name = 'process_application' AND request_id IS NOT NULL AND status IN ('running','simulated','failed','timeout')"
+    conditions, parameters = [base], []
+    if status:
+        conditions.append('status = ?')
+        parameters.append(status)
+    if request_id:
+        conditions.append('request_id = ?')
+        parameters.append(request_id)
+    where = ' AND '.join(conditions)
+    with closing(get_connection()) as connection:
+        # 统计和当前页在同一只读快照内，避免更新中的状态导致数量不一致。
+        connection.execute('BEGIN')
+        counts = {s: 0 for s in ('running', 'simulated', 'failed', 'timeout')}
+        for row in connection.execute(f'SELECT status, COUNT(*) AS n FROM n8n_execution_records WHERE {base} GROUP BY status'):
+            counts[row['status']] = row['n']
+        total = connection.execute(f'SELECT COUNT(*) FROM n8n_execution_records WHERE {where}', parameters).fetchone()[0]
+        rows = connection.execute(
+            f'''SELECT id, request_id, status, input_json, output_json, response_status_code, started_at, finished_at
+                FROM n8n_execution_records WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?''',
+            [*parameters, page_size, (page - 1) * page_size],
+        ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        fields = json.loads(item.pop('input_json')).get('fields', {})
+        output = json.loads(item.pop('output_json') or 'null')
+        item.update(application_type=fields.get('application_type'), applicant=fields.get('applicant'),
+                    department=fields.get('department'), ticket_id=output.get('ticket_id') if output else None)
+        items.append(item)
+    return dict(items=items, total=total, page=page, page_size=page_size, status_counts=counts)

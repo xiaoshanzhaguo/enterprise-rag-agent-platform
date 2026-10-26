@@ -14,6 +14,7 @@
 * */
 
 import { FileText, RefreshCw, UploadCloud } from 'lucide-react'
+import { formatApiError } from '../api/httpClient'
 // 在这个页面里：useState 保存知识库列表、分类列表、loading、错误信息；useEffect 页面首次加载后请求后端数据。
 import { useEffect, useState } from 'react'
 // 只从 React 里导入 ChangeEvent 这个“类型”，用于 TypeScript 类型标注，不会作为运行时代码打包。
@@ -111,7 +112,7 @@ export const KnowledgeAdminPage = () => {
       } catch (error) {
         // 如果 try 里的请求失败，就进入 catch。error是捕获到的错误对象。
         // 展示接口错误，方便开发阶段定位后端是否启动。
-        setErrorMessage(error instanceof Error ? error.message : '加载知识库管理数据失败')
+        setErrorMessage(formatApiError(error, '加载知识库管理数据失败，请检查服务连接后刷新页面。'))
       } finally {
         // 组件还存在时才结束 loading。
         if (!ignore) {
@@ -165,7 +166,7 @@ export const KnowledgeAdminPage = () => {
         // 如果请求失败，展示错误信息。
         if (!ignore) {
           // 尽量展示真实错误；拿不到时展示兜底文案。
-          setErrorMessage(error instanceof Error ? error.message : '加载文档状态失败')
+          setErrorMessage(formatApiError(error, '加载文档状态失败，请稍后重试。'))
           // 清空文档状态，避免旧数据误导用户。
           setRagStatus(null)
         }
@@ -229,7 +230,7 @@ export const KnowledgeAdminPage = () => {
       setRagStatus(response)
     } catch (error) {
       // 展示接口错误。
-      setErrorMessage(error instanceof Error ? error.message : '刷新文档状态失败')
+      setErrorMessage(formatApiError(error, '刷新文档状态失败，请稍后重试。'))
     } finally {
       // 结束文档状态加载。
       setIsStatusLoading(false)
@@ -330,7 +331,7 @@ export const KnowledgeAdminPage = () => {
       await refreshSelectedKnowledgeBaseStatus()
     } catch (error) {
       // 展示上传失败原因。
-      setErrorMessage(error instanceof Error ? error.message : '上传并索引文档失败')
+      setErrorMessage(formatApiError(error, '上传并索引文档失败，请核对文档后重试。'))
     } finally {
       // 结束上传中状态。
       setIsUploading(false)
@@ -348,12 +349,12 @@ export const KnowledgeAdminPage = () => {
         <div>
           <p className="eyebrow">管理员侧</p>
           <h2>知识库管理</h2>
-          <p>这里保留管理员上传入口，让知识库从普通聊天 session 中独立出来。</p>
+          <p>集中维护企业资料，按业务分类整理，为员工提供可信的知识来源。</p>
         </div>
       </header>
 
       {/* 加载失败时展示错误信息。 */}
-      {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
+      {errorMessage ? <div className="alert error" role="alert">{errorMessage}</div> : null}
 
       {/* 两列布局：左侧上传入口，右侧当前配置。 */}
       <div className="workspace-grid">
@@ -365,7 +366,7 @@ export const KnowledgeAdminPage = () => {
             <UploadCloud aria-hidden="true" size={20} />
             <div>
               <h3>上传企业文档</h3>
-              <p>复用后端 /index_document，把文本型文档写入选中的企业知识库。</p>
+              <p>选择分类并上传文本资料，处理完成后即可用于问答检索。</p>
             </div>
           </div>
 
@@ -431,8 +432,8 @@ export const KnowledgeAdminPage = () => {
             {/* small-icon 是 CSS 类名，用于把这个文字显示成小图标样式。 */}
             <div className="small-icon">KB</div>
             <div>
-              <h3>当前配置</h3>
-              <p>来自 FastAPI 的知识库和分类接口。</p>
+              <h3>知识库概览</h3>
+              <p>查看已收录文档及其分类与处理情况。</p>
             </div>
           </div>
 

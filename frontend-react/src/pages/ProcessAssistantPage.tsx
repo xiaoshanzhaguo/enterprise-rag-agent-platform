@@ -1,6 +1,8 @@
 /** 流程申请：提取 → 人工确认 → 显式提交 → 查询执行记录。 */
 import { CheckCircle2, ClipboardList, Search, SendHorizontal, WandSparkles } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { EmptyState } from '../components/WorkspaceUI'
 import { ApiError } from '../api/httpClient'
 import { extractApplicationFields, fetchApplicationExecution, submitApplication } from '../api/processApi'
 import type { ProcessFields, ProcessReceipt, ProcessSubmission } from '../types/process'
@@ -197,14 +199,15 @@ export function ProcessAssistantPage() {
         <aside className="panel process-result-panel" aria-label="流程执行结果">
           <div className="panel-heading"><Search aria-hidden="true" size={20} /><div><h3>流程执行结果</h3><p>提交后可查询已保存的执行状态。</p></div></div>
           {receipt ? <div className="process-success" role="status">
-            <CheckCircle2 aria-hidden="true" size={24} /><div><strong>流程已触发 / 已记录</strong><p>模拟流程执行完成，回执已保存至 SQLite。</p></div>
-          </div> : <p className="muted-text">{pending ? '已保留申请编号。结果不明时先查询，不自动重发。' : '确认提交后，这里将显示申请编号和执行结果。'}</p>}
+            <CheckCircle2 aria-hidden="true" size={24} /><div><strong>流程已触发 / 已记录</strong><p>模拟流程执行完成，回执已保存，可在执行日志中查看。</p></div>
+          </div> : pending ? <p className="muted-text">已保留申请编号。结果不明时先查询，不自动重发。</p> : <EmptyState title="等待确认提交">完成字段核对后，申请编号与执行结果会显示在这里。</EmptyState>}
           {pending && <>
             <dl className="process-record-details"><div><dt>申请编号</dt><dd>{pending.request_id}</dd></div>
               <div><dt>模拟工单编号</dt><dd>{receipt?.ticket_id || '等待有效回执'}</dd></div></dl>
             <button className="primary-button" type="button" disabled={!!busy} onClick={handleQuery}>
               <Search aria-hidden="true" size={16} />{busy === 'query' ? '正在查询…' : '查询执行状态'}
             </button>
+            <Link className="text-button" to={`/logs?request_id=${encodeURIComponent(pending.request_id)}`}>在执行日志中查看此申请 →</Link>
             {!receipt && <label className="process-new-confirm"><input type="checkbox" checked={allowNew} disabled={!!busy}
               onChange={event => setAllowNew(event.target.checked)} />我已核对原申请结果，确认需要另建申请。</label>}
             <button className="process-secondary-button" type="button" onClick={handleNewApplication} disabled={!!busy || (!receipt && !allowNew)}>新建另一份申请</button>
