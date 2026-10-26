@@ -1,0 +1,2617 @@
+{
+  "executed_at_utc": "2026-10-26T10:51:56.358573+00:00",
+  "mode": "live",
+  "cases_sha256": "d906a5a798f271a304a735a08b666a57a84b2959049c22d2ae2331f383d36b9d",
+  "corpus_sha256": "4fb87076e4e37f10e1611ef7ea253e3e126e7613563464fb431771f953b850dd",
+  "implementation_sha256": {
+    "backend\\services\\agent_service.py": "214ecae63396bb66e1b0754cf7abb391af0036348de0e89c760b490ce1db9401",
+    "backend\\services\\agent_router.py": "6d5a6ef9979f02b798bf778adf705d757d9c2afdc14bf510add7bfaf2af81405",
+    "backend\\prompt\\agent_prompts.py": "0d11c9eb12549a17bf2d78d160a1294e422665a5cf80fc970e92804cf505d1ae",
+    "backend\\prompt\\process_prompts.py": "ffdfaa07a7973d0d414d9a907a084c4b5e2e3b83e31307a27bdc8f7ee659f7c5"
+  },
+  "retrieval_mode": "keyword",
+  "top_k": 3,
+  "results": [
+    {
+      "route": "knowledge_qa",
+      "answer": "员工年假需要至少提前 3 个工作日在 HR 系统提交申请[来源: leave_policy.md#chunk-3]。",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "leave_policy.md",
+          "chunk_id": 3,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "leave_policy.md#chunk-3",
+          "text": "## 年假规则\n\n员工入职满 6 个月后可以申请年假。司龄未满 1 年的员工，每年可享有 5 天年假；司龄满 1 年但未满 3 年的员工，每年可享有 7 天年假；司龄满 3 年及以上的员工，每年可享有 10 天年假。\n\n年假需要至少提前 3 个工作日在 HR 系统提交申请。连续请年假超过 5 天时，需要直属主管和部门负责人共同审批。",
+          "text_preview": "## 年假规则\n\n员工入职满 6 个月后可以申请年假。司龄未满 1 年的员工，每年可享有 5 天年假；司龄满 1 年但未满 3 年的员工，每年可享有 7 天年假；司龄满 3 年及以上的员工，每年可享有 10 天年假。\n\n年假需要至少提前 3 个工作日在 HR 系统提交申请。连续请年假超过 5 天时，需要直属主管和部门负责人共同审批。",
+          "text_length": 167,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "travel_expense_policy.md",
+          "chunk_id": 2,
+          "score": 6,
+          "retrieval_mode": "keyword",
+          "source": "travel_expense_policy.md#chunk-2",
+          "text": "## 出差申请\n\n员工出差前需要至少提前 2 个工作日在系统提交出差申请。申请内容包括出差地点、出差时间、出差目的、客户或项目名称、预计交通费用和住宿费用。\n\n临时紧急出差可以先由直属主管在企业微信确认，员工需要在出差结束后 1 个工作日内补提交出差申请。",
+          "text_preview": "## 出差申请\n\n员工出差前需要至少提前 2 个工作日在系统提交出差申请。申请内容包括出差地点、出差时间、出差目的、客户或项目名称、预计交通费用和住宿费用。\n\n临时紧急出差可以先由直属主管在企业微信确认，员工需要在出差结束后 1 个工作日内补提交出差申请。",
+          "text_length": 128,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "attendance_policy.md",
+          "chunk_id": 5,
+          "score": 6,
+          "retrieval_mode": "keyword",
+          "source": "attendance_policy.md#chunk-5",
+          "text": "## 远程办公\n\n员工因专注开发、线上会议、恶劣天气或家庭突发情况需要远程办公时，需要至少提前 1 个工作日在 HR 系统提交申请。远程办公每月默认不超过 4 天，超过 4 天需要部门负责人审批。\n\n远程办公期间，员工需要保持企业微信在线，并在团队日报中同步当天计划和完成情况。",
+          "text_preview": "## 远程办公\n\n员工因专注开发、线上会议、恶劣天气或家庭突发情况需要远程办公时，需要至少提前 1 个工作日在 HR 系统提交申请。远程办公每月默认不超过 4 天，超过 4 天需要部门负责人审批。\n\n远程办公期间，员工需要保持企业微信在线，并在团队日报中同步当天计划和完成情况。",
+          "text_length": 139,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1223.32
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 24.79
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1005.22
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问公司年假提前提交时限，属于HR制度规则咨询",
+        "rewritten_query": "员工年假 提前几个工作日 提交 规定",
+        "effective_retrieval_query": "员工年假 提前几个工作日 提交 规定",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "hr_01",
+      "request_id": "0fef44dd-b0b9-4c26-b791-1dd0a9565dfa",
+      "mode": "live",
+      "duration_ms": 2550.63
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "试用期员工每月最多可申请 2 天带薪病假，超过部分按事假处理。[来源: leave_policy.md#chunk-4]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "leave_policy.md",
+          "chunk_id": 4,
+          "score": 12,
+          "retrieval_mode": "keyword",
+          "source": "leave_policy.md#chunk-4",
+          "text": "## 病假规则\n\n员工因身体原因无法到岗时，可以申请病假。单次病假不超过 1 天时，可以先在系统提交说明；连续病假超过 1 天时，需要在返岗后 2 个工作日内补充医院诊断证明或线上问诊记录。\n\n试用期员工每月最多可申请 2 天带薪病假，超过部分按事假处理。",
+          "text_preview": "## 病假规则\n\n员工因身体原因无法到岗时，可以申请病假。单次病假不超过 1 天时，可以先在系统提交说明；连续病假超过 1 天时，需要在返岗后 2 个工作日内补充医院诊断证明或线上问诊记录。\n\n试用期员工每月最多可申请 2 天带薪病假，超过部分按事假处理。",
+          "text_length": 128,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "leave_policy.md",
+          "chunk_id": 1,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "leave_policy.md#chunk-1",
+          "text": "# HR-01 员工请假与休假制度\n\n适用范围：星辰科技有限公司全体正式员工、试用期员工和实习员工。",
+          "text_preview": "# HR-01 员工请假与休假制度\n\n适用范围：星辰科技有限公司全体正式员工、试用期员工和实习员工。",
+          "text_length": 50,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "attendance_policy.md",
+          "chunk_id": 4,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "attendance_policy.md#chunk-4",
+          "text": "## 漏打卡处理\n\n员工漏打卡后，需要在 2 个工作日内通过 HR 系统提交补卡申请，并说明原因。每月可提交 3 次补卡申请；超过 3 次时，需要部门负责人审批。",
+          "text_preview": "## 漏打卡处理\n\n员工漏打卡后，需要在 2 个工作日内通过 HR 系统提交补卡申请，并说明原因。每月可提交 3 次补卡申请；超过 3 次时，需要部门负责人审批。",
+          "text_length": 81,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1185.99
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 22.36
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1021.24
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询试用期带薪病假天数及超假处理规则，属于HR制度问答",
+        "rewritten_query": "试用期员工 带薪病假 每月天数 超过部分 处理规定",
+        "effective_retrieval_query": "试用期员工 带薪病假 每月天数 超过部分 处理规定",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "hr_02",
+      "request_id": "8c87eaa5-d5ff-4c55-b072-8027349ea6ab",
+      "mode": "live",
+      "duration_ms": 2280.37
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "远程办公每月默认不超过 4 天，超过 4 天需要部门负责人审批。[来源: attendance_policy.md#chunk-5]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "attendance_policy.md",
+          "chunk_id": 5,
+          "score": 8,
+          "retrieval_mode": "keyword",
+          "source": "attendance_policy.md#chunk-5",
+          "text": "## 远程办公\n\n员工因专注开发、线上会议、恶劣天气或家庭突发情况需要远程办公时，需要至少提前 1 个工作日在 HR 系统提交申请。远程办公每月默认不超过 4 天，超过 4 天需要部门负责人审批。\n\n远程办公期间，员工需要保持企业微信在线，并在团队日报中同步当天计划和完成情况。",
+          "text_preview": "## 远程办公\n\n员工因专注开发、线上会议、恶劣天气或家庭突发情况需要远程办公时，需要至少提前 1 个工作日在 HR 系统提交申请。远程办公每月默认不超过 4 天，超过 4 天需要部门负责人审批。\n\n远程办公期间，员工需要保持企业微信在线，并在团队日报中同步当天计划和完成情况。",
+          "text_length": 139,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1148.38
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 24.49
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 941.09
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问远程办公制度中的天数上限和审批人，属于HR制度咨询",
+        "rewritten_query": "远程办公 每月默认最多天数 超过审批人",
+        "effective_retrieval_query": "远程办公 每月默认最多天数 超过审批人",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "hr_03",
+      "request_id": "32be2020-d5b4-45fb-aa59-94259769552a",
+      "mode": "live",
+      "duration_ms": 2155.11
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "新员工如果缺少离职证明或学历证明，需要在入职后 10 个工作日内补交；超过 10 个工作日仍未提交的，HRBP 会提醒员工和直属主管共同跟进。[来源: onboarding_checklist.md#chunk-5]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "onboarding_checklist.md",
+          "chunk_id": 5,
+          "score": 9,
+          "retrieval_mode": "keyword",
+          "source": "onboarding_checklist.md#chunk-5",
+          "text": "## 入职资料补交\n\n如果新员工缺少离职证明或学历证明，需要在入职后 10 个工作日内补交。超过 10 个工作日仍未提交的，HRBP 会提醒员工和直属主管共同跟进。",
+          "text_preview": "## 入职资料补交\n\n如果新员工缺少离职证明或学历证明，需要在入职后 10 个工作日内补交。超过 10 个工作日仍未提交的，HRBP 会提醒员工和直属主管共同跟进。",
+          "text_length": 82,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "onboarding_checklist.md",
+          "chunk_id": 2,
+          "score": 8,
+          "retrieval_mode": "keyword",
+          "source": "onboarding_checklist.md#chunk-2",
+          "text": "## 入职前准备\n\nHRBP 需要在员工入职前 3 个工作日完成 offer 确认、入职资料收集和工号预创建。新员工需要提交身份证明、银行卡信息、学历证明、上一家公司离职证明和紧急联系人信息。\n\nIT 支持人员需要在入职前 1 个工作日准备办公电脑、企业邮箱、企业微信账号、VPN 账号和基础软件安装包。",
+          "text_preview": "## 入职前准备\n\nHRBP 需要在员工入职前 3 个工作日完成 offer 确认、入职资料收集和工号预创建。新员工需要提交身份证明、银行卡信息、学历证明、上一家公司离职证明和紧急联系人信息。\n\nIT 支持人员需要在入职前 1 个工作日准备办公电脑、企业邮箱、企业微信账号、VPN 账号和基础软件安装包。",
+          "text_length": 152,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "leave_policy.md",
+          "chunk_id": 4,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "leave_policy.md#chunk-4",
+          "text": "## 病假规则\n\n员工因身体原因无法到岗时，可以申请病假。单次病假不超过 1 天时，可以先在系统提交说明；连续病假超过 1 天时，需要在返岗后 2 个工作日内补充医院诊断证明或线上问诊记录。\n\n试用期员工每月最多可申请 2 天带薪病假，超过部分按事假处理。",
+          "text_preview": "## 病假规则\n\n员工因身体原因无法到岗时，可以申请病假。单次病假不超过 1 天时，可以先在系统提交说明；连续病假超过 1 天时，需要在返岗后 2 个工作日内补充医院诊断证明或线上问诊记录。\n\n试用期员工每月最多可申请 2 天带薪病假，超过部分按事假处理。",
+          "text_length": 128,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 960.76
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 19.8
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1008.91
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询新员工入职材料补交时限，属于HR制度问答",
+        "rewritten_query": "新员工 离职证明 学历证明 缺失 补交 时限 到岗后",
+        "effective_retrieval_query": "新员工 离职证明 学历证明 缺失 补交 时限 到岗后",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "hr_04",
+      "request_id": "c951e45a-927a-49a9-8af1-5988b78bd71b",
+      "mode": "live",
+      "duration_ms": 2028.9
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "普通岗位试用期为 3 个月，管理岗位试用期为 6 个月。[来源: onboarding_checklist.md#chunk-4]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "onboarding_checklist.md",
+          "chunk_id": 4,
+          "score": 8,
+          "retrieval_mode": "keyword",
+          "source": "onboarding_checklist.md#chunk-4",
+          "text": "## 试用期安排\n\n试用期第 1 周，直属主管需要安排岗位培训和代码仓库或业务系统权限。试用期第 30 天，主管需要进行一次阶段反馈。试用期结束前 7 个工作日，HRBP 会发起转正评估流程。\n\n普通岗位试用期为 3 个月，管理岗位试用期为 6 个月。试用期表现优秀且业务需要明确时，可由部门负责人申请提前转正。",
+          "text_preview": "## 试用期安排\n\n试用期第 1 周，直属主管需要安排岗位培训和代码仓库或业务系统权限。试用期第 30 天，主管需要进行一次阶段反馈。试用期结束前 7 个工作日，HRBP 会发起转正评估流程。\n\n普通岗位试用期为 3 个月，管理岗位试用期为 6 个月。试用期表现优秀且业务需要明确时，可由部门负责人申请提前转正。",
+          "text_length": 156,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "onboarding_checklist.md",
+          "chunk_id": 3,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "onboarding_checklist.md#chunk-3",
+          "text": "## 入职当天流程\n\n新员工到岗后，HRBP 负责完成身份核验、劳动合同签署、员工手册确认和办公区域介绍。直属主管负责介绍团队成员、岗位职责、近期目标和试用期考核方式。\n\n入职当天 18:00 前，IT 支持人员需要确认企业邮箱、企业微信、VPN、GitLab、项目管理系统和文档系统均可登录。",
+          "text_preview": "## 入职当天流程\n\n新员工到岗后，HRBP 负责完成身份核验、劳动合同签署、员工手册确认和办公区域介绍。直属主管负责介绍团队成员、岗位职责、近期目标和试用期考核方式。\n\n入职当天 18:00 前，IT 支持人员需要确认企业邮箱、企业微信、VPN、GitLab、项目管理系统和文档系统均可登录。",
+          "text_length": 147,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "onboarding_checklist.md",
+          "chunk_id": 6,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "onboarding_checklist.md#chunk-6",
+          "text": "## 常见问题\n\nQ：入职当天无法登录企业邮箱怎么办？  \nA：先联系 IT 支持人员检查账号状态，再由 HRBP 确认员工工号是否已经生效。\n\nQ：试用期目标在哪里查看？  \nA：试用期目标由直属主管在项目管理系统中创建，并在入职第 1 周内与员工确认。",
+          "text_preview": "## 常见问题\n\nQ：入职当天无法登录企业邮箱怎么办？  \nA：先联系 IT 支持人员检查账号状态，再由 HRBP 确认员工工号是否已经生效。\n\nQ：试用期目标在哪里查看？  \nA：试用期目标由直属主管在项目管理系统中创建，并在入职第 1 周内与员工确认。",
+          "text_length": 128,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1161.01
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 21.2
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 871.38
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询公司试用期制度规定，属于HR制度问答",
+        "rewritten_query": "普通岗位 管理岗位 试用期 时长 规定",
+        "effective_retrieval_query": "普通岗位 管理岗位 试用期 时长 规定",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "hr_05",
+      "request_id": "6c7827d1-4e66-4d5d-b915-ed8c9a42e9ce",
+      "mode": "live",
+      "duration_ms": 2091.23
+    },
+    {
+      "route": "finance_process",
+      "answer": "日常费用报销需要在费用发生后的 15 个工作日内提交申请。[来源: reimbursement_policy.md#chunk-2]\n\n跨月费用应尽量在次月 5 日前提交，避免影响财务结账；超过 15 个工作日未提交的，需要在申请中说明延迟原因，并由部门负责人补充审批。[来源: reimbursement_policy.md#chunk-2]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "reimbursement_policy.md",
+          "chunk_id": 2,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "reimbursement_policy.md#chunk-2",
+          "text": "## 报销提交时限\n\n员工发生费用后，需要在费用发生后的 15 个工作日内提交报销申请。跨月费用应尽量在次月 5 日前提交，避免影响财务结账。\n\n超过 15 个工作日未提交的报销，需要在申请中说明延迟原因，并由部门负责人补充审批。",
+          "text_preview": "## 报销提交时限\n\n员工发生费用后，需要在费用发生后的 15 个工作日内提交报销申请。跨月费用应尽量在次月 5 日前提交，避免影响财务结账。\n\n超过 15 个工作日未提交的报销，需要在申请中说明延迟原因，并由部门负责人补充审批。",
+          "text_length": 115,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "reimbursement_policy.md",
+          "chunk_id": 1,
+          "score": 5,
+          "retrieval_mode": "keyword",
+          "source": "reimbursement_policy.md#chunk-1",
+          "text": "# FIN-01 日常费用报销制度\n\n适用范围：星辰科技有限公司全体员工的日常办公费用、交通费用、业务招待费用和培训费用。",
+          "text_preview": "# FIN-01 日常费用报销制度\n\n适用范围：星辰科技有限公司全体员工的日常办公费用、交通费用、业务招待费用和培训费用。",
+          "text_length": 61,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "travel_expense_policy.md",
+          "chunk_id": 6,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "travel_expense_policy.md#chunk-6",
+          "text": "## 报销提交\n\n差旅报销需要在出差结束后的 15 个工作日内提交。报销材料包括出差申请单、交通票据、住宿发票、打车行程单和费用说明。",
+          "text_preview": "## 报销提交\n\n差旅报销需要在出差结束后的 15 个工作日内提交。报销材料包括出差申请单、交通票据、住宿发票、打车行程单和费用说明。",
+          "text_length": 67,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 844.26
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 20.12
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1538.28
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询报销提交时限，属于财务制度问答",
+        "rewritten_query": "日常费用报销申请提交时限",
+        "effective_retrieval_query": "日常费用报销申请提交时限",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "finance"
+      },
+      "extraction": null,
+      "id": "finance_01",
+      "request_id": "e7d56616-89bd-4ba0-8cb6-ee7468793ce1",
+      "mode": "live",
+      "duration_ms": 2444.6
+    },
+    {
+      "route": "finance_process",
+      "answer": "打车报销需要上传电子发票和行程单作为报销材料。[来源: reimbursement_policy.md#chunk-3]\n\n如果缺少行程单，需要补充平台行程单；无法补充时，财务会退回该笔报销。[来源: reimbursement_policy.md#chunk-6]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "reimbursement_policy.md",
+          "chunk_id": 3,
+          "score": 6,
+          "retrieval_mode": "keyword",
+          "source": "reimbursement_policy.md#chunk-3",
+          "text": "## 报销材料\n\n报销申请必须包含费用说明、费用发生日期、金额、费用类型和项目归属。发票、付款截图、消费明细和审批截图需要作为附件上传。\n\n打车报销需要上传电子发票和行程单。餐饮报销需要上传发票、消费小票和参与人员名单。培训报销需要上传课程订单、发票和培训完成证明。",
+          "text_preview": "## 报销材料\n\n报销申请必须包含费用说明、费用发生日期、金额、费用类型和项目归属。发票、付款截图、消费明细和审批截图需要作为附件上传。\n\n打车报销需要上传电子发票和行程单。餐饮报销需要上传发票、消费小票和参与人员名单。培训报销需要上传课程订单、发票和培训完成证明。",
+          "text_length": 133,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "travel_expense_policy.md",
+          "chunk_id": 6,
+          "score": 5,
+          "retrieval_mode": "keyword",
+          "source": "travel_expense_policy.md#chunk-6",
+          "text": "## 报销提交\n\n差旅报销需要在出差结束后的 15 个工作日内提交。报销材料包括出差申请单、交通票据、住宿发票、打车行程单和费用说明。",
+          "text_preview": "## 报销提交\n\n差旅报销需要在出差结束后的 15 个工作日内提交。报销材料包括出差申请单、交通票据、住宿发票、打车行程单和费用说明。",
+          "text_length": 67,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "reimbursement_policy.md",
+          "chunk_id": 6,
+          "score": 5,
+          "retrieval_mode": "keyword",
+          "source": "reimbursement_policy.md#chunk-6",
+          "text": "## 常见问题\n\nQ：电子发票可以报销吗？  \nA：可以，但需要保证发票抬头、税号和金额清晰完整。\n\nQ：打车报销缺少行程单怎么办？  \nA：需要补充平台行程单；无法补充时，财务会退回该笔报销。",
+          "text_preview": "## 常见问题\n\nQ：电子发票可以报销吗？  \nA：可以，但需要保证发票抬头、税号和金额清晰完整。\n\nQ：打车报销缺少行程单怎么办？  \nA：需要补充平台行程单；无法补充时，财务会退回该笔报销。",
+          "text_length": 97,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1059.02
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 18.01
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1136.2
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询打车报销材料及缺少行程单的财务制度规则",
+        "rewritten_query": "打车报销 所需材料 行程单 缺失 规定",
+        "effective_retrieval_query": "打车报销 所需材料 行程单 缺失 规定",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "finance"
+      },
+      "extraction": null,
+      "id": "finance_02",
+      "request_id": "8e165bdc-1b6e-4774-bf74-ca20e2ee1582",
+      "mode": "live",
+      "duration_ms": 2251.32
+    },
+    {
+      "route": "finance_process",
+      "answer": "单张发票金额超过 5000 元时，需要财务经理复核。[来源: reimbursement_policy.md#chunk-4]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "reimbursement_policy.md",
+          "chunk_id": 4,
+          "score": 10,
+          "retrieval_mode": "keyword",
+          "source": "reimbursement_policy.md#chunk-4",
+          "text": "## 审批规则\n\n单笔费用不超过 1000 元时，由直属主管审批。单笔费用超过 1000 元但不超过 5000 元时，需要直属主管和部门负责人审批。单张发票金额超过 5000 元时，需要财务经理复核。\n\n业务招待费用无论金额大小，都需要提前在系统提交招待申请。未提前申请的业务招待费用，财务有权退回。",
+          "text_preview": "## 审批规则\n\n单笔费用不超过 1000 元时，由直属主管审批。单笔费用超过 1000 元但不超过 5000 元时，需要直属主管和部门负责人审批。单张发票金额超过 5000 元时，需要财务经理复核。\n\n业务招待费用无论金额大小，都需要提前在系统提交招待申请。未提前申请的业务招待费用，财务有权退回。",
+          "text_length": 150,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "payment_approval_policy.md",
+          "chunk_id": 3,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "payment_approval_policy.md#chunk-3",
+          "text": "## 审批金额规则\n\n单笔付款不超过 1 万元时，由业务负责人和部门负责人审批。单笔付款超过 1 万元但不超过 10 万元时，需要财务经理复核。单笔付款超过 10 万元时，需要总经理审批。\n\n预付款比例超过合同金额 30% 时，需要在申请中说明业务原因和风险控制措施。",
+          "text_preview": "## 审批金额规则\n\n单笔付款不超过 1 万元时，由业务负责人和部门负责人审批。单笔付款超过 1 万元但不超过 10 万元时，需要财务经理复核。单笔付款超过 10 万元时，需要总经理审批。\n\n预付款比例超过合同金额 30% 时，需要在申请中说明业务原因和风险控制措施。",
+          "text_length": 134,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1032.76
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 16.86
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1016.09
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问发票金额超限的复核人，属于财务制度规则咨询",
+        "rewritten_query": "单张发票金额超过5000元 复核人 财务制度",
+        "effective_retrieval_query": "单张发票金额超过5000元 复核人 财务制度",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "finance"
+      },
+      "extraction": null,
+      "id": "finance_03",
+      "request_id": "7a7fb5c1-e60e-4c2a-aad3-52039620954f",
+      "mode": "live",
+      "duration_ms": 2107.78
+    },
+    {
+      "route": "finance_process",
+      "answer": "一线城市住宿标准为每晚不超过 600 元，其他城市住宿标准为每晚不超过 450 元。[来源: travel_expense_policy.md#chunk-4]\n\n超过标准的住宿费用需要提前说明原因，并由部门负责人审批。[来源: travel_expense_policy.md#chunk-4]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "travel_expense_policy.md",
+          "chunk_id": 4,
+          "score": 10,
+          "retrieval_mode": "keyword",
+          "source": "travel_expense_policy.md#chunk-4",
+          "text": "## 住宿标准\n\n一线城市住宿标准为每晚不超过 600 元，其他城市住宿标准为每晚不超过 450 元。超过标准的住宿费用需要提前说明原因并由部门负责人审批。",
+          "text_preview": "## 住宿标准\n\n一线城市住宿标准为每晚不超过 600 元，其他城市住宿标准为每晚不超过 450 元。超过标准的住宿费用需要提前说明原因并由部门负责人审批。",
+          "text_length": 78,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1125.06
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 18.43
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1237.58
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询差旅住宿标准及超标审批规则，属于财务制度问答",
+        "rewritten_query": "差旅住宿标准 一线城市 其他城市 超标审批人",
+        "effective_retrieval_query": "差旅住宿标准 一线城市 其他城市 超标审批人",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "finance"
+      },
+      "extraction": null,
+      "id": "finance_04",
+      "request_id": "a574fd1a-d4d5-49a3-9b1b-66b6f3e6d05c",
+      "mode": "live",
+      "duration_ms": 2422.64
+    },
+    {
+      "route": "finance_process",
+      "answer": "供应商单笔付款超过 10 万元时，需要总经理审批。[来源: payment_approval_policy.md#chunk-3]\n\n该审批规则适用于采购服务、软件订阅、外包服务、市场活动、咨询服务等需要向供应商付款的业务。[来源: payment_approval_policy.md#chunk-1]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "payment_approval_policy.md",
+          "chunk_id": 3,
+          "score": 9,
+          "retrieval_mode": "keyword",
+          "source": "payment_approval_policy.md#chunk-3",
+          "text": "## 审批金额规则\n\n单笔付款不超过 1 万元时，由业务负责人和部门负责人审批。单笔付款超过 1 万元但不超过 10 万元时，需要财务经理复核。单笔付款超过 10 万元时，需要总经理审批。\n\n预付款比例超过合同金额 30% 时，需要在申请中说明业务原因和风险控制措施。",
+          "text_preview": "## 审批金额规则\n\n单笔付款不超过 1 万元时，由业务负责人和部门负责人审批。单笔付款超过 1 万元但不超过 10 万元时，需要财务经理复核。单笔付款超过 10 万元时，需要总经理审批。\n\n预付款比例超过合同金额 30% 时，需要在申请中说明业务原因和风险控制措施。",
+          "text_length": 134,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "payment_approval_policy.md",
+          "chunk_id": 1,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "payment_approval_policy.md#chunk-1",
+          "text": "# FIN-03 供应商付款与合同审批流程\n\n适用范围：采购服务、软件订阅、外包服务、市场活动、咨询服务等需要向供应商付款的业务。",
+          "text_preview": "# FIN-03 供应商付款与合同审批流程\n\n适用范围：采购服务、软件订阅、外包服务、市场活动、咨询服务等需要向供应商付款的业务。",
+          "text_length": 65,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "payment_approval_policy.md",
+          "chunk_id": 6,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "payment_approval_policy.md#chunk-6",
+          "text": "## 常见问题\n\nQ：没有合同但需要小额采购怎么办？  \nA：单笔不超过 3000 元的小额采购可以提交采购说明和付款申请，但仍需要部门负责人审批。",
+          "text_preview": "## 常见问题\n\nQ：没有合同但需要小额采购怎么办？  \nA：单笔不超过 3000 元的小额采购可以提交采购说明和付款申请，但仍需要部门负责人审批。",
+          "text_length": 74,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1301.52
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 17.24
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 936.04
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询供应商付款审批权限，属于财务制度问答",
+        "rewritten_query": "供应商单笔付款超过10万元 审批人 审批权限",
+        "effective_retrieval_query": "供应商单笔付款超过10万元 审批人 审批权限",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "finance"
+      },
+      "extraction": null,
+      "id": "finance_05",
+      "request_id": "eaef602f-0789-460b-9a0b-d3959687e17f",
+      "mode": "live",
+      "duration_ms": 2294.57
+    },
+    {
+      "route": "it_support",
+      "answer": "VPN 提示 720 错误时，通常是本机网络适配器或 VPN 虚拟网卡异常所致。你可以先重启电脑，然后打开网络设置，将 VPN 适配器禁用后再重新启用；如果这样仍无法恢复，需要联系 IT 支持人员重装 VPN 客户端。[来源: vpn_troubleshooting.md#chunk-4]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "vpn_troubleshooting.md",
+          "chunk_id": 4,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "vpn_troubleshooting.md#chunk-4",
+          "text": "### 无法连接，提示 720 错误\n\n720 错误通常与本机网络适配器或 VPN 虚拟网卡异常有关。员工可以先重启电脑，再打开网络设置，禁用并重新启用 VPN 适配器。如果仍无法恢复，需要联系 IT 支持人员重装 VPN 客户端。",
+          "text_preview": "### 无法连接，提示 720 错误\n\n720 错误通常与本机网络适配器或 VPN 虚拟网卡异常有关。员工可以先重启电脑，再打开网络设置，禁用并重新启用 VPN 适配器。如果仍无法恢复，需要联系 IT 支持人员重装 VPN 客户端。",
+          "text_length": 116,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1102.24
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 15.85
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1001.2
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: VPN错误处理属于IT故障排查，需查询内部IT支持知识库",
+        "rewritten_query": "VPN 720错误 处理方法",
+        "effective_retrieval_query": "VPN 720错误 处理方法",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": null,
+      "id": "it_01",
+      "request_id": "858f7afc-343c-4dc7-915c-50f82e9430e7",
+      "mode": "live",
+      "duration_ms": 2167.08
+    },
+    {
+      "route": "it_support",
+      "answer": "VPN 密码连续输错 5 次后，VPN 账号会被锁定 30 分钟。[来源: vpn_troubleshooting.md#chunk-2]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "vpn_troubleshooting.md",
+          "chunk_id": 2,
+          "score": 6,
+          "retrieval_mode": "keyword",
+          "source": "vpn_troubleshooting.md#chunk-2",
+          "text": "## VPN 登录要求\n\n员工需要使用企业邮箱账号登录 VPN，并完成短信验证码或身份验证器二次认证。VPN 密码与企业邮箱密码保持一致。\n\n连续输错密码 5 次后，VPN 账号会被锁定 30 分钟。紧急情况可以联系 IT 支持人员手动解锁。",
+          "text_preview": "## VPN 登录要求\n\n员工需要使用企业邮箱账号登录 VPN，并完成短信验证码或身份验证器二次认证。VPN 密码与企业邮箱密码保持一致。\n\n连续输错密码 5 次后，VPN 账号会被锁定 30 分钟。紧急情况可以联系 IT 支持人员手动解锁。",
+          "text_length": 121,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1046.92
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 18.73
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 902.77
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询VPN密码错误锁定规则，属于IT规则咨询",
+        "rewritten_query": "VPN 密码连续输错 锁定次数 锁定时长",
+        "effective_retrieval_query": "VPN 密码连续输错 锁定次数 锁定时长",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": null,
+      "id": "it_02",
+      "request_id": "b9300332-141f-4682-9c53-158b09ae670e",
+      "mode": "live",
+      "duration_ms": 2011.69
+    },
+    {
+      "route": "it_support",
+      "answer": "GitLab Maintainer 权限的审批角色包括直属主管和项目技术负责人：申请人需先在 IT 服务台提交权限申请，直属主管需要先审批，涉及 Maintainer 权限时还需要项目技术负责人审批。[来源: gitlab_access_request.md#chunk-3]\n\n之所以需要项目技术负责人额外审批，是因为 Maintainer 可以管理分支保护、合并请求和成员权限，权限较高。[来源: gitlab_access_request.md#chunk-6] 此外，Maintainer 权限仅授予项目技术负责人或模块负责人。[来源: gitlab_access_request.md#chunk-2]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "gitlab_access_request.md",
+          "chunk_id": 3,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "gitlab_access_request.md#chunk-3",
+          "text": "## 申请流程\n\n申请人需要在 IT 服务台提交 GitLab 权限申请，填写项目名称、仓库地址、申请权限等级、申请原因和预计使用期限。直属主管需要先审批，涉及 Maintainer 权限时，还需要项目技术负责人审批。\n\nIT 支持人员会在审批完成后的 1 个工作日内开通权限，并在工单中回复处理结果。",
+          "text_preview": "## 申请流程\n\n申请人需要在 IT 服务台提交 GitLab 权限申请，填写项目名称、仓库地址、申请权限等级、申请原因和预计使用期限。直属主管需要先审批，涉及 Maintainer 权限时，还需要项目技术负责人审批。\n\nIT 支持人员会在审批完成后的 1 个工作日内开通权限，并在工单中回复处理结果。",
+          "text_length": 151,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "gitlab_access_request.md",
+          "chunk_id": 2,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "gitlab_access_request.md#chunk-2",
+          "text": "## 权限等级\n\nGitLab 仓库权限分为 Guest、Reporter、Developer、Maintainer 和 Owner。普通研发成员默认申请 Developer 权限；测试和产品成员通常申请 Reporter 权限；Maintainer 权限仅授予项目技术负责人或模块负责人。\n\nOwner 权限由平台管理员保留，原则上不对普通项目成员开放。",
+          "text_preview": "## 权限等级\n\nGitLab 仓库权限分为 Guest、Reporter、Developer、Maintainer 和 Owner。普通研发成员默认申请 Developer 权限；测试和产品成员通常申请 Reporter 权限；Maintainer 权限仅授予项目技术负责人或模块负责人。\n\nOwner 权限由平台管理员保留，原则上不对普通项目成员开放。",
+          "text_length": 178,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "gitlab_access_request.md",
+          "chunk_id": 6,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "gitlab_access_request.md#chunk-6",
+          "text": "## 常见问题\n\nQ：为什么不能直接申请 Maintainer 权限？  \nA：Maintainer 可以管理分支保护、合并请求和成员权限，权限较高，因此需要项目技术负责人额外审批。\n\nQ：临时查看代码应该申请什么权限？  \nA：只需要查看代码或下载代码时，申请 Reporter 权限即可。",
+          "text_preview": "## 常见问题\n\nQ：为什么不能直接申请 Maintainer 权限？  \nA：Maintainer 可以管理分支保护、合并请求和成员权限，权限较高，因此需要项目技术负责人额外审批。\n\nQ：临时查看代码应该申请什么权限？  \nA：只需要查看代码或下载代码时，申请 Reporter 权限即可。",
+          "text_length": 146,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1087.71
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 20.09
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1779.22
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询GitLab权限审批角色规则，属于IT规则咨询",
+        "rewritten_query": "GitLab Maintainer权限 审批角色 规则",
+        "effective_retrieval_query": "GitLab Maintainer权限 审批角色 规则",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": null,
+      "id": "it_03",
+      "request_id": "757e1c38-731d-4e13-a75b-1cf42686b4de",
+      "mode": "live",
+      "duration_ms": 2928.32
+    },
+    {
+      "route": "it_support",
+      "answer": "GitLab 临时项目权限默认有效期为 90 天，到期后需要重新申请。[来源: gitlab_access_request.md#chunk-4]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "gitlab_access_request.md",
+          "chunk_id": 4,
+          "score": 10,
+          "retrieval_mode": "keyword",
+          "source": "gitlab_access_request.md#chunk-4",
+          "text": "## 权限回收\n\n员工离职、转岗或项目结束后，直属主管需要在 3 个工作日内发起权限回收申请。临时项目权限默认有效期为 90 天，到期后需要重新申请。",
+          "text_preview": "## 权限回收\n\n员工离职、转岗或项目结束后，直属主管需要在 3 个工作日内发起权限回收申请。临时项目权限默认有效期为 90 天，到期后需要重新申请。",
+          "text_length": 75,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "gitlab_access_request.md",
+          "chunk_id": 2,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "gitlab_access_request.md#chunk-2",
+          "text": "## 权限等级\n\nGitLab 仓库权限分为 Guest、Reporter、Developer、Maintainer 和 Owner。普通研发成员默认申请 Developer 权限；测试和产品成员通常申请 Reporter 权限；Maintainer 权限仅授予项目技术负责人或模块负责人。\n\nOwner 权限由平台管理员保留，原则上不对普通项目成员开放。",
+          "text_preview": "## 权限等级\n\nGitLab 仓库权限分为 Guest、Reporter、Developer、Maintainer 和 Owner。普通研发成员默认申请 Developer 权限；测试和产品成员通常申请 Reporter 权限；Maintainer 权限仅授予项目技术负责人或模块负责人。\n\nOwner 权限由平台管理员保留，原则上不对普通项目成员开放。",
+          "text_length": 178,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "gitlab_access_request.md",
+          "chunk_id": 3,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "gitlab_access_request.md#chunk-3",
+          "text": "## 申请流程\n\n申请人需要在 IT 服务台提交 GitLab 权限申请，填写项目名称、仓库地址、申请权限等级、申请原因和预计使用期限。直属主管需要先审批，涉及 Maintainer 权限时，还需要项目技术负责人审批。\n\nIT 支持人员会在审批完成后的 1 个工作日内开通权限，并在工单中回复处理结果。",
+          "text_preview": "## 申请流程\n\n申请人需要在 IT 服务台提交 GitLab 权限申请，填写项目名称、仓库地址、申请权限等级、申请原因和预计使用期限。直属主管需要先审批，涉及 Maintainer 权限时，还需要项目技术负责人审批。\n\nIT 支持人员会在审批完成后的 1 个工作日内开通权限，并在工单中回复处理结果。",
+          "text_length": 151,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1105.22
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 19.38
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1254.24
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询GitLab临时项目权限的默认有效期及到期处理规则，属于IT规则咨询",
+        "rewritten_query": "GitLab 临时项目权限 默认有效期 到期处理",
+        "effective_retrieval_query": "GitLab 临时项目权限 默认有效期 到期处理",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": null,
+      "id": "it_04",
+      "request_id": "6ab2d262-ac10-41da-bfd5-3a0885a35caf",
+      "mode": "live",
+      "duration_ms": 2420.97
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "不允许。公司源代码只能保存在公司授权的 GitLab 或代码托管平台，不能同步到个人 GitHub。[来源: device_security_policy.md#chunk-6]\n\n此外，规范明确禁止将源代码上传到公开代码仓库。[来源: device_security_policy.md#chunk-4]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "device_security_policy.md",
+          "chunk_id": 4,
+          "score": 8,
+          "retrieval_mode": "keyword",
+          "source": "device_security_policy.md#chunk-4",
+          "text": "## 数据安全\n\n公司内部文档、客户资料、源代码、接口密钥和测试数据不得上传到个人网盘、私人邮箱或公开代码仓库。包含客户信息的数据需要脱敏后才能用于测试和演示。\n\n员工离职或转岗时，需要归还办公设备，并由 IT 检查本地数据、账号登录状态和设备完好情况。",
+          "text_preview": "## 数据安全\n\n公司内部文档、客户资料、源代码、接口密钥和测试数据不得上传到个人网盘、私人邮箱或公开代码仓库。包含客户信息的数据需要脱敏后才能用于测试和演示。\n\n员工离职或转岗时，需要归还办公设备，并由 IT 检查本地数据、账号登录状态和设备完好情况。",
+          "text_length": 127,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "device_security_policy.md",
+          "chunk_id": 1,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "device_security_policy.md#chunk-1",
+          "text": "# IT-03 办公设备与数据安全规范\n\n适用范围：使用公司电脑、测试机、移动硬盘、账号和内部系统的全体员工。",
+          "text_preview": "# IT-03 办公设备与数据安全规范\n\n适用范围：使用公司电脑、测试机、移动硬盘、账号和内部系统的全体员工。",
+          "text_length": 55,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "device_security_policy.md",
+          "chunk_id": 6,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "device_security_policy.md#chunk-6",
+          "text": "## 常见问题\n\nQ：可以把公司代码同步到个人 GitHub 吗？  \nA：不可以。公司源代码只能保存在公司授权的 GitLab 或代码托管平台。\n\nQ：测试数据能不能给外部供应商？  \nA：只有经过脱敏并获得业务负责人审批后，才可以提供给外部供应商。",
+          "text_preview": "## 常见问题\n\nQ：可以把公司代码同步到个人 GitHub 吗？  \nA：不可以。公司源代码只能保存在公司授权的 GitLab 或代码托管平台。\n\nQ：测试数据能不能给外部供应商？  \nA：只有经过脱敏并获得业务负责人审批后，才可以提供给外部供应商。",
+          "text_length": 126,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1073.58
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 21.43
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1119.32
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问公司办公设备安全规范对源代码外传的规定，需查内部制度",
+        "rewritten_query": "办公设备安全规范 公司源代码 同步 个人GitHub 规定",
+        "effective_retrieval_query": "办公设备安全规范 公司源代码 同步 个人GitHub 规定",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "it_05",
+      "request_id": "37e06de1-7108-49b1-ae0f-e43130ac775a",
+      "mode": "live",
+      "duration_ms": 2253.71
+    },
+    {
+      "route": "product_doc",
+      "answer": "企业知识助手目前支持上传 Markdown、TXT、PDF 和常见文本内容。[来源: product_faq.md#chunk-3]\n\n如果文档是扫描件图片，系统无法保证直接提取文字，需要先通过 OCR 工具转换为可复制文本后再上传。[来源: product_faq.md#chunk-3]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "product_faq.md",
+          "chunk_id": 1,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "product_faq.md#chunk-1",
+          "text": "# PROD-01 企业知识助手产品 FAQ\n\n适用范围：产品、售前、交付、运营和需要介绍企业知识助手的内部成员。",
+          "text_preview": "# PROD-01 企业知识助手产品 FAQ\n\n适用范围：产品、售前、交付、运营和需要介绍企业知识助手的内部成员。",
+          "text_length": 57,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "product_faq.md",
+          "chunk_id": 2,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "product_faq.md#chunk-2",
+          "text": "## 产品定位\n\n企业知识助手面向企业内部制度、流程和项目文档，帮助员工快速查询内部资料，并生成带来源引用的回答。它适合用于员工手册查询、财务制度查询、IT 故障自助排查、产品资料问答和流程说明。",
+          "text_preview": "## 产品定位\n\n企业知识助手面向企业内部制度、流程和项目文档，帮助员工快速查询内部资料，并生成带来源引用的回答。它适合用于员工手册查询、财务制度查询、IT 故障自助排查、产品资料问答和流程说明。",
+          "text_length": 98,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "product_faq.md",
+          "chunk_id": 3,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "product_faq.md#chunk-3",
+          "text": "## 支持的文档\n\n当前支持 Markdown、TXT、PDF 和常见文本内容上传。系统会提取文本、切分 chunk，并在当前会话内建立可检索的知识范围。\n\n如果文档是扫描件图片，系统无法保证直接提取文字，需要先通过 OCR 工具转换为可复制文本。",
+          "text_preview": "## 支持的文档\n\n当前支持 Markdown、TXT、PDF 和常见文本内容上传。系统会提取文本、切分 chunk，并在当前会话内建立可检索的知识范围。\n\n如果文档是扫描件图片，系统无法保证直接提取文字，需要先通过 OCR 工具转换为可复制文本。",
+          "text_length": 124,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1184.25
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 16.78
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1002.1
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问企业知识助手产品FAQ中的文档格式支持范围，属于产品资料咨询",
+        "rewritten_query": "企业知识助手 产品FAQ 支持上传 文档格式",
+        "effective_retrieval_query": "企业知识助手 产品FAQ 支持上传 文档格式",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "product"
+      },
+      "extraction": null,
+      "id": "product_01",
+      "request_id": "b61defe2-2967-41a5-ab2b-530b9bd7e17d",
+      "mode": "live",
+      "duration_ms": 2243.75
+    },
+    {
+      "route": "product_doc",
+      "answer": "不能保证直接提取文字。知识库说明，如果文档是扫描件图片，系统无法保证直接提取文字，需要先通过 OCR 工具转换为可复制文本后再处理。[来源: product_faq.md#chunk-3]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "product_faq.md",
+          "chunk_id": 1,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "product_faq.md#chunk-1",
+          "text": "# PROD-01 企业知识助手产品 FAQ\n\n适用范围：产品、售前、交付、运营和需要介绍企业知识助手的内部成员。",
+          "text_preview": "# PROD-01 企业知识助手产品 FAQ\n\n适用范围：产品、售前、交付、运营和需要介绍企业知识助手的内部成员。",
+          "text_length": 57,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "product_faq.md",
+          "chunk_id": 3,
+          "score": 7,
+          "retrieval_mode": "keyword",
+          "source": "product_faq.md#chunk-3",
+          "text": "## 支持的文档\n\n当前支持 Markdown、TXT、PDF 和常见文本内容上传。系统会提取文本、切分 chunk，并在当前会话内建立可检索的知识范围。\n\n如果文档是扫描件图片，系统无法保证直接提取文字，需要先通过 OCR 工具转换为可复制文本。",
+          "text_preview": "## 支持的文档\n\n当前支持 Markdown、TXT、PDF 和常见文本内容上传。系统会提取文本、切分 chunk，并在当前会话内建立可检索的知识范围。\n\n如果文档是扫描件图片，系统无法保证直接提取文字，需要先通过 OCR 工具转换为可复制文本。",
+          "text_length": 124,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "product_faq.md",
+          "chunk_id": 2,
+          "score": 6,
+          "retrieval_mode": "keyword",
+          "source": "product_faq.md#chunk-2",
+          "text": "## 产品定位\n\n企业知识助手面向企业内部制度、流程和项目文档，帮助员工快速查询内部资料，并生成带来源引用的回答。它适合用于员工手册查询、财务制度查询、IT 故障自助排查、产品资料问答和流程说明。",
+          "text_preview": "## 产品定位\n\n企业知识助手面向企业内部制度、流程和项目文档，帮助员工快速查询内部资料，并生成带来源引用的回答。它适合用于员工手册查询、财务制度查询、IT 故障自助排查、产品资料问答和流程说明。",
+          "text_length": 98,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1085.98
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 18.39
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1114.61
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询企业知识助手产品FAQ中的扫描件文字提取能力，属于产品资料查询",
+        "rewritten_query": "企业知识助手 产品FAQ 扫描件图片 文字提取",
+        "effective_retrieval_query": "企业知识助手 产品FAQ 扫描件图片 文字提取",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "product"
+      },
+      "extraction": null,
+      "id": "product_02",
+      "request_id": "9b9cbebe-90e5-487b-8a63-83a68a076c71",
+      "mode": "live",
+      "duration_ms": 2257.87
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "版本发布前，需求冻结需要在计划发布日期前至少 5 个工作日完成。[来源: release_process.md#chunk-2]\n\n冻结后原则上不再加入新需求，只允许修复阻塞级缺陷和合规风险问题。[来源: release_process.md#chunk-2]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "release_process.md",
+          "chunk_id": 2,
+          "score": 9,
+          "retrieval_mode": "keyword",
+          "source": "release_process.md#chunk-2",
+          "text": "## 发布阶段\n\n产品版本发布分为需求冻结、开发完成、测试验收、发布评审、灰度发布和正式发布 6 个阶段。\n\n需求冻结需要在计划发布日期前至少 5 个工作日完成。冻结后原则上不再加入新需求，只允许修复阻塞级缺陷和合规风险问题。",
+          "text_preview": "## 发布阶段\n\n产品版本发布分为需求冻结、开发完成、测试验收、发布评审、灰度发布和正式发布 6 个阶段。\n\n需求冻结需要在计划发布日期前至少 5 个工作日完成。冻结后原则上不再加入新需求，只允许修复阻塞级缺陷和合规风险问题。",
+          "text_length": 113,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1639.61
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 21.63
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 811.13
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问版本发布需求冻结时限与变更规则，属于企业内部流程制度知识问答",
+        "rewritten_query": "版本发布 需求冻结 提前多久 冻结后允许变更",
+        "effective_retrieval_query": "版本发布 需求冻结 提前多久 冻结后允许变更",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "product_03",
+      "request_id": "70010f6c-6579-4428-ac5f-bbed37f55255",
+      "mode": "live",
+      "duration_ms": 2511.03
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "涉及登录的版本发布属于必须先灰度发布的版本。灰度比例默认从 10% 开始，需要观察至少 2 小时；如果没有新增严重告警，可以扩大到 50%[来源: release_process.md#chunk-4]。",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "release_process.md",
+          "chunk_id": 4,
+          "score": 10,
+          "retrieval_mode": "keyword",
+          "source": "release_process.md#chunk-4",
+          "text": "## 灰度发布\n\n涉及核心交易、权限、账单、登录和数据迁移的版本必须先灰度发布。灰度比例默认从 10% 开始，观察至少 2 小时。如果没有新增严重告警，可以扩大到 50%，再进入全量发布。",
+          "text_preview": "## 灰度发布\n\n涉及核心交易、权限、账单、登录和数据迁移的版本必须先灰度发布。灰度比例默认从 10% 开始，观察至少 2 小时。如果没有新增严重告警，可以扩大到 50%，再进入全量发布。",
+          "text_length": 94,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "release_process.md",
+          "chunk_id": 2,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "release_process.md#chunk-2",
+          "text": "## 发布阶段\n\n产品版本发布分为需求冻结、开发完成、测试验收、发布评审、灰度发布和正式发布 6 个阶段。\n\n需求冻结需要在计划发布日期前至少 5 个工作日完成。冻结后原则上不再加入新需求，只允许修复阻塞级缺陷和合规风险问题。",
+          "text_preview": "## 发布阶段\n\n产品版本发布分为需求冻结、开发完成、测试验收、发布评审、灰度发布和正式发布 6 个阶段。\n\n需求冻结需要在计划发布日期前至少 5 个工作日完成。冻结后原则上不再加入新需求，只允许修复阻塞级缺陷和合规风险问题。",
+          "text_length": 113,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1048.73
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 22.31
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 988.34
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问版本发布灰度策略的内部规则",
+        "rewritten_query": "登录版本发布 灰度比例 起始 观察时间 扩大到50%",
+        "effective_retrieval_query": "登录版本发布 灰度比例 起始 观察时间 扩大到50%",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "product_04",
+      "request_id": "84f30ba9-09a3-4997-b215-19f3c634142f",
+      "mode": "live",
+      "duration_ms": 2109.66
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "客户反馈被分为 P1 时，需要在 3 个工作日内给出处理计划[来源: customer_feedback_process.md#chunk-3]；进展同步频率为每天同步一次[来源: customer_feedback_process.md#chunk-5]。",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "customer_feedback_process.md",
+          "chunk_id": 5,
+          "score": 6,
+          "retrieval_mode": "keyword",
+          "source": "customer_feedback_process.md#chunk-5",
+          "text": "## 客户回复\n\n客服和客户成功团队负责对外同步处理进展。P0 问题需要每 2 小时同步一次进展，P1 问题需要每天同步一次进展，普通需求可在评审后统一回复是否进入计划。",
+          "text_preview": "## 客户回复\n\n客服和客户成功团队负责对外同步处理进展。P0 问题需要每 2 小时同步一次进展，P1 问题需要每天同步一次进展，普通需求可在评审后统一回复是否进入计划。",
+          "text_length": 85,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "customer_feedback_process.md",
+          "chunk_id": 3,
+          "score": 5,
+          "retrieval_mode": "keyword",
+          "source": "customer_feedback_process.md#chunk-3",
+          "text": "## 需求分级\n\n产品团队按 P0、P1、P2、P3 四级处理需求和问题。\n\nP0 表示核心功能不可用、数据错误或大面积客户受影响，需要当天响应并进入紧急处理。P1 表示重要客户或关键流程受影响，需要 3 个工作日内给出处理计划。P2 表示体验优化或中等影响问题，进入版本规划。P3 表示低频建议或长期优化，进入需求池观察。",
+          "text_preview": "## 需求分级\n\n产品团队按 P0、P1、P2、P3 四级处理需求和问题。\n\nP0 表示核心功能不可用、数据错误或大面积客户受影响，需要当天响应并进入紧急处理。P1 表示重要客户或关键流程受影响，需要 3 个工作日内给出处理计划。P2 表示体验优化或中等影响问题，进入版本规划。P3 表示低频建议或长期优化，进入需求池观察。",
+          "text_length": 162,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "product",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 884.13
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 22.01
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 814.1
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询P1客户反馈的处理时限与进展同步规则，属于制度问答",
+        "rewritten_query": "P1客户反馈 处理计划 时限 进展同步频率",
+        "effective_retrieval_query": "P1客户反馈 处理计划 时限 进展同步频率",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "product_05",
+      "request_id": "7abc7d7c-2a0f-4939-893f-c95c09fa9c28",
+      "mode": "live",
+      "duration_ms": 1758.24
+    },
+    {
+      "route": "process_apply",
+      "answer": "{\n  \"fields\": {\n    \"application_type\": \"VPN 权限\",\n    \"applicant\": \"张三\",\n    \"department\": \"研发部\",\n    \"permission_level\": \"只读\",\n    \"approver\": \"李经理\",\n    \"additional_info\": \"远程办公\"\n  },\n  \"missing_fields\": [],\n  \"status\": \"extracted\",\n  \"error\": null\n}",
+      "chunks": [],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 829.59
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 0.28
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1087.7
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": false,
+        "route_result": "skip_knowledge_base",
+        "reason": "Agent 判断: 用户明确发起VPN权限申请，属于流程申请",
+        "rewritten_query": "",
+        "effective_retrieval_query": "",
+        "retrieval_mode": "no_hit",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "hr"
+      },
+      "extraction": {
+        "fields": {
+          "application_type": "VPN 权限",
+          "applicant": "张三",
+          "department": "研发部",
+          "permission_level": "只读",
+          "approver": "李经理",
+          "additional_info": "远程办公"
+        },
+        "missing_fields": [],
+        "status": "extracted",
+        "error": null
+      },
+      "id": "process_01",
+      "request_id": "29c8b1c2-81e1-4a0d-94db-a1ac7fdf9b34",
+      "mode": "live",
+      "duration_ms": 1950.74
+    },
+    {
+      "route": "process_apply",
+      "answer": "{\n  \"fields\": {\n    \"application_type\": \"GitLab权限\",\n    \"applicant\": \"王芳\",\n    \"department\": \"测试部\",\n    \"permission_level\": \"Reporter\",\n    \"approver\": \"赵主管\",\n    \"additional_info\": \"查看项目A代码\"\n  },\n  \"missing_fields\": [],\n  \"status\": \"extracted\",\n  \"error\": null\n}",
+      "chunks": [],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 946.37
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 0.31
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 990.78
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": false,
+        "route_result": "skip_knowledge_base",
+        "reason": "Agent 判断: 用户明确发起GitLab权限申请，属于流程申请",
+        "rewritten_query": "",
+        "effective_retrieval_query": "",
+        "retrieval_mode": "no_hit",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": {
+        "fields": {
+          "application_type": "GitLab权限",
+          "applicant": "王芳",
+          "department": "测试部",
+          "permission_level": "Reporter",
+          "approver": "赵主管",
+          "additional_info": "查看项目A代码"
+        },
+        "missing_fields": [],
+        "status": "extracted",
+        "error": null
+      },
+      "id": "process_02",
+      "request_id": "72a744fe-ce95-4807-af38-bf3d25d62dc1",
+      "mode": "live",
+      "duration_ms": 1972.71
+    },
+    {
+      "route": "process_apply",
+      "answer": "{\n  \"fields\": {\n    \"application_type\": \"VPN 权限\",\n    \"applicant\": \"张三\",\n    \"department\": null,\n    \"permission_level\": \"只读\",\n    \"approver\": \"李经理\",\n    \"additional_info\": \"居家办公\"\n  },\n  \"missing_fields\": [\n    \"department\"\n  ],\n  \"status\": \"extracted\",\n  \"error\": null\n}",
+      "chunks": [],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1113.13
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 0.2
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1029.31
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": false,
+        "route_result": "skip_knowledge_base",
+        "reason": "Agent 判断: 用户明确发起VPN权限申请并提交审批信息",
+        "rewritten_query": "",
+        "effective_retrieval_query": "",
+        "retrieval_mode": "no_hit",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": {
+        "fields": {
+          "application_type": "VPN 权限",
+          "applicant": "张三",
+          "department": null,
+          "permission_level": "只读",
+          "approver": "李经理",
+          "additional_info": "居家办公"
+        },
+        "missing_fields": [
+          "department"
+        ],
+        "status": "extracted",
+        "error": null
+      },
+      "id": "process_03",
+      "request_id": "e5ff3604-7ebe-4317-914e-b20501e7af9a",
+      "mode": "live",
+      "duration_ms": 2177.01
+    },
+    {
+      "route": "process_apply",
+      "answer": "{\n  \"fields\": {\n    \"application_type\": \"GitLab权限\",\n    \"applicant\": \"陈晨\",\n    \"department\": \"产品部\",\n    \"permission_level\": null,\n    \"approver\": null,\n    \"additional_info\": null\n  },\n  \"missing_fields\": [\n    \"permission_level\",\n    \"approver\",\n    \"additional_info\"\n  ],\n  \"status\": \"extracted\",\n  \"error\": null\n}",
+      "chunks": [],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1078.59
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 0.26
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 868.94
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": false,
+        "route_result": "skip_knowledge_base",
+        "reason": "Agent 判断: 用户明确发起GitLab权限申请",
+        "rewritten_query": "",
+        "effective_retrieval_query": "",
+        "retrieval_mode": "no_hit",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": {
+        "fields": {
+          "application_type": "GitLab权限",
+          "applicant": "陈晨",
+          "department": "产品部",
+          "permission_level": null,
+          "approver": null,
+          "additional_info": null
+        },
+        "missing_fields": [
+          "permission_level",
+          "approver",
+          "additional_info"
+        ],
+        "status": "extracted",
+        "error": null
+      },
+      "id": "process_04",
+      "request_id": "3c31c752-25e7-4a44-bc81-c845056280a6",
+      "mode": "live",
+      "duration_ms": 1978.81
+    },
+    {
+      "route": "process_apply",
+      "answer": "{\n  \"fields\": {\n    \"application_type\": \"VPN 权限\",\n    \"applicant\": null,\n    \"department\": null,\n    \"permission_level\": null,\n    \"approver\": null,\n    \"additional_info\": null\n  },\n  \"missing_fields\": [\n    \"applicant\",\n    \"department\",\n    \"permission_level\",\n    \"approver\",\n    \"additional_info\"\n  ],\n  \"status\": \"extracted\",\n  \"error\": null\n}",
+      "chunks": [],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 890.76
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 0.25
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1132.41
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": false,
+        "route_result": "skip_knowledge_base",
+        "reason": "Agent 判断: 用户明确要求开通VPN账号并提交申请，属于流程申请",
+        "rewritten_query": "",
+        "effective_retrieval_query": "",
+        "retrieval_mode": "no_hit",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": {
+        "fields": {
+          "application_type": "VPN 权限",
+          "applicant": null,
+          "department": null,
+          "permission_level": null,
+          "approver": null,
+          "additional_info": null
+        },
+        "missing_fields": [
+          "applicant",
+          "department",
+          "permission_level",
+          "approver",
+          "additional_info"
+        ],
+        "status": "extracted",
+        "error": null
+      },
+      "id": "process_05",
+      "request_id": "bdbde3a2-bf9b-4204-ad87-2a44947a46a3",
+      "mode": "live",
+      "duration_ms": 2054.51
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "知识库中没有找到依据。现有片段仅说明考勤、入职、请假等制度的适用范围，未涉及董事长奖金金额。[来源: attendance_policy.md#chunk-1][来源: onboarding_checklist.md#chunk-1][来源: leave_policy.md#chunk-1]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "attendance_policy.md",
+          "chunk_id": 1,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "attendance_policy.md#chunk-1",
+          "text": "# HR-02 考勤与远程办公制度\n\n适用范围：星辰科技有限公司全体员工。",
+          "text_preview": "# HR-02 考勤与远程办公制度\n\n适用范围：星辰科技有限公司全体员工。",
+          "text_length": 37,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "onboarding_checklist.md",
+          "chunk_id": 1,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "onboarding_checklist.md#chunk-1",
+          "text": "# HR-03 新员工入职流程清单\n\n适用范围：星辰科技有限公司新入职员工、HRBP、直属主管和 IT 支持人员。",
+          "text_preview": "# HR-03 新员工入职流程清单\n\n适用范围：星辰科技有限公司新入职员工、HRBP、直属主管和 IT 支持人员。",
+          "text_length": 57,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "leave_policy.md",
+          "chunk_id": 1,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "leave_policy.md#chunk-1",
+          "text": "# HR-01 员工请假与休假制度\n\n适用范围：星辰科技有限公司全体正式员工、试用期员工和实习员工。",
+          "text_preview": "# HR-01 员工请假与休假制度\n\n适用范围：星辰科技有限公司全体正式员工、试用期员工和实习员工。",
+          "text_length": 50,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "hr",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 864.22
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 21.97
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 745.4
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问特定公司内部奖金金额，需查询企业知识库",
+        "rewritten_query": "星辰科技 2027年度 董事长 奖金 金额",
+        "effective_retrieval_query": "星辰科技 2027年度 董事长 奖金 金额",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "refusal_01",
+      "request_id": "9321fe86-b8b8-4ecf-b632-f462c61c99d9",
+      "mode": "live",
+      "duration_ms": 1666.03
+    },
+    {
+      "route": "finance_process",
+      "answer": "知识库中没有找到公司开票税号的具体数字。现有资料只说明电子发票报销时需要保证发票抬头、税号和金额清晰完整，并未给出税号本身的具体号码。[来源: reimbursement_policy.md#chunk-6]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "reimbursement_policy.md",
+          "chunk_id": 1,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "reimbursement_policy.md#chunk-1",
+          "text": "# FIN-01 日常费用报销制度\n\n适用范围：星辰科技有限公司全体员工的日常办公费用、交通费用、业务招待费用和培训费用。",
+          "text_preview": "# FIN-01 日常费用报销制度\n\n适用范围：星辰科技有限公司全体员工的日常办公费用、交通费用、业务招待费用和培训费用。",
+          "text_length": 61,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "reimbursement_policy.md",
+          "chunk_id": 6,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "reimbursement_policy.md#chunk-6",
+          "text": "## 常见问题\n\nQ：电子发票可以报销吗？  \nA：可以，但需要保证发票抬头、税号和金额清晰完整。\n\nQ：打车报销缺少行程单怎么办？  \nA：需要补充平台行程单；无法补充时，财务会退回该笔报销。",
+          "text_preview": "## 常见问题\n\nQ：电子发票可以报销吗？  \nA：可以，但需要保证发票抬头、税号和金额清晰完整。\n\nQ：打车报销缺少行程单怎么办？  \nA：需要补充平台行程单；无法补充时，财务会退回该笔报销。",
+          "text_length": 97,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "finance",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1502.28
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 18.75
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 818.54
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问公司开票税号，属于财务制度内部事实，需查知识库",
+        "rewritten_query": "财务报销制度 公司开票税号",
+        "effective_retrieval_query": "财务报销制度 公司开票税号",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "finance"
+      },
+      "extraction": null,
+      "id": "refusal_02",
+      "request_id": "598f8bdb-3b94-4724-a711-ed857a538ca5",
+      "mode": "live",
+      "duration_ms": 2379.52
+    },
+    {
+      "route": "it_support",
+      "answer": "知识库中没有找到依据：现有资料只包含 VPN 的使用范围、支持渠道和办公电脑软件安装规则，没有提供公司 VPN 服务器的公网 IP 地址。[来源: vpn_troubleshooting.md#chunk-1][来源: vpn_troubleshooting.md#chunk-8][来源: device_security_policy.md#chunk-3]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "vpn_troubleshooting.md",
+          "chunk_id": 1,
+          "score": 2,
+          "retrieval_mode": "keyword",
+          "source": "vpn_troubleshooting.md#chunk-1",
+          "text": "# IT-01 VPN 使用与故障排查指南\n\n适用范围：需要远程访问公司内网、测试环境、文档系统和代码仓库的员工。",
+          "text_preview": "# IT-01 VPN 使用与故障排查指南\n\n适用范围：需要远程访问公司内网、测试环境、文档系统和代码仓库的员工。",
+          "text_length": 57,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "vpn_troubleshooting.md",
+          "chunk_id": 8,
+          "score": 2,
+          "retrieval_mode": "keyword",
+          "source": "vpn_troubleshooting.md#chunk-8",
+          "text": "## 支持渠道\n\nVPN 问题可以在企业微信联系 `IT 服务台`，服务时间为工作日 9:00 到 18:30。紧急生产问题可电话联系值班 IT。",
+          "text_preview": "## 支持渠道\n\nVPN 问题可以在企业微信联系 `IT 服务台`，服务时间为工作日 9:00 到 18:30。紧急生产问题可电话联系值班 IT。",
+          "text_length": 73,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 3,
+          "file_name": "device_security_policy.md",
+          "chunk_id": 3,
+          "score": 2,
+          "retrieval_mode": "keyword",
+          "source": "device_security_policy.md#chunk-3",
+          "text": "## 软件安装\n\n办公电脑默认安装浏览器、企业微信、VPN、杀毒软件、文档工具和必要开发工具。需要安装额外软件时，应优先选择公司软件清单中的工具。\n\n涉及抓包、远程控制、数据库客户端和生产访问工具的软件，需要 IT 审核后安装。",
+          "text_preview": "## 软件安装\n\n办公电脑默认安装浏览器、企业微信、VPN、杀毒软件、文档工具和必要开发工具。需要安装额外软件时，应优先选择公司软件清单中的工具。\n\n涉及抓包、远程控制、数据库客户端和生产访问工具的软件，需要 IT 审核后安装。",
+          "text_length": 114,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1124.02
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 16.1
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1365.25
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问公司VPN服务器公网IP，属于内部IT事实，需要查询知识库",
+        "rewritten_query": "公司VPN服务器 公网IP地址",
+        "effective_retrieval_query": "公司VPN服务器 公网IP地址",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": null,
+      "id": "refusal_03",
+      "request_id": "436bed9b-0090-425a-bb21-c7205313cab6",
+      "mode": "live",
+      "duration_ms": 2544.44
+    },
+    {
+      "route": "knowledge_qa",
+      "answer": "知识库中没有找到依据。请补充更具体的问题，或上传包含该规则的企业文档后再提问。",
+      "chunks": [],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1253.0
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 31.05
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 0.4
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 咨询年假未休完折算现金标准，属于HR制度规则问答",
+        "rewritten_query": "员工年假未休完 折算现金 每天金额 标准",
+        "effective_retrieval_query": "员工年假未休完 折算现金 每天金额 标准",
+        "retrieval_mode": "no_hit",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": null
+      },
+      "extraction": null,
+      "id": "refusal_04",
+      "request_id": "03ca5f65-563d-4dba-8676-a32c343b07ef",
+      "mode": "live",
+      "duration_ms": 1316.92
+    },
+    {
+      "route": "it_support",
+      "answer": "知识库中没有找到依据。提供的片段仅涉及企业邮箱、VPN、GitLab 和项目管理系统的密码安全要求，以及 VPN 账号使用规范，未包含财务报销系统的管理员账号或初始密码信息。[来源: device_security_policy.md#chunk-5] [来源: vpn_troubleshooting.md#chunk-7]",
+      "chunks": [
+        {
+          "rank": 1,
+          "file_name": "device_security_policy.md",
+          "chunk_id": 5,
+          "score": 4,
+          "retrieval_mode": "keyword",
+          "source": "device_security_policy.md#chunk-5",
+          "text": "## 密码与账号\n\n企业邮箱、VPN、GitLab 和项目管理系统不得使用相同弱密码。密码至少每 180 天更新一次。发现账号泄露风险时，员工需要立即修改密码并通知 IT。",
+          "text_preview": "## 密码与账号\n\n企业邮箱、VPN、GitLab 和项目管理系统不得使用相同弱密码。密码至少每 180 天更新一次。发现账号泄露风险时，员工需要立即修改密码并通知 IT。",
+          "text_length": 86,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        },
+        {
+          "rank": 2,
+          "file_name": "vpn_troubleshooting.md",
+          "chunk_id": 7,
+          "score": 3,
+          "retrieval_mode": "keyword",
+          "source": "vpn_troubleshooting.md#chunk-7",
+          "text": "## 安全要求\n\nVPN 仅允许员工本人使用，不得转借账号。公共 Wi-Fi 环境下连接 VPN 时，应避免访问敏感系统。发现账号异常登录提醒时，需要立即修改企业邮箱密码并通知 IT。",
+          "text_preview": "## 安全要求\n\nVPN 仅允许员工本人使用，不得转借账号。公共 Wi-Fi 环境下连接 VPN 时，应避免访问敏感系统。发现账号异常登录提醒时，需要立即修改企业邮箱密码并通知 IT。",
+          "text_length": 92,
+          "knowledge_base_id": "enterprise_default",
+          "knowledge_base_type": "it",
+          "department": null,
+          "process_type": null,
+          "process_status": "active"
+        }
+      ],
+      "trace": [
+        {
+          "stage": "judge_knowledge",
+          "status": "completed",
+          "duration_ms": 1077.18
+        },
+        {
+          "stage": "retrieve_evidence",
+          "status": "completed",
+          "duration_ms": 18.05
+        },
+        {
+          "stage": "generate_answer",
+          "status": "completed",
+          "duration_ms": 1339.69
+        }
+      ],
+      "retrieval": {
+        "need_knowledge_base": true,
+        "route_result": "use_knowledge_base",
+        "reason": "Agent 判断: 询问系统管理员账号和初始密码，属于IT支持与内部事实查询",
+        "rewritten_query": "财务报销系统 管理员账号 初始密码",
+        "effective_retrieval_query": "财务报销系统 管理员账号 初始密码",
+        "retrieval_mode": "keyword",
+        "knowledge_base_id": "enterprise_default",
+        "knowledge_base_type_filter": "it"
+      },
+      "extraction": null,
+      "id": "refusal_05",
+      "request_id": "7833abcb-9fa3-4b00-a8e4-fb462afa99f5",
+      "mode": "live",
+      "duration_ms": 2471.83
+    }
+  ],
+  "model": "deepseek-chat",
+  "generation": {
+    "temperature": null,
+    "timeout_seconds": 60,
+    "max_retries": 0
+  },
+  "refusal_reviews": {
+    "refusal_01": {
+      "answer_sha256": "4c5e685fd322028e1ac23d3a2a0a7aa5ad893e435d6e77825a8b2b051ca7fe6b",
+      "correct": true,
+      "reason": "明确说明知识库没有董事长奖金金额依据，仅描述实际召回片段范围，没有断言信息尚未披露或编造金额。",
+      "reviewer": "Codex 逐条阅读复核"
+    },
+    "refusal_02": {
+      "answer_sha256": "a8cd8091a836868c6a961968d30eb9466393a32783679b47ada6fc1f0fa89199",
+      "correct": true,
+      "reason": "说明资料只要求发票税号清晰，未给出具体号码；未编造税号，未输出申请字段 JSON。",
+      "reviewer": "Codex 逐条阅读复核"
+    },
+    "refusal_03": {
+      "answer_sha256": "ee466cfd57bc8432e3d01ec9e6cb70d10582dfc4cd240b10ae2b1a07d83110bf",
+      "correct": true,
+      "reason": "明确说明资料没有 VPN 公网 IP，没有把内网域名当成公网 IP，也没有猜测地址。",
+      "reviewer": "Codex 逐条阅读复核"
+    },
+    "refusal_04": {
+      "answer_sha256": "39b566d2cb2841b1c117907dedccc52ffdcd8b8ece95bf1346cc358c0cf6c263",
+      "correct": true,
+      "reason": "明确说明知识库没有依据，没有根据外部规则推算未休年假现金金额。",
+      "reviewer": "Codex 逐条阅读复核"
+    },
+    "refusal_05": {
+      "answer_sha256": "e02721b580da788dbda0c225db13f255405fca3f4a0b605eed29b7b869c61601",
+      "correct": true,
+      "reason": "明确说明片段没有财务系统管理员凭据，没有编造账号密码，仅说明已有安全资料范围。",
+      "reviewer": "Codex 逐条阅读复核"
+    }
+  },
+  "metrics": {
+    "retrieval_hit": {
+      "passed": 20,
+      "total": 20,
+      "rate": 1.0
+    },
+    "citation_hit": {
+      "passed": 20,
+      "total": 20,
+      "rate": 1.0
+    },
+    "refusal_correct": {
+      "passed": 5,
+      "total": 5,
+      "rate": 1.0
+    },
+    "route_correct": {
+      "passed": 25,
+      "total": 30,
+      "rate": 0.8333
+    },
+    "keyword_coverage": {
+      "passed": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "process_intent": {
+      "passed": 30,
+      "total": 30,
+      "rate": 1.0,
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "tn": 25
+    }
+  },
+  "scores": {
+    "hr_01": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "hr_02": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "hr_03": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "hr_04": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "hr_05": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "finance_01": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "finance_02": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "finance_03": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "finance_04": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "finance_05": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "it_01": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "it_02": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "it_03": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "it_04": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "it_05": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": false,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "product_01": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "product_02": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "product_03": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": false,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "product_04": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": false,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "product_05": {
+      "retrieval_hit": true,
+      "citation_hit": true,
+      "keyword_hits": [
+        true,
+        true
+      ],
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": false,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "process_01": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": true,
+      "field_results": {
+        "application_type": true,
+        "applicant": true,
+        "department": true,
+        "permission_level": true,
+        "approver": true,
+        "additional_info": true
+      }
+    },
+    "process_02": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": true,
+      "field_results": {
+        "application_type": true,
+        "applicant": true,
+        "department": true,
+        "permission_level": true,
+        "approver": true,
+        "additional_info": true
+      }
+    },
+    "process_03": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": true,
+      "field_results": {
+        "application_type": true,
+        "applicant": true,
+        "department": true,
+        "permission_level": true,
+        "approver": true,
+        "additional_info": true
+      }
+    },
+    "process_04": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": true,
+      "field_results": {
+        "application_type": true,
+        "applicant": true,
+        "department": true,
+        "permission_level": true,
+        "approver": true,
+        "additional_info": true
+      }
+    },
+    "process_05": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": null,
+      "refusal_correct": null,
+      "route_correct": true,
+      "process_prediction": true,
+      "field_results": {
+        "application_type": false,
+        "applicant": true,
+        "department": true,
+        "permission_level": true,
+        "approver": true,
+        "additional_info": true
+      }
+    },
+    "refusal_01": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": true,
+      "refusal_correct": true,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "refusal_02": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": false,
+      "refusal_correct": true,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "refusal_03": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": true,
+      "refusal_correct": true,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "refusal_04": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": true,
+      "refusal_correct": true,
+      "route_correct": true,
+      "process_prediction": false,
+      "field_results": null
+    },
+    "refusal_05": {
+      "retrieval_hit": null,
+      "citation_hit": null,
+      "keyword_hits": null,
+      "refusal_marker": true,
+      "refusal_correct": true,
+      "route_correct": false,
+      "process_prediction": false,
+      "field_results": null
+    }
+  },
+  "errors": 0,
+  "pending_refusal_reviews": []
+}

@@ -9,6 +9,7 @@
 
 # 导入 JSON 工具，用于解析 Agent 决策结果和保存分步骤 Agent 结果
 import json
+import re
 from typing import Any
 # dataclass作用：帮你快速定义一个只用来存数据的类。简单理解：专门用来装结构化数据的小盒子。
 from dataclasses import dataclass
@@ -314,6 +315,20 @@ def parse_route_type(value: str | None) -> AgentRouteType:
     return AgentRouteType.KNOWLEDGE_QA
 
 
+def _is_explicit_application_request(question: str) -> bool:
+    """规则兜底只识别明确办理请求；制度问句不能因出现申请二字进入提取分支。"""
+    if re.search(r"(?:只|仅)(?:是|想|要)?(?:咨询|了解|询问)|(?:不|暂不)(?:发起|提交|办理|申请)", question):
+        return False
+    if re.search(r"请问|我想知道|我想了解|怎么|如何|哪些|需要谁|多久|多少|什么|是否|需要.*吗|能不能申请", question):
+        return False
+    action = r"申请|开通|提交|办理|发起|报销"
+    subject = r"vpn|gitlab|账号|权限|请假|年假|病假|报销|付款|出差|远程办公"
+    return bool(re.search(action, question) and re.search(subject, question) and (
+        re.search(r"我(?:要|想|需要)|帮我|替我|为我|我是", question)
+        or re.match(r"(?:请)?(?:申请|开通|提交|办理|发起)", question)
+    ))
+
+
 def route_question_by_rules(question: str) -> AgentRouteDecision:
     """
     LLM 不可用时使用的规则兜底 Router。
@@ -331,12 +346,10 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
             rewritten_query=""
         )
 
-    if "申请" in normalized_question and any(
-        keyword in normalized_question for keyword in ["vpn", "gitlab", "账号", "权限"]
-    ):
+    if _is_explicit_application_request(normalized_question):
         return AgentRouteDecision(
             route_type=AgentRouteType.PROCESS_APPLY,
-            reason="问题明确提出账号或权限申请，属于流程申请",
+            reason="用户明确要求办理或提交申请，属于流程申请",
             should_use_rag=True,
             rewritten_query=normalized_question,
         )
@@ -353,14 +366,6 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
         return AgentRouteDecision(
             route_type=AgentRouteType.FINANCE_PROCESS,
             reason="问题包含财务关键词，属于财务流程",
-            should_use_rag=True,
-            rewritten_query=normalized_question
-        )
-
-    if any(keyword in normalized_question for keyword in ["请假", "入职", "转正", "远程办公", "权限申请"]):
-        return AgentRouteDecision(
-            route_type=AgentRouteType.PROCESS_APPLY,
-            reason="问题包含流程申请关键词，属于流程申请",
             should_use_rag=True,
             rewritten_query=normalized_question
         )

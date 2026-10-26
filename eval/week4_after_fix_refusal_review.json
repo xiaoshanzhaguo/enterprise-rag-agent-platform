@@ -1,0 +1,32 @@
+{
+  "refusal_01": {
+    "answer_sha256": "4c5e685fd322028e1ac23d3a2a0a7aa5ad893e435d6e77825a8b2b051ca7fe6b",
+    "correct": true,
+    "reason": "明确说明知识库没有董事长奖金金额依据，仅描述实际召回片段范围，没有断言信息尚未披露或编造金额。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_02": {
+    "answer_sha256": "a8cd8091a836868c6a961968d30eb9466393a32783679b47ada6fc1f0fa89199",
+    "correct": true,
+    "reason": "说明资料只要求发票税号清晰，未给出具体号码；未编造税号，未输出申请字段 JSON。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_03": {
+    "answer_sha256": "ee466cfd57bc8432e3d01ec9e6cb70d10582dfc4cd240b10ae2b1a07d83110bf",
+    "correct": true,
+    "reason": "明确说明资料没有 VPN 公网 IP，没有把内网域名当成公网 IP，也没有猜测地址。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_04": {
+    "answer_sha256": "39b566d2cb2841b1c117907dedccc52ffdcd8b8ece95bf1346cc358c0cf6c263",
+    "correct": true,
+    "reason": "明确说明知识库没有依据，没有根据外部规则推算未休年假现金金额。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_05": {
+    "answer_sha256": "e02721b580da788dbda0c225db13f255405fca3f4a0b605eed29b7b869c61601",
+    "correct": true,
+    "reason": "明确说明片段没有财务系统管理员凭据，没有编造账号密码，仅说明已有安全资料范围。",
+    "reviewer": "Codex 逐条阅读复核"
+  }
+}

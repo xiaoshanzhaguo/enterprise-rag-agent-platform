@@ -216,6 +216,9 @@ def _build_agent_answer_system_prompt(has_rag_evidence: bool) -> str:
         "不要输出 judge_knowledge、retrieve_evidence、generate_answer 等字段，"
         "不要重复“判断是否需要知识库”“检索证据”“生成回答”等流程标题。"
         "历史消息只作为上下文参考，最终回答必须只回应当前用户的最新问题，不要补答历史问题。"
+        "涉及特定企业的内部事实时，只能依据提供的企业资料；缺少所问细节时明确说明“知识库中没有找到依据”。"
+        "没有找到资料不代表信息尚未披露、尚未确定、未发生或不存在，不得作出这些无依据断言，"
+        "也不得根据常识猜测金额、税号、地址、账号或密码。"
     )
 
     # 命中知识库证据时，强调引用和事实边界
@@ -808,7 +811,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             process_result = None
 
             # 流程类输出经过校验的 JSON；只提取原文，不从知识库或历史猜测申请信息。
-            if route_type in {AgentRouteType.PROCESS_APPLY, AgentRouteType.FINANCE_PROCESS}:
+            if route_type == AgentRouteType.PROCESS_APPLY:
                 process_result = extract_process_fields(request.input_text, client)
                 answer_text = process_result.model_dump_json(indent=2)
                 yield to_sse(

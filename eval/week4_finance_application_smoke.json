@@ -1,0 +1,52 @@
+{
+  "route": "process_apply",
+  "answer": "{\n  \"fields\": {\n    \"application_type\": \"报销\",\n    \"applicant\": \"王芳\",\n    \"department\": \"财务部\",\n    \"permission_level\": null,\n    \"approver\": \"赵经理\",\n    \"additional_info\": \"差旅报销金额800元\"\n  },\n  \"missing_fields\": [\n    \"permission_level\"\n  ],\n  \"status\": \"extracted\",\n  \"error\": null\n}",
+  "chunks": [],
+  "trace": [
+    {
+      "stage": "judge_knowledge",
+      "status": "completed",
+      "duration_ms": 1007.97
+    },
+    {
+      "stage": "retrieve_evidence",
+      "status": "completed",
+      "duration_ms": 0.19
+    },
+    {
+      "stage": "generate_answer",
+      "status": "completed",
+      "duration_ms": 960.17
+    }
+  ],
+  "retrieval": {
+    "need_knowledge_base": false,
+    "route_result": "skip_knowledge_base",
+    "reason": "Agent 判断: 用户明确要求提交报销申请，属于流程申请",
+    "rewritten_query": "",
+    "effective_retrieval_query": "",
+    "retrieval_mode": "no_hit",
+    "knowledge_base_id": "enterprise_default",
+    "knowledge_base_type_filter": "finance"
+  },
+  "extraction": {
+    "fields": {
+      "application_type": "报销",
+      "applicant": "王芳",
+      "department": "财务部",
+      "permission_level": null,
+      "approver": "赵经理",
+      "additional_info": "差旅报销金额800元"
+    },
+    "missing_fields": [
+      "permission_level"
+    ],
+    "status": "extracted",
+    "error": null
+  },
+  "id": "finance_application_smoke",
+  "question": "我是财务部王芳，请帮我提交报销申请，审批人为赵经理，补充信息是差旅报销金额800元。",
+  "request_id": "122a7923-eeb3-404a-8499-cd018f23f547",
+  "mode": "live",
+  "model": "deepseek-chat"
+}
