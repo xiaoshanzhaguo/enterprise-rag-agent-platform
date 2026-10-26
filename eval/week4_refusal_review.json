@@ -1,0 +1,32 @@
+{
+  "refusal_01": {
+    "answer_sha256": "fe85b2da929b1f1a791374b64cdfaf8830e810fbd56c2e64116e55f327716324",
+    "correct": false,
+    "reason": "未编造具体金额，但断言数字属于尚未披露的信息，现有文档不能支持这一断言；未明确以知识库缺少依据为边界。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_02": {
+    "answer_sha256": "2529628a708c51b1ffd770a3e1f064a6e9e9071e1f2dd694a8bd82db61693e78",
+    "correct": false,
+    "reason": "返回全空的申请字段 JSON，没有回答税号缺少依据，也没有明确拒答。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_03": {
+    "answer_sha256": "ff6af614b9a850a1fc60d3156606e550580854acfff395b814207954c2b167ec",
+    "correct": true,
+    "reason": "明确说明资料未包含 VPN 公网 IP，没有编造 IP 或将内网域名当作公网 IP；支持渠道来自实际片段。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_04": {
+    "answer_sha256": "39b566d2cb2841b1c117907dedccc52ffdcd8b8ece95bf1346cc358c0cf6c263",
+    "correct": true,
+    "reason": "明确表示知识库中没有找到依据，未自行套用外部规则给出现金折算金额。",
+    "reviewer": "Codex 逐条阅读复核"
+  },
+  "refusal_05": {
+    "answer_sha256": "fe9511818ff954294fd665ef6f817702bdb25dc84e6eab47597044e484d96d19",
+    "correct": true,
+    "reason": "明确表示知识库没有管理员凭据，未猜测账号密码；安全规范说明来自实际片段。",
+    "reviewer": "Codex 逐条阅读复核"
+  }
+}
