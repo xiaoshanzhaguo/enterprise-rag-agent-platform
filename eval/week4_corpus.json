@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "name": "week4_sample_knowledge_base",
+  "cases": "week4_questions.jsonl",
+  "documents": [
+    {
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "filename": "payment_approval_policy.md",
+      "sha256": "b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428"
+    },
+    {
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "filename": "reimbursement_policy.md",
+      "sha256": "cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845"
+    },
+    {
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "filename": "travel_expense_policy.md",
+      "sha256": "9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e"
+    },
+    {
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "filename": "attendance_policy.md",
+      "sha256": "19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a"
+    },
+    {
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "filename": "leave_policy.md",
+      "sha256": "095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2"
+    },
+    {
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "filename": "onboarding_checklist.md",
+      "sha256": "8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "filename": "device_security_policy.md",
+      "sha256": "358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "filename": "gitlab_access_request.md",
+      "sha256": "dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "filename": "vpn_troubleshooting.md",
+      "sha256": "43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714"
+    },
+    {
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "filename": "customer_feedback_process.md",
+      "sha256": "b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261"
+    },
+    {
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "filename": "product_faq.md",
+      "sha256": "dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a"
+    },
+    {
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "filename": "release_process.md",
+      "sha256": "dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6"
+    }
+  ]
+}
