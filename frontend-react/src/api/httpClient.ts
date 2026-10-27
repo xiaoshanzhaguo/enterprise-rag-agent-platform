@@ -98,11 +98,12 @@ export function formatApiError(error: unknown, fallback = '暂时无法连接服
 
 // POST 请求封装。
 // 定义并导出一个 POST 请求函数 apiPost，它有两个泛型，分别对应 TRequest-请求体 body 的类型，TResponse-后端返回数据的类型
-export async function apiPost<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
+export async function apiPost<TRequest, TResponse>(path: string, body: TRequest, signal?: AbortSignal): Promise<TResponse> {
   // 发送请求
   // POST 一般用于：提交数据、创建资源、上传内容、发送聊天问题、提交文档
   const response = await fetch(buildApiUrl(path), {
     method: 'POST',
+    signal,
     headers: { // 配置请求头
       Accept: 'application/json', // 告诉后端：我希望你返回 JSON
       'Content-Type': 'application/json', // 告诉后端：我发送给你的请求体是 JSON 格式。这行对 POST 很重要，如果没有它，后端可能不知道怎么解析请求体。
@@ -111,4 +112,15 @@ export async function apiPost<TRequest, TResponse>(path: string, body: TRequest)
   })
 
   return parseResponse<TResponse>(response)
+}
+
+export async function apiPatch<TResponse>(path: string, body: unknown): Promise<TResponse> {
+  return parseResponse<TResponse>(await fetch(buildApiUrl(path), {
+    method: 'PATCH', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  }))
+}
+
+export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
+  return parseResponse<TResponse>(await fetch(buildApiUrl(path), { method: 'DELETE', signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json' } }))
 }

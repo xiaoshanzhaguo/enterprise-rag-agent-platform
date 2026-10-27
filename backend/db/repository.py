@@ -23,6 +23,7 @@
 # 哈希算法模块，给上传文档生成唯一指纹
 import hashlib
 import json
+from contextlib import closing
 from datetime import datetime
 from typing import Any
 
@@ -170,7 +171,10 @@ def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: st
     session_mode = mode or "unknown"
     now = _current_timestamp()
     # 获取数据库连接，代码执行结束后自动关闭连接
-    with get_connection() as connection:
+    with closing(get_connection()) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        if connection.execute('SELECT 1 FROM deleted_chat_sessions WHERE session_id = ?', (session_id,)).fetchone():
+            raise ValueError('会话已删除，请新建会话。')
         connection.execute(
             """
             INSERT INTO chat_sessions (id, mode, title, created_at, updated_at)
@@ -398,7 +402,7 @@ def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]
     return mode_sessions
 
 
-def list_recent_chat_sessions(limit: int = 10) -> list[dict[str, Any]]:
+def list_recent_chat_sessions(limit: int = 10, *, mode: str | None = None, include_empty: bool = False) -> list[dict[str, Any]]:
     """
     查询最近更新的聊天会话列表。
 
@@ -441,12 +445,14 @@ def list_recent_chat_sessions(limit: int = 10) -> list[dict[str, Any]]:
                 COUNT(chat_messages.id) AS message_count
             FROM chat_sessions
             LEFT JOIN chat_messages ON chat_messages.session_id = chat_sessions.id
+            WHERE substr(chat_sessions.id, 1, 15) <> 'knowledge_base:'
+              AND (? IS NULL OR chat_sessions.mode = ?)
             GROUP BY chat_sessions.id
-            HAVING COUNT(chat_messages.id) > 0
-            ORDER BY chat_sessions.updated_at DESC, chat_sessions.created_at DESC
+            HAVING ? OR COUNT(chat_messages.id) > 0
+            ORDER BY chat_sessions.updated_at DESC, chat_sessions.created_at DESC, chat_sessions.id DESC
             LIMIT ?
             """,
-            (safe_limit,),
+            (mode, mode, include_empty, safe_limit),
         ).fetchall()
 
     # 将 sqlite3.Row 转成前端更容易消费的普通字典
@@ -523,10 +529,23 @@ def delete_chat_session(session_id: str | None) -> None:
     """
     if not session_id:
         return
+    if session_id.startswith('knowledge_base:'):
+        raise ValueError('不能通过聊天接口删除公共知识库。')
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        connection.execute('INSERT OR IGNORE INTO deleted_chat_sessions (session_id) VALUES (?)', (session_id,))
         connection.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
         connection.commit()
+
+
+def rename_chat_session(session_id: str, title: str) -> bool:
+    if session_id.startswith('knowledge_base:'):
+        raise ValueError('不能通过聊天接口修改公共知识库。')
+    with closing(get_connection()) as connection, connection:
+        cursor = connection.execute('UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?',
+                                    (title, _current_timestamp(), session_id))
+        return cursor.rowcount == 1
 
 
 def save_chat_message(

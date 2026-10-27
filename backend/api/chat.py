@@ -66,6 +66,7 @@ from backend.rag.knowledge_bases import (
 )
 from backend.rag.service import build_rag_preview, resolve_retrieval_mode
 from backend.db.repository import delete_chat_session
+from backend.db.repository import rename_chat_session
 from backend.db.repository import ensure_chat_session
 from backend.db.repository import get_chat_session_detail
 from backend.db.repository import list_knowledge_bases
@@ -77,6 +78,7 @@ from backend.schema.chat_schema import (
     ChatSessionDetailResponse,
     ChatSessionListResponse,
     ChatSessionCreateRequest,
+    ChatSessionRenameRequest,
     IndexDocumentRequest,
     IndexDocumentResponse,
     KnowledgeBaseCategoryListResponse,
@@ -177,15 +179,15 @@ def chat_history(request: ChatHistoryRequest):
 
 
 @router.get("/chat_sessions", response_model=ChatSessionListResponse)
-def chat_sessions(limit: int = Query(default=10, ge=1, le=50)):
+def chat_sessions(limit: int = Query(default=10, ge=1, le=50), mode: str | None = None, include_empty: bool = False):
     """
     返回最近更新的聊天会话列表，用于前端侧边栏展示历史会话。
 
     :param limit: 最多返回多少条会话，默认10条
     :return: 最近会话摘要列表
     """
-    # 读取最近更新的会话摘要；Repository 会过滤空会话
-    sessions = list_recent_chat_sessions(limit=limit)
+    # 兼容旧入口默认隐藏空会话；React 显式请求 include_empty。
+    sessions = list_recent_chat_sessions(limit=limit, mode=mode, include_empty=include_empty)
     # 按响应模型返回，保证前端拿到稳定字段
     return {
         "sessions": sessions
@@ -201,6 +203,8 @@ def chat_session_detail(session_id: str):
     :return: 会话详情与消息列表
     """
     # 从数据库读取指定会话详情
+    if session_id.startswith('knowledge_base:'):
+        raise HTTPException(status_code=403, detail='公共知识库不是聊天会话。')
     session = get_chat_session_detail(session_id)
     # 会话不存在时返回 404，避免前端误以为恢复成功
     if not session:
@@ -219,11 +223,12 @@ def create_chat_session(request: ChatSessionCreateRequest):
     :return: 新创建会话的信息
     """
     # 创建或更新当前会话记录
-    ensure_chat_session(
-        session_id=request.session_id,
-        mode=request.mode,
-        title=request.title
-    )
+    if not request.session_id.strip() or request.session_id.startswith('knowledge_base:'):
+        raise HTTPException(status_code=400, detail='会话编号无效。')
+    try:
+        ensure_chat_session(session_id=request.session_id, mode=request.mode, title=request.title)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
         "session_id": request.session_id,
         "mode": request.mode
@@ -239,10 +244,21 @@ def clear_chat_session(session_id: str):
     :return: 删除结果提示信息
     """
     # 删除数据库中的会话及所有级联关联数据
+    if session_id.startswith('knowledge_base:'):
+        raise HTTPException(status_code=403, detail='不能删除公共知识库会话。')
     delete_chat_session(session_id)
     # 同时清理当前会话在数据库 RAG store 中的文档索引
     clear_document_chunks(session_id)
     return {"message": f"session {session_id} 的聊天数据已清理"}
+
+
+@router.patch('/chat_session/{session_id}')
+def update_chat_session_title(session_id: str, request: ChatSessionRenameRequest):
+    if session_id.startswith('knowledge_base:'):
+        raise HTTPException(status_code=403, detail='不能修改公共知识库会话。')
+    if not rename_chat_session(session_id, request.title):
+        raise HTTPException(status_code=404, detail='会话不存在。')
+    return {'session_id': session_id, 'title': request.title}
 
 
 @router.post("/chat_stream")

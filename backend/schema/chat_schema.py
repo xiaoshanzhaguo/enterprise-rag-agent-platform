@@ -262,3 +262,8 @@ class ChatSessionCreateRequest(BaseModel):
     session_id: str  # 新会话 ID
     mode: str  # 当前会话所属模式
     title: Optional[str] = None  # 会话标题，可选
+
+
+class ChatSessionRenameRequest(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    title: str = Field(min_length=1, max_length=80)

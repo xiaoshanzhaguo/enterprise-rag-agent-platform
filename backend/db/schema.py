@@ -168,8 +168,14 @@ CREATE_TABLE_SQL = [
         FOREIGN KEY (eval_case_id) REFERENCES eval_cases(id) ON DELETE CASCADE
     )
     """,
+    # 删除标记防止迟到的流式回答重新创建会话，不关联已删除会话的外键。
+    """
+    CREATE TABLE IF NOT EXISTS deleted_chat_sessions (
+        session_id TEXT PRIMARY KEY,
+        deleted_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
 ]
-
 
 # 索引
 CREATE_INDEX_SQL = [

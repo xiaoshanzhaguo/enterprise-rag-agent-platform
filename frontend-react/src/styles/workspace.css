@@ -136,6 +136,25 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; }
 .eval-snapshot { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 6px; }
 .eval-snapshot span { font-size: 11px; color: var(--muted); background: #f1f5ed; border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; }
 .sr-only { position: absolute; left: 0; top: 0; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.session-workspace { display: grid; grid-template-columns: 210px minmax(0, 1fr); align-items: start; gap: 18px; }
+.session-sidebar { padding: 16px; display: grid; gap: 16px; min-width: 0; }
+.session-sidebar .section-title strong { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.session-list { display: grid; gap: 6px; max-height: 500px; overflow-y: auto; }
+.session-item { padding: 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; text-align: left; color: var(--ink); display: grid; gap: 6px; min-width: 0; cursor: pointer; }
+.session-item:hover { background: #f5f8f1; }
+.session-item.active { background: #edf4e6; border-color: #cbdcc2; }
+.session-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.session-item small { color: var(--muted); font-size: 10px; }
+.session-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.session-confirm { display: grid; gap: 12px; }
+.session-confirm form { display: grid; gap: 14px; max-width: 520px; }
+.session-confirm h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.session-confirm p { margin: 0; color: var(--muted); font-size: 12px; }
+.conversation-surface { min-width: 0; }
+.conversation-surface > .page-stack > .page-header { display: none; }
+.conversation-surface .chat-message p { overflow-wrap: anywhere; }
+@media (max-width: 1400px) { .conversation-surface .workspace-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .session-workspace { grid-template-columns: minmax(0, 1fr); } .session-list { max-height: 180px; } }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 20; background: #fff; padding: 10px; }
 .skip-link:focus { top: 10px; }
 .spin { animation: workspace-spin 1s linear infinite; }

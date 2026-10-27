@@ -4,7 +4,7 @@
  * 功能描述：
  * 1. 员工在这里选择企业知识库和检索分类。
  * 2. 页面会从后端读取知识库列表、分类列表、当前知识库的 RAG 文档状态。
- * 3. 后续再接入真正的提问和流式回答。
+ * 3. 通过父级传入的真实会话编号恢复消息与引用。
  * 4. 当前已经接入 POST SSE 流式问答，用于展示 Agent 判断、检索过程和 AI 回答。
  */
 
@@ -12,11 +12,12 @@
 // Database        数据库图标，用于文档或知识库
 // FileSearch      文件检索图标，用于检索上下文区域
 // SendHorizontal  发送图标，用于发送按钮
-import { Bot, Database, FileSearch, SendHorizontal, Delete } from 'lucide-react'
+import { Bot, Database, FileSearch, SendHorizontal, RefreshCw } from 'lucide-react'
 // useState 保存知识库列表、分类列表、当前选中项、RAG 状态、loading、错误信息。
 // useEffect 页面加载时请求接口，或知识库切换时重新请求状态。
 // useMemo 根据当前 ID 从列表里找出当前选中的完整对象。
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { answerBody } from '../api/sessionMessages'
 // streamAgentAnswer 负责调用后端 /agent_stream，并用 ReadableStream 逐步解析 SSE 事件。
 import { streamAgentAnswer } from '../api/chatApi'
 import { formatApiError } from '../api/httpClient'
@@ -24,12 +25,6 @@ import { fetchKnowledgeBaseCategories, fetchKnowledgeBases, fetchRagStatus } fro
 import type { AgentStreamEvent, AgentTracePanelState, ChatMessage, RagPreviewChunk } from '../types/chat'
 import type { KnowledgeBaseCategory, KnowledgeBaseItem, RagStatusResponse } from '../types/knowledgeBase'
 
-
-// 当前 React 页面只是预览版，还没有真正创建聊天 session。所以先写死一个 session_id，用它去调用 RAG 状态接口。
-// 后续真正接入聊天功能后，可能会由后端创建真实会话 ID。
-const PREVIEW_SESSION_ID = 'react-preview-session'
-// 智能问答页使用的会话 ID。当前先固定，后续接历史会话时可以由后端创建或从 URL 中读取。
-const CHAT_SESSION_ID = 'react-chat-session'
 
 // 员工聊天页默认只展示最终答案，不展示 Agent 路由、检索、生成等中间步骤。
 // 这些步骤仍然会保存在 message.steps 中，后续可以放到“执行日志”或调试开关里展示。
@@ -123,7 +118,17 @@ function formatChunkScore(chunk: RagPreviewChunk) {
 }
 
 // ChatPage 是员工问答页面组件。
-export function ChatPage() {
+export function ChatPage({ sessionId, initialMessages, onSettled, onStreamingChange, onReload }: {
+  sessionId: string; initialMessages: ChatMessage[]; onSettled: () => void
+  onStreamingChange: (id: string, busy: boolean) => void
+  onReload: () => void
+}) {
+  const streamRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false; streamRef.current?.abort() }
+  }, [])
   // 保存后端返回的企业知识库列表。
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseItem[]>([])
 
@@ -143,10 +148,13 @@ export function ChatPage() {
   const [question, setQuestion] = useState('')
 
   // 保存聊天窗口里的消息列表。
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
 
   // 保存右侧 Agent 过程与引用来源面板的数据。
-  const [agentTrace, setAgentTrace] = useState<AgentTracePanelState | null>(null)
+  const [agentTrace, setAgentTrace] = useState<AgentTracePanelState | null>(() => {
+    const latest = initialMessages.filter(message => message.role === 'assistant').at(-1)
+    return latest ? { status: 'complete', metadata: latest.metadata, generateText: latest.content } : null
+  })
 
   // 标记当前是否正在等待后端流式回答。
   const [isStreaming, setIsStreaming] = useState(false)
@@ -257,7 +265,7 @@ export function ChatPage() {
       // 开始请求 RAG 状态的错误捕获。
       try {
         // 传入 knowledge_base_id 后，后端会按企业知识库范围查询状态。
-        const response = await fetchRagStatus(PREVIEW_SESSION_ID, selectedKnowledgeBaseId)
+        const response = await fetchRagStatus(sessionId, selectedKnowledgeBaseId)
 
         // 如果组件仍然存在，就写入最新状态。
         if (!ignore) {
@@ -284,7 +292,7 @@ export function ChatPage() {
       // 将 ignore 改成 true，防止旧请求回来后更新状态。
       ignore = true
     }
-  }, [selectedKnowledgeBaseId]) // 组件首次渲染后执行一次；以后每次 selectedKnowledgeBaseId 变化时，再执行一次。
+  }, [selectedKnowledgeBaseId, sessionId])
 
   // 根据 selectedKnowledgeBaseId 从列表里找到完整知识库对象。
   // 定义一个缓存计算值。selectedKnowledgeBase 表示当前选中的完整知识库对象。
@@ -514,6 +522,8 @@ export function ChatPage() {
                 // 把这条 AI 消息的状态改成：'complete'，表示：这条 AI 回复已经生成完成。
                 // 这通常会影响页面展示，比如：隐藏 loading 动画、隐藏“生成中”、显示完整回答状态。
                 status: 'complete',
+                content: answerBody(event.content || message.content),
+                metadata: event.metadata,
               }
             // 其他消息不变
             : message,
@@ -552,7 +562,7 @@ export function ChatPage() {
     const trimmedQuestion = question.trim()
 
     // 空问题或正在生成时不重复提交。
-    if (!trimmedQuestion || isStreaming) {
+    if (!trimmedQuestion || isStreaming || streamRef.current) {
       return
     }
 
@@ -591,6 +601,9 @@ export function ChatPage() {
     // 进入流式生成状态。
     // 把 isStreaming 设置为 true，表示当前正在等待后端生成回答。它通常用于：禁用发送按钮、显示生成中状态、防止重复提交。
     setIsStreaming(true)
+    const controller = new AbortController()
+    streamRef.current = controller
+    onStreamingChange(sessionId, true)
 
     // 调用后端流式接口
     // 因为调用后端接口可能失败，比如：网络断开、后端报错、HTTP 500、流式读取失败，所以用 try/catch 捕获错误。
@@ -600,11 +613,11 @@ export function ChatPage() {
       await streamAgentAnswer(
         // 开始传入请求体对象，这个对象会发送给后端 /agent_stream。
         {
-          session_id: CHAT_SESSION_ID,  // 指定当前聊天会话ID。CHAT_SESSION_ID：后端可以用它保存：聊天记录、检索记录、上下文信息。
+          session_id: sessionId,
           task_type: 'agent',  // 当前任务类型固定为: 'agent'，表示这次调用的是 Agent 智能问答流程。
           input_text: trimmedQuestion,  // 发送给后端的用户原始问题，这里使用清理过空格的 trimmedQuestion。
           mode: '企业知识库问答',  // 当前问答模式。后端可以根据 mode 决定不同处理流程。
-          history: [],  // 历史消息列表，当前先传空数组。意思是：第一版暂时不带多轮上下文。后续如果要支持多轮对话，可以把之前的用户消息和 AI 消息整理后放进去。
+          history: messages.filter(message => message.status === 'complete').slice(-12).map(({ role, content }) => ({ role, content })),
           use_rag: true,  // 表示启用 RAG。即：回答问题时，需要检索企业知识库。
           rag_top_k: 3,  // 表示最多检索返回 3 个相关片段。top_k 可以理解为：从向量库或知识库中找最相关的前 k 条内容。
           // 用户配置项。这些是前端给后端的补充参数。
@@ -618,6 +631,7 @@ export function ChatPage() {
         // 第二个参数：事件回调函数。
         // 每当后端返回一条 SSE 事件，streamAgentAnswer 就会调用这个函数。参数 event 就是解析后的 AgentStreamEvent。
         (event) => {
+          if (!mountedRef.current || controller.signal.aborted) return
           // 把这条事件同步到右侧 Agent 过程面板。
           applyStreamEventToAgentTrace(event)
 
@@ -626,8 +640,10 @@ export function ChatPage() {
           // 这一行的作用：每收到一条后端事件，就更新 assistantMessageId 对应的那条 AI 消息。
           applyStreamEventToAssistantMessage(assistantMessageId, event)
         },
+        controller.signal,
       )
     } catch (error) {
+      if (!mountedRef.current || controller.signal.aborted) return
       // 网络错误或后端非 2xx 错误会进入这里。
       // 可能出错的地方包括：fetch 请求失败、后端返回非 2xx、response.body 不存在、ReadableStream 读取失败。这些错误会被捕获到 error 变量里。
       // 开始更新消息列表。这里要把刚才创建的 AI 占位消息改成错误状态。
@@ -648,16 +664,16 @@ export function ChatPage() {
     } finally {
       // 不管成功还是失败，都退出生成状态。
       // 把流式生成状态改回 false。这样页面可以：恢复发送按钮、隐藏生成中状态、允许用户继续提问。
-      setIsStreaming(false)
+      streamRef.current = null
+      if (mountedRef.current) setIsStreaming(false)
+      onStreamingChange(sessionId, false)
+      onSettled()
     }
   }
 
-  // 清空对话按钮会清空当前前端消息列表
-  function handleDeleteChat() {
-    // 清空聊天消息列表。
-    setMessages([])
-    // 同时清空右侧 Agent 过程面板，避免残留上一轮引用证据。
-    setAgentTrace(null)
+  // 重新读取服务端历史，保留会话与公共知识库。
+  function handleReloadHistory() {
+    onReload()
   }
 
   // 返回页面结构。说明下面进入 JSX 页面结构。
@@ -700,6 +716,7 @@ export function ChatPage() {
           {/* 聊天窗口：展示用户问题、AI 回答和 Agent 执行过程。 */}
           {/* 当前员工侧默认隐藏 Agent 执行过程，只把最终答案作为聊天正文展示。 */}
           <div className="chat-window">
+            {initialMessages.at(-1)?.role === 'user' && messages.length === initialMessages.length ? <p className="page-footnote" role="status">上一条问题尚无已保存的完整回答，可能曾中断或仍在处理。可稍后刷新历史核对，系统不会自动重发。</p> : null}
             {messages.length === 0 ? (
               <div className="chat-empty">
                 <strong>还没有对话</strong>
@@ -724,6 +741,8 @@ export function ChatPage() {
                   ) : null}
 
                   <p>{message.content || (message.status === 'streaming' ? '正在等待后端返回内容...' : '')}</p>
+                  {message.role === 'assistant' && message.metadata?.rag_preview_chunks?.length ? <button className="text-button" type="button"
+                    onClick={() => setAgentTrace({ status: 'complete', metadata: message.metadata, generateText: message.content })}>查看本条回答的依据</button> : null}
                 </article>
               ))
             )}
@@ -782,9 +801,9 @@ export function ChatPage() {
             {isStreaming ? '生成中...' : '发送问题'}
           </button>
 
-          <button className="primary-button" type="button" disabled={!messages.length || isStreaming} onClick={handleDeleteChat}>
-            <Delete aria-hidden="true" size={18} />
-            {isStreaming ? '生成中...' : '清空对话'}
+          <button className="primary-button" type="button" disabled={!messages.length || isStreaming} onClick={handleReloadHistory}>
+            <RefreshCw aria-hidden="true" size={18} />
+            {isStreaming ? '生成中...' : '刷新历史'}
           </button>
         </section>
 

@@ -6,7 +6,7 @@
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { MainLayout } from '../layouts/MainLayout'
-import { ChatPage } from '../pages/ChatPage'
+import { ChatWorkspacePage } from '../pages/ChatWorkspacePage'
 // 评测结果页面。
 import { EvaluationResultPage } from '../pages/EvaluationResultPage'
 // 执行日志页面。
@@ -31,7 +31,7 @@ export function AppRouter() {
           {/*默认子路由：访问 / 时跳转到 /chat。index 表示默认页面，因为它写在内部，因此它表示 MainLayout 下的默认子页面。*/}
           {/*整行理解：用户访问首页 / 时，自动跳转到 /chat，并且不要在浏览器历史里保留 /。*/}
           <Route index element={<Navigate to="/chat" replace />} />
-          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat" element={<ChatWorkspacePage />} />
           <Route path="/admin/knowledge" element={<KnowledgeAdminPage />} />
           {/* 流程助手路由。 */}
           <Route path="/workflow" element={<ProcessAssistantPage />} />

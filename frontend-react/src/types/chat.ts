@@ -26,6 +26,24 @@ export interface ChatMessage {
   content: string // 聊天气泡里展示的正文内容。
   steps?: string[] // Agent 执行步骤，例如“正在判断是否需要知识库”“已命中 3 个片段”。
   status?: 'streaming' | 'complete' | 'error' // 当前 AI 消息状态，用于展示生成中或错误。
+  metadata?: AgentStreamMetadata
+}
+
+export interface ChatSessionSummary {
+  session_id: string
+  title: string
+  mode: string
+  created_at: string
+  updated_at: string
+  message_count: number
+}
+
+export interface ChatSessionDetail extends Omit<ChatSessionSummary, 'title' | 'message_count'> {
+  title: string | null
+  messages: Array<{
+    role: string; content: string; raw_content?: string
+    agent_route?: AgentRouteMetadata; rag_preview_chunks?: RagPreviewChunk[]
+  }>
 }
 
 // Agent 路由判断元数据，对应后端 metadata.agent_route。
@@ -97,7 +115,7 @@ export interface AgentStreamRequest {
   history?: Array<{
     role: 'user' | 'assistant' | 'system' // 历史消息角色。
     content: string // 历史消息内容。
-  }> // 历史消息列表；当前先传空数组，后续可接多轮对话。
+  }> // 当前会话最近的完整消息，供多轮追问使用。
   user_options: {
     knowledge_base_id?: string // 指定要检索的企业知识库范围。
     knowledge_base_type_filter?: string // 指定分类过滤条件，例如 finance；不传表示让 Agent 自动判断。

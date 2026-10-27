@@ -63,7 +63,7 @@ sequenceDiagram
 
 | 模块 | 主要位置 | 数据归属 |
 | --- | --- | --- |
-| React 工作台与 API 客户端 | `frontend-react/src` | 页面状态与申请恢复信息 |
+| React 工作台与 API 客户端 | `frontend-react/src` | 会话编号 URL、页面状态与申请恢复信息；会话消息及引用持久化到后端 SQLite |
 | 路由、生成与字段提取 | `backend/services`、`backend/prompt` | 业务逻辑，不保存模型密钥到响应 |
 | 检索与知识库 Tool | `backend/rag` | SQLite 片段与可选 Chroma 向量 |
 | 数据库与流程记录 | `backend/db` | `data/app.db` |
