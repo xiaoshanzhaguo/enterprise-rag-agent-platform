@@ -5,12 +5,13 @@ services:
       dockerfile: Dockerfile.backend
     container_name: enterprise-rag-agent-backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-18000}:8000"
     environment:
       # 大模型服务配置：默认从宿主机 .env 或环境变量读取
       BASE_URL: ${BASE_URL:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
       N8N_WEBHOOK_TOKEN: ${N8N_WEBHOOK_TOKEN:-}
       N8N_WEBHOOK_TIMEOUT_SECONDS: ${N8N_WEBHOOK_TIMEOUT_SECONDS:-10}
@@ -22,7 +23,7 @@ services:
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       VECTOR_STORE_DIR: /app/data/chroma
       HF_HOME: /app/data/huggingface
-      RAG_RETRIEVAL_MODE: ${RAG_RETRIEVAL_MODE:-vector}
+      RAG_RETRIEVAL_MODE: ${RAG_RETRIEVAL_MODE:-keyword}
       RAG_STORE_TTL_SECONDS: ${RAG_STORE_TTL_SECONDS:-3600}
       RAG_STORE_MAX_SESSIONS: ${RAG_STORE_MAX_SESSIONS:-50}
       RAG_PREVIEW_TEXT_LIMIT: ${RAG_PREVIEW_TEXT_LIMIT:-120}
@@ -34,8 +35,25 @@ services:
     volumes:
       # 挂载 data 目录，持久化 SQLite 数据库和 data/chroma 向量库
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
 
   frontend:
+    profiles: [legacy-streamlit]
     build:
       context: .
       dockerfile: Dockerfile.frontend
@@ -43,7 +61,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "8501:8501"
+      - "127.0.0.1:${STREAMLIT_PORT:-8501}:8501"
     environment:
       # 容器网络里通过服务名 backend 访问后端，不能使用 127.0.0.1
       FRONTEND_BACKEND_BASE_URL: http://backend:8000

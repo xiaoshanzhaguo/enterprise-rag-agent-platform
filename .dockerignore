@@ -13,6 +13,14 @@ data/
 
 # 本地环境变量文件可能包含密钥，不打进镜像
 .env
+**/.env
+**/.env.local
+**/.runtime/
+**/local-access.json
+**/node_modules/
+**/dist/
+eval/local/
+docs/demo_script.md
 
 # 本地日志和临时文件
 *.log

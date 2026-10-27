@@ -1,488 +1,140 @@
-# 企业内部知识与流程自动化助手
+# 知行工作台 · 企业知识与流程助手
 
-> 面向企业内部制度、流程和项目文档的 RAG + Agent 助手，支持文档上传、语义检索、引用回答、无依据拒答、会话持久化、流程文本处理和评测集验证。项目采用 Streamlit + FastAPI + SQLite + ChromaDB 的前后端分离架构，形成从文档入库、检索回答、流程辅助到效果评测的完整闭环。
+一个面向企业内部资料查询和轻量流程辅助的 RAG + Agent 项目。以 React 工作台为主要入口，用 FastAPI、LangChain、SQLite 与可选 ChromaDB 串起文档入库、引用回答、字段提取、n8n 模拟流程和执行记录；另用 Dify 复刻简化知识问答，比较代码实现与低代码交付。
 
----
+![执行日志与申请详情](docs/screenshots/day26-execution-desktop.png)
 
-## 项目定位
+## 可以演示什么
 
-本项目定位为一个 **企业内部知识与流程自动化助手**。核心目标是把企业内部文档中的制度、流程和项目信息变成可以检索、可以追溯、可以辅助处理日常文本任务的智能工作台。
+- **知识问答**：上传分类文档，进行意图判断与 Query Rewrite，通过知识库 Tool 检索，展示回答、来源片段和实际检索方式。
+- **流程申请**：提取六字段，允许修改与补充；确认后调用 n8n Webhook，先保存申请、校验回执再记录结果，按申请编号防止重复提交。
+- **无依据拒答**：资料没有所问事实时明确说明缺少依据；不把“未找到”解释为“未披露”或“不存在”。
+- **执行记录**：从 SQLite 读取真实申请，支持状态筛选、编号查询、分页、详情与超时提示。
+- **可复核评测**：30 题覆盖 HR、财务、IT、产品、流程申请和无依据拒答，区分离线检索基线与真实模型输出。
 
-它不是一个只会调用大模型接口的聊天页面，而是围绕真实 RAG 应用链路实现了：
+当前为本机演示项目：n8n 生成模拟表格、通知和工单，不执行真实审批、通知或授权。React 的知识库上传入口支持 `.md` / `.txt`，单文件上限 2MB；旧版 Streamlit 入口保留附加文本处理及会话界面。
 
-- 文档上传与文本切块
-- Embedding 生成与 ChromaDB 向量检索
-- SQLite 持久化会话、消息、文档、chunk、检索记录
-- 带来源引用的制度、流程和文档回答
-- 检索不到依据时明确拒答
-- 前端展示引用来源、命中片段和检索原因
-- Eval 评测集量化验证 RAG 效果
-- Agent 路由决策判断问题是否需要检索企业内部资料，并自动改写检索 query
+## 架构
 
-除企业内部知识检索与引用回答主流程外，系统还提供内容分析、结构优化、风格改写、多版本生成和工作流优化等附加文本处理能力，用于覆盖制度查询、流程说明、项目文档整理之外的常见办公文本场景。
-
----
-
-## 核心功能
-
-### 1. 企业内部知识检索与引用回答
-
-用户可以上传一份或多份企业文档，例如员工手册、制度说明、项目文档、FAQ 等，然后直接围绕文档提问。系统会判断问题是否需要知识库，并在需要时改写检索 query 后执行 RAG 检索。
-
-示例：
-
-```text
-试用期是多久？
+```mermaid
+flowchart LR
+  U[员工 / 管理员] --> UI[React 工作台]
+  UI --> API[FastAPI]
+  API --> Router[意图分类 / Query Rewrite]
+  Router --> Tool[LangChain 知识库 Tool]
+  Tool --> Search[关键词检索 / 可选 ChromaDB]
+  Search --> Answer[证据上下文 + ChatModel]
+  Answer --> UI
+  API --> Extract[结构化字段提取]
+  Extract --> Confirm[用户核对并确认]
+  Confirm --> Submit[申请服务 / 编号去重]
+  Submit --> DB[(SQLite)]
+  Submit --> N8N[n8n 模拟流程]
+  N8N --> Receipt[校验回执并落库]
+  Receipt --> DB
+  DB --> Logs[执行日志 API]
+  Logs --> UI
+  Dify[Dify 简化问答] --> Shared[同类样例文档]
+  Eval[独立评测库 / 30 题] --> Router
 ```
 
-回答示例：
+这是逻辑架构；容器代理、数据流与持久化说明见 [架构说明](docs/architecture.md)。Dify 是独立对照应用，原系统不通过 Dify 回答问题。
 
-```text
-根据星辰科技有限公司的企业管理制度，普通岗位试用期为3个月，管理岗位试用期为6个月。[来源: 星辰科技有限公司企业管理制度（2026版）.md#chunk-36]
-```
+## 本地开发启动
 
-### 2. 文档上传与切块
-
-前端支持在聊天输入框中附加一份或多份文档，后端会提取文本、按章节和段落切分 chunk，并保存到 SQLite 数据库。同一会话可以持续追加文档，后续问题会在当前会话已保存的文档集合中检索。
-
-仓库内置了一组演示用企业资料，位于 `docs/sample_knowledge_base/`，覆盖 HR、财务、IT、产品 4 类常见内部场景。启动前端后可以直接上传这些 Markdown 文档，并在上传前选择 `HR / 财务 / IT / 产品` 分类，用于演示制度查询、流程说明、故障排查和产品 FAQ 问答。
-
-每个 chunk 会记录：
-
-- `document_id`
-- `file_name`
-- `chunk_id`
-- `text`
-- `text_length`
-- `created_at`
-
-### 3. Embedding + ChromaDB 向量检索
-
-项目支持基于 Embedding 的语义检索，并使用本地 ChromaDB 持久化向量数据，默认目录为：
-
-```text
-data/chroma/
-```
-
-向量库 metadata 会保存：
-
-- `session_id`
-- `document_id`
-- `db_chunk_id`
-- `file_name`
-- `chunk_id`
-
-同时保留关键词检索作为 fallback，可通过配置切换检索方式。
-
-### 4. 参考依据与命中片段展示
-
-RAG 回答会在页面正文中保留来源标记，前端会在回答下方提供默认折叠的“参考依据”区域。展开后可以看到证据卡片、检索详情和完整原文，方便用户判断模型回答是否有依据。
-
-展示内容包括：
-
-- `rank`：命中排序
-- `score`：相似度或关键词得分
-- `file_name`：来源文件名
-- `chunk_id`：命中文本块编号
-- `text_preview`：命中内容预览
-- `retrieval_mode`：实际检索方式，如 `vector`、`keyword`、`no_hit`
-
-复制答案时，系统会自动去掉 `[来源: ...]` 这类内部引用标记，让复制出去的正文更自然；页面展示和参考依据区域仍保留引用信息，便于追溯。
-
-### 5. 无依据拒答
-
-当知识库中没有可靠依据时，系统会明确返回：
-
-```text
-知识库中没有找到依据。
-```
-
-这种设计可以避免模型在企业制度、流程和项目文档场景中凭空编造答案，更符合严肃业务场景下的回答要求。
-
-### 6. RAG 可解释面板
-
-前端会通过“参考依据”折叠面板展示本轮问题命中的 top_k 片段、分数、来源文件、chunk 编号和原文预览。后端也会记录检索过程，便于后续调试和展示。
-
-相关数据库表：
-
-- `rag_queries`
-- `rag_hits`
-
-### 7. 聊天会话持久化
-
-聊天会话和消息会写入 SQLite，默认数据库文件为：
-
-```text
-data/app.db
-```
-
-前端侧边栏支持：
-
-- 新建会话
-- 查看最近 10 条会话
-- 点击历史会话恢复消息
-- 当前会话高亮
-- 删除单条历史会话
-- 回复完成后自动刷新历史列表
-
-### 8. Eval 评测集
-
-项目内置轻量评测集，用于量化 RAG 效果。
-
-评测相关文件：
-
-```text
-eval/questions.jsonl
-eval/run_eval.py
-eval/report.md  # 运行评测后生成
-docs/eval_report_sample.md  # 可提交的评测报告样例
-```
-
-运行命令：
-
-```bash
-python eval/run_eval.py
-```
-
-评测报告会展示：
-
-- 检索命中率
-- 引用命中率
-- 关键词包含率
-- 无依据拒答准确率
-- 失败案例
-
-说明：`eval/report.md` 是本地运行后生成的报告文件，默认不提交；仓库中保留 `docs/eval_report_sample.md` 作为可查看的样例评测证据。
-
----
-
-## 附加文本处理能力
-
-除企业内部知识检索主流程外，项目还提供以下附加能力：
-
-- **内容分析**：提炼主题、关键信息、主要结论和关键词
-- **结构优化**：优化文本结构和表达层次
-- **风格改写**：调整文本风格，使表达更自然或更适合目标场景
-- **多版本生成**：围绕同一输入生成多个表达版本
-- **工作流优化**：按步骤总结状态、分析问题并给出优化建议
-
-这些能力用于补充文档检索之外的文本处理需求，让同一个工作台可以覆盖更多轻量办公任务。
-
----
-
-## 技术亮点
-
-- **前后端分离**：Streamlit 负责交互，FastAPI 负责接口和业务流程
-- **SSE 流式输出**：模型回答逐步返回，提升对话体验
-- **SQLite 持久化**：保存会话、消息、文档、chunk、检索问题和命中记录
-- **ChromaDB 向量库**：支持本地持久化语义检索
-- **Embedding 配置化**：支持本地模型或 OpenAI 兼容 embedding 服务
-- **RAG 引用可解释**：前端展示来源、分数、chunk 和原文片段
-- **无依据拒答**：检索不到可靠依据时避免强行回答
-- **Eval 评测集**：用命中率、引用准确率和拒答准确率量化效果
-- **Agent 路由决策**：先判断问题是否需要知识库，再决定是否执行 RAG，避免所有问题都盲目检索
-- **Query Rewrite**：需要知识库时由 LLM 将用户问题改写为更适合向量检索的短查询
-- **多模式扩展**：在企业内部知识检索主流程之外，提供内容分析和工作流等附加能力
-
----
-
-## 系统架构
-
-```text
-+-----------------------------+
-|        Streamlit 前端        |
-|  会话历史 / 文档上传 / RAG展示 |
-+--------------+--------------+
-               |
-               | HTTP / SSE
-               v
-+-----------------------------+
-|        FastAPI 后端          |
-|  Chat API / Agent / RAG 服务 |
-+--------------+--------------+
-               |
-      +--------+--------+
-      |                 |
-      v                 v
-+------------+    +-------------+
-|  SQLite    |    |  ChromaDB   |
-| 会话/文档/检索 |    |  向量索引   |
-+------------+    +-------------+
-      |
-      v
-+-----------------------------+
-| OpenAI SDK 兼容模型与 Embedding |
-+-----------------------------+
-```
-
----
-
-## 目录结构
-
-```text
-enterprise-rag-agent-platform/
-├── backend/
-│   ├── api/                 # FastAPI 路由
-│   ├── db/                  # SQLite 连接、建表和数据读写
-│   ├── llm/                 # LLM 客户端封装
-│   ├── prompt/              # Prompt 模板与构建逻辑
-│   ├── rag/                 # chunk、embedding、向量库和检索服务
-│   ├── schema/              # 请求和响应数据结构
-│   ├── services/            # 聊天、Agent、工作流和元数据服务
-│   └── main.py              # FastAPI 入口
-├── frontend/
-│   ├── app.py               # Streamlit 前端入口
-│   ├── api_client.py        # 前端请求封装
-│   ├── file_parser.py       # 文件解析
-│   ├── renderers.py         # 前端展示组件
-│   └── state_manager.py     # 前端状态管理
-├── eval/
-│   ├── questions.jsonl      # 评测问题集
-│   ├── run_eval.py          # 评测脚本
-│   └── report.md            # 评测报告，运行后生成
-├── docs/
-│   └── sample_knowledge_base/ # HR、财务、IT、产品样例知识库文档
-├── data/
-│   ├── app.db               # SQLite 数据库，运行后生成
-│   └── chroma/              # ChromaDB 向量库，运行后生成
-├── requirements.txt
-├── .env.example
-└── README.md
-```
-
----
-
-## 数据库设计
-
-项目默认使用 SQLite，数据库路径：
-
-```text
-data/app.db
-```
-
-核心表包括：
-
-- `chat_sessions`
-- `chat_messages`
-- `documents`
-- `document_chunks`
-- `rag_queries`
-- `rag_hits`
-- `eval_cases`
-- `eval_results`
-
-这些表分别用于保存聊天会话、消息、上传文档、文档切块、RAG 查询记录、命中片段和评测结果。
-
----
-
-## 运行方式
-
-### 1. 克隆项目
-
-```bash
-git clone https://github.com/xiaoshanzhaguo/enterprise-rag-agent-platform.git
-cd enterprise-rag-agent-platform
-```
-
-### 2. 创建虚拟环境并安装依赖
-
-Windows PowerShell：
+在项目根目录操作。后端建议使用 Python 3.11；本机既有 Python 3.13 虚拟环境也已完成单元测试。前端使用 Node.js 22.12+ 的 22.x 版本及 npm。已有可用 `.venv` 时跳过创建步骤。
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
+py -3.11 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-macOS / Linux：
+编辑 `.env` 中的模型配置：`DEEPSEEK_API_KEY`、`BASE_URL`、`LLM_MODEL`。示例使用官方 DeepSeek API 地址；接兼容服务时按实际地址与可用模型填写。[DeepSeek 配置说明](https://api-docs.deepseek.com/)
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+示例默认 `RAG_RETRIEVAL_MODE=keyword`，便于先跑通。选择 `vector` 后需要可用的 Embedding 服务或本地模型；首次加载本地模型需下载权重，实际检索方式会记录在结果中。
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 18000
 ```
 
-### 3. 配置环境变量
+另一个终端：
 
-复制 `.env.example` 为 `.env`，然后填写自己的模型服务配置。
-
-```bash
-cp .env.example .env
+```powershell
+cd frontend-react
+npm ci
+npm run dev
 ```
 
-主要配置项：
+打开 Vite 输出的地址，通常为 [工作台](http://localhost:5173)。默认 `/api` 代理至 `http://127.0.0.1:18000`，可在 `frontend-react/.env.local` 设置 `BACKEND_PROXY_TARGET` 后重启 Vite。后端启动时初始化 SQLite；[健康检查](http://127.0.0.1:18000/health) 与 [API 文档](http://127.0.0.1:18000/docs) 可单独访问。
 
-```env
-BASE_URL=your_llm_base_url
-DEEPSEEK_API_KEY=your_api_key
-LLM_MODEL=your_llm_model
+## Docker 启动
 
-EMBEDDING_PROVIDER=local
-EMBEDDING_MODEL=BAAI/bge-m3
-EMBEDDING_BASE_URL=your_embedding_base_url
-EMBEDDING_API_KEY=your_embedding_api_key
+先启动 Docker Desktop 的 Linux 引擎，准备好 `.env`，再执行：
 
-VECTOR_STORE_DIR=./data/chroma
-RAG_RETRIEVAL_MODE=vector
-RAG_PREVIEW_TEXT_LIMIT=120
-DATABASE_URL=sqlite:///./data/app.db
-FRONTEND_BACKEND_BASE_URL=http://127.0.0.1:8000
+```powershell
+docker compose config --quiet
+docker compose up -d --build backend web
 ```
 
-说明：
+| 入口 | 默认本机地址 | 说明 |
+| --- | --- | --- |
+| React 工作台 | [localhost:8080](http://localhost:8080) | Nginx 提供静态页面并代理 `/api` |
+| FastAPI | [127.0.0.1:18000/docs](http://127.0.0.1:18000/docs) | 容器内部仍监听 8000 |
+| n8n（可选） | [localhost:5678](http://localhost:5678) | 需导入模板、绑定 Header Auth 并发布 |
+| Dify（独立部署） | [localhost:18080](http://localhost:18080) | 见独立部署说明 |
 
-- `EMBEDDING_PROVIDER=local` 时，使用本地 embedding 模型，适合演示和低成本测试。
-- `EMBEDDING_PROVIDER=openai` 时，使用 OpenAI 兼容 embedding 服务，需要配置 `EMBEDDING_BASE_URL` 和 `EMBEDDING_API_KEY`。
-- `RAG_PREVIEW_TEXT_LIMIT` 统一控制参考依据卡片中的片段预览长度；前端直接展示后端返回的 `text_preview`，不再二次截断。
-- 如果本机设置了 SOCKS 代理，需要确保安装了 `httpx[socks]`，当前 `requirements.txt` 已包含。
+默认 Compose 启动 React 与后端；旧版 Streamlit 使用 `legacy-streamlit` profile，可通过 `docker compose --profile legacy-streamlit up -d --build frontend` 启动，端口 8501。端口覆盖、数据保存、SSE 代理、升级和排错见 [部署说明](docs/deployment.md)。
 
-### 4. 初始化数据库
+本机第 27 天检查中 React 镜像构建成功，但后端构建期间 Docker containerd 崩溃，CPU 后端与整套容器联调尚未验证。实际通过项和受阻项见 [交付记录](docs/day27_delivery.md)。
 
-```bash
-python -m backend.db.init_db
+## 接入 n8n 与 Dify
+
+```powershell
+docker compose --profile automation up -d n8n
 ```
 
-启动项目时也会连接数据库并创建表，手动执行可以提前确认数据库是否正常生成。
+按 [n8n 配置说明](docs/day19_n8n_webhook.md) 导入 [工作流模板](integrations/n8n/process_application.json)，设置 `X-Webhook-Token` Header Auth 并发布。宿主机 FastAPI 使用 `http://127.0.0.1:5678/webhook/process-application`；同一 Compose 内的 FastAPI 使用 `http://n8n:5678/webhook/process-application`。`.env` 的 Token 必须与凭据一致，修改后重启后端使其生效。
 
-### 5. 启动后端
+Dify 不随根 Compose 启动。按 [Dify 部署与导入说明](integrations/dify/README.md) 创建独立实例、知识库与模型配置，使用已导出的应用 DSL。对比见 [FastAPI vs Dify](docs/day23_fastapi_vs_dify.md)。
 
-```bash
-uvicorn backend.main:app --reload --port 8000
+## 测试与效果记录
+
+```powershell
+# 单元测试：模拟外部模型与 n8n，不触发真实申请
+.venv\Scripts\python.exe -m unittest discover -s tests -v
+
+# 离线规则路由 + 真实检索
+.venv\Scripts\python.exe eval/run_week4.py --mode offline --output eval/local/offline_report.json
+
+# 真实模型 Agent（需要已配置模型服务）
+.venv\Scripts\python.exe eval/run_week4.py --mode live --output eval/local/live_report.json
 ```
 
-启动后可以检查后端健康状态：
+前端在 `frontend-react` 目录执行 `npm run build` 与 `npm run lint`。旧的 `eval/run_eval.py` 仍服务于旧语料，不代表第四周结果。
 
-```bash
-curl http://127.0.0.1:8000/health
-```
+2026-10-26 的修复后单次真实模型基线（`deepseek-chat`、keyword、top_k=3）：
 
-健康检查会返回服务状态、SQLite 连接状态、当前 RAG 检索模式和向量库目录是否可写，便于本地演示和 Docker 排错。
+| 指标 | 结果 |
+| --- | --- |
+| 检索来源命中 | 20/20 |
+| 答案引用命中 | 20/20 |
+| 答案关键词事实组覆盖 | 50/50 |
+| 无依据拒答 | 5/5，Codex 逐条阅读复核 |
+| 流程意图二分类 | 30/30 |
+| 六类路由完全匹配 | 25/30 |
 
-### 6. 启动前端
+这些是有限样例下的指标，不能等同于所有问题的准确率；引用指标不逐句判断蕴含关系，关键词覆盖不等于完整语义正确。语料哈希、逐题回答、失败分析、拒答复核和运行边界见 [评测说明](docs/day25_evaluation.md)与[修复对照](docs/week4_eval_fixes.md)。更换模型后应重新评测。前端评测页显示构建时快照。
 
-```bash
-streamlit run frontend/app.py
-```
+## 演示与交付资料
 
-默认打开 Streamlit 本地页面后，即可开始上传文档，并使用企业内部知识检索与引用回答能力。
+- [3 分钟演示脚本](docs/demo_script_3min.md)：知识问答、流程申请、无依据拒答三条链路。
+- [第 26 天 UI 与日志验收](docs/day26_workspace_ui.md)：桌面、手机、超时和隔离测试记录。
+- [12 份虚拟知识文档](docs/sample_knowledge_base/README.md)：按 HR、财务、IT、产品分类。
+- [第 27 天交付检查](docs/day27_delivery.md)：本轮构建与部署验证范围。
 
-### 7. 使用 Docker Compose 启动
+## 项目范围
 
-如果希望用容器快速启动完整项目，可以在项目根目录执行：
+后端已持久化会话、消息、文档、检索与流程记录；React 当前使用固定演示聊天会话，尚未提供完整多会话历史管理。知识库角色是演示约定，未实现完整登录、多租户与员工级访问隔离。执行日志页目前只聚合流程申请；统一的业务全链路 Trace 仍待完善。
 
-```bash
-docker compose up --build
-```
-
-启动完成后访问：
-
-```text
-http://localhost:8501
-```
-
-Docker 启动说明：
-
-- 后端容器端口：`8000`
-- 前端容器端口：`8501`
-- `./data` 会挂载到容器内 `/app/data`
-- SQLite 数据库会写入 `./data/app.db`
-- ChromaDB 向量库会写入 `./data/chroma/`
-- 本地 embedding 模型缓存会写入 `./data/huggingface/`
-- 前端容器会通过 `http://backend:8000` 访问后端服务
-
-如果使用云端大模型或云端 embedding，请先在本地 `.env` 中配置对应环境变量，`docker-compose.yml` 会读取这些变量。
-
----
-
-## 评测方式
-
-运行：
-
-```bash
-python eval/run_eval.py
-```
-
-生成或更新：
-
-```text
-eval/report.md
-```
-
-报告适合作为演示材料，展示当前 RAG 链路在测试集上的命中率、引用准确率、关键词覆盖率和无依据拒答准确率。由于 `eval/report.md` 属于本地运行产物，仓库中额外提供 `docs/eval_report_sample.md` 作为可提交的样例评测证据。
-
----
-
-## 截屏展示
-
-### 1. 企业内部知识检索首页
-
-默认进入企业内部知识检索核心入口，侧边栏展示会话入口、功能类型和对话设置。
-
-![企业内部知识检索首页](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619202013105.png)
-
-### 2. 上传企业文档
-
-在聊天输入框中上传企业知识库测试文档，作为本轮知识库问答的数据来源。
-
-![上传企业知识库文档](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619202238523.png)
-
-企业知识库测试文档，具体内容如下所示。
-
-![企业知识库测试文档详情](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619202340742.png)
-
-### 3. 基于文档提问
-
-用户提问“试用期是多久？”，系统进入知识库检索和回答流程。
-
-![基于企业知识库提问试用期](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619202545338.png)
-
-### 4. 引用回答
-
-回答中包含明确来源，便于追溯答案依据。
-
-![带引用来源的回答](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619202715988.png)
-
-### 5. 参考依据与命中原文
-
-前端默认折叠“参考依据”，展开后展示命中的 chunk、score、证据卡片和完整原文，增强 RAG 可解释性，同时避免回答页面过长。
-
-![RAG 参考依据折叠面板](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619202813636.png)
-
-![RAG 命中原文详情](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619202824477.png)
-
-### 6. 无依据拒答
-
-当知识库没有相关依据时，系统明确拒答，避免凭空生成答案。
-
-![无依据拒答示例](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619203035404.png)
-
-### 7. 会话历史
-
-侧边栏展示最近 10 条历史会话，支持点击恢复对应聊天记录，并通过高亮状态标识当前会话，体现 SQLite 会话持久化能力。
-
-![会话历史列表](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260619203212120.png)
-
-### 8. Eval 评测报告
-
-运行评测脚本后生成报告，用命中率、引用准确率和拒答准确率验证 RAG 效果。
-
-![Eval 评测报告](https://blog-1301840846.cos.ap-nanjing.myqcloud.com/img/image-20260615175719392.png)
-
----
-
-## 项目边界
-
-当前项目重点是完整走通企业内部知识检索、引用回答、流程文本处理和评测验证的工程链路，因此暂不追求复杂多 Agent 编排，也不把 LangChain 作为所有模块的强依赖。后续可以继续扩展：
-
-- 多知识库管理
-- 用户登录与权限隔离
-- 文档增量更新
-- 更完整的检索评测平台
-- 多轮上下文理解
-- 更细粒度的 citation 对齐
-
----
-
-## 致谢
-
-本项目用于个人学习、能力验证与求职作品展示，欢迎交流与建议。
+项目用于学习、工程能力验证与求职展示。已实现的模块为后续扩展提供基础，未实现的审批、授权、真实通知和复杂 Agent 编排不作为现有能力描述。
