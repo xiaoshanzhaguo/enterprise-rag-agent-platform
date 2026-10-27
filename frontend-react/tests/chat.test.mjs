@@ -62,3 +62,11 @@ test('恢复历史正文及每条引用，过滤系统消息和步骤 JSON 外�
   assert.equal(result[1].content, '提前申请')
   assert.equal(result[1].metadata.rag_preview_chunks[0].source, 'leave.md#chunk-1')
 })
+test('历史反馈绑定数据库消息编号，不用前端列表下标代替', () => {
+  const feedback = { rating: 'unhelpful', reason: 'incomplete', comment: '缺少时限', updated_at: '2026-10-27' }
+  const restored = restoreMessages({ session_id: 'a', messages: [
+    { message_id: 52, role: 'assistant', content: '回答', feedback },
+  ] })
+  assert.equal(restored[0].messageId, 52)
+  assert.deepEqual(restored[0].feedback, feedback)
+})

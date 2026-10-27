@@ -70,6 +70,7 @@ class StreamEvent(BaseModel):
     前端可根据事件类型更新界面状态、拼接文本内容或处理异常。
     """
     event_type: StreamEventType  # 当前流式事件的类型
+    message_id: Optional[int] = None  # final 中已持久化的 assistant 消息编号。
     session_id: Optional[str] = None  # 当前事件所属的会话ID
     task_type: Optional[TaskType] = None  # 当前任务类型
     step_name: Optional[str] = None  # 当前事件关联的步骤名称

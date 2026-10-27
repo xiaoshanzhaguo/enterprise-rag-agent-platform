@@ -18,6 +18,7 @@ import { Bot, Database, FileSearch, SendHorizontal, RefreshCw } from 'lucide-rea
 // useMemo 根据当前 ID 从列表里找出当前选中的完整对象。
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { answerBody } from '../api/sessionMessages'
+import { AnswerFeedbackForm } from '../components/AnswerFeedbackForm'
 // streamAgentAnswer 负责调用后端 /agent_stream，并用 ReadableStream 逐步解析 SSE 事件。
 import { streamAgentAnswer } from '../api/chatApi'
 import { formatApiError } from '../api/httpClient'
@@ -522,6 +523,7 @@ export function ChatPage({ sessionId, initialMessages, onSettled, onStreamingCha
                 // 把这条 AI 消息的状态改成：'complete'，表示：这条 AI 回复已经生成完成。
                 // 这通常会影响页面展示，比如：隐藏 loading 动画、隐藏“生成中”、显示完整回答状态。
                 status: 'complete',
+                messageId: event.message_id ?? undefined,
                 content: answerBody(event.content || message.content),
                 metadata: event.metadata,
               }
@@ -741,6 +743,8 @@ export function ChatPage({ sessionId, initialMessages, onSettled, onStreamingCha
                   ) : null}
 
                   <p>{message.content || (message.status === 'streaming' ? '正在等待后端返回内容...' : '')}</p>
+                  {message.role === 'assistant' && message.status === 'complete' && message.messageId ? <AnswerFeedbackForm
+                    sessionId={sessionId} messageId={message.messageId} initialFeedback={message.feedback} /> : null}
                   {message.role === 'assistant' && message.metadata?.rag_preview_chunks?.length ? <button className="text-button" type="button"
                     onClick={() => setAgentTrace({ status: 'complete', metadata: message.metadata, generateText: message.content })}>查看本条回答的依据</button> : null}
                 </article>

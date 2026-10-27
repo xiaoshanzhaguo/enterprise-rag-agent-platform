@@ -919,7 +919,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 assistant_metadata = assistant_metadata or {}
                 assistant_metadata["process_extraction"] = process_result.model_dump()
             # 保存 assistant 消息；如果本轮有引用片段，则把引用模块元数据一起保存
-            save_chat_message(
+            assistant_message_id = save_chat_message(
                 session_id=request.session_id,
                 role="assistant",
                 content=final_content,
@@ -937,6 +937,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             yield to_sse(
                 StreamEvent(
                     event_type="final",
+                    message_id=assistant_message_id,
                     session_id=request.session_id,
                     task_type=request.task_type,
                     content=final_content,

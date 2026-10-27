@@ -153,6 +153,24 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; }
 .conversation-surface { min-width: 0; }
 .conversation-surface > .page-stack > .page-header { display: none; }
 .conversation-surface .chat-message p { overflow-wrap: anywhere; }
+.answer-feedback { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.feedback-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.feedback-choice { display: inline-flex; align-items: center; gap: 5px; background: transparent; border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.feedback-choice[aria-pressed=true] { color: var(--accent); border-color: var(--accent); background: #edf4e6; }
+.feedback-saved { font-size: 11px; color: var(--accent); }
+.feedback-form { display: grid; gap: 10px; margin-top: 12px; }
+.feedback-form .field { margin: 0; }
+.feedback-form .field span { font-size: 11px; }
+.feedback-review { display: grid; gap: 18px; }
+.feedback-list { display: grid; gap: 12px; }
+.feedback-record { padding: 18px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.feedback-record-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; }
+.feedback-record-heading a { color: var(--accent); }
+.feedback-record h4 { font-size: 13px; margin: 14px 0 8px; overflow-wrap: anywhere; }
+.feedback-record p { font-size: 12px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-answer { max-height: 150px; overflow-y: auto; color: var(--muted); }
+.feedback-comment { padding: 10px; background: #f4f7ef; border-radius: 5px; }
+.feedback-record small { color: var(--muted); font-size: 11px; }
 @media (max-width: 1400px) { .conversation-surface .workspace-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) { .session-workspace { grid-template-columns: minmax(0, 1fr); } .session-list { max-height: 180px; } }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 20; background: #fff; padding: 10px; }

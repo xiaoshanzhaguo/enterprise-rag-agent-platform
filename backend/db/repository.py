@@ -95,9 +95,13 @@ def _message_row_to_dict(row) -> dict[str, Any]:
     :return: 前端消息字典
     """
     message = {
+        "message_id": row["id"],
         "role": row["role"],
         "content": row["content"],
     }
+
+    if row['feedback_rating']:
+        message['feedback'] = {key: row['feedback_' + key] for key in ('rating', 'reason', 'comment', 'updated_at')}
 
     if row["raw_content"]:
         message["raw_content"] = row["raw_content"]
@@ -338,14 +342,16 @@ def get_session_messages(session_id: str | None) -> list[dict[str, Any]]:
     if not session_id:
         return []
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         # 获取查询结果中的所有记录
         rows = connection.execute(
             """
-            SELECT role, content, raw_content, metadata_json
-            FROM chat_messages
-            WHERE session_id = ?
-            ORDER BY message_order ASC, id ASC
+            SELECT m.id, m.role, m.content, m.raw_content, m.metadata_json,
+                   f.rating AS feedback_rating, f.reason AS feedback_reason,
+                   f.comment AS feedback_comment, f.updated_at AS feedback_updated_at
+            FROM chat_messages m LEFT JOIN answer_feedback f ON f.message_id = m.id
+            WHERE m.session_id = ?
+            ORDER BY m.message_order ASC, m.id ASC
             """,
             (session_id,),
         ).fetchall()

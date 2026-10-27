@@ -168,7 +168,17 @@ CREATE_TABLE_SQL = [
         FOREIGN KEY (eval_case_id) REFERENCES eval_cases(id) ON DELETE CASCADE
     )
     """,
-    # 删除标记防止迟到的流式回答重新创建会话，不关联已删除会话的外键。
+    # 每条回答保留最新反馈，删除消息时一并清理。
+    """
+    CREATE TABLE IF NOT EXISTS answer_feedback (
+        message_id INTEGER PRIMARY KEY,
+        rating TEXT NOT NULL CHECK (rating IN ('helpful', 'unhelpful')),
+        reason TEXT NOT NULL DEFAULT '',
+        comment TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS deleted_chat_sessions (
         session_id TEXT PRIMARY KEY,

@@ -11,6 +11,15 @@
 // 当前前端先用字符串字面量表示角色，后续如果接真实登录系统，可以从后端返回角色。
 export type UserRole = 'employee' | 'kb_admin' | 'approver' | 'admin'
 
+export type FeedbackRating = 'helpful' | 'unhelpful'
+export type FeedbackReason = '' | 'answer_inaccurate' | 'citation_mismatch' | 'incomplete' | 'other'
+export interface AnswerFeedback {
+  rating: FeedbackRating
+  reason: FeedbackReason
+  comment: string
+  updated_at: string
+}
+
 // 聊天输入区的草稿状态。
 export interface ChatDraftState {
   question: string // 员工当前输入的问题。
@@ -27,6 +36,8 @@ export interface ChatMessage {
   steps?: string[] // Agent 执行步骤，例如“正在判断是否需要知识库”“已命中 3 个片段”。
   status?: 'streaming' | 'complete' | 'error' // 当前 AI 消息状态，用于展示生成中或错误。
   metadata?: AgentStreamMetadata
+  messageId?: number
+  feedback?: AnswerFeedback
 }
 
 export interface ChatSessionSummary {
@@ -41,7 +52,7 @@ export interface ChatSessionSummary {
 export interface ChatSessionDetail extends Omit<ChatSessionSummary, 'title' | 'message_count'> {
   title: string | null
   messages: Array<{
-    role: string; content: string; raw_content?: string
+    role: string; content: string; raw_content?: string; message_id?: number; feedback?: AnswerFeedback
     agent_route?: AgentRouteMetadata; rag_preview_chunks?: RagPreviewChunk[]
   }>
 }
@@ -96,6 +107,7 @@ export interface AgentTracePanelState {
 
 // 后端 SSE 事件结构，对应 backend.schema.chat_schema.StreamEvent。
 export interface AgentStreamEvent {
+  message_id?: number | null
   event_type: 'workflow_start' | 'step_start' | 'delta' | 'step_complete' | 'final' | 'error' // 当前事件类型。
   session_id?: string | null // 当前事件所属会话 ID。
   task_type?: string | null // 当前任务类型，智能问答页一般是 agent。

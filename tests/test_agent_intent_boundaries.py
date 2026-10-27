@@ -42,6 +42,7 @@ class AgentIntentBoundaryTests(unittest.TestCase):
                 'extract_process_fields',
             )}
             mocks['get_chat_session_title'].return_value = '财务咨询'
+            mocks['save_chat_message'].return_value = 42
             mocks['_build_agent_rag_metadata'].return_value = {}
             mocks['route_question'].return_value = AgentRouteDecision(
                 AgentRouteType.FINANCE_PROCESS, '财务制度咨询', True, '报销提交时限')

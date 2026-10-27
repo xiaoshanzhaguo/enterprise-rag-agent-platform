@@ -13,6 +13,8 @@ export function restoreMessages(session: ChatSessionDetail): ChatMessage[] {
     id: `${session.session_id}-history-${index}`, role: message.role as 'user' | 'assistant',
     content: message.role === 'assistant' ? answerBody(message.raw_content || message.content) : message.content,
     status: 'complete',
+    messageId: message.message_id,
+    feedback: message.feedback,
     metadata: message.role === 'assistant' ? { agent_route: message.agent_route, rag_preview_chunks: message.rag_preview_chunks } : undefined,
   }))
 }

@@ -1,5 +1,6 @@
 import { BarChart3, CheckCheck, FlaskConical } from 'lucide-react'
 import { metrics, model, executed_at_utc } from '../../../eval/week4_after_fix_report.json'
+import { FeedbackReviewPanel } from '../components/FeedbackReviewPanel'
 
 const metricItems = [
   ['检索命中', metrics.retrieval_hit, '预期来源进入检索结果'],
@@ -22,5 +23,6 @@ export function EvaluationResultPage() {
     <div className="workspace-grid"><section className="panel"><div className="panel-heading"><CheckCheck size={20} /><div><h3>本轮已验证</h3><p>财务咨询与实际申请分别处理。</p></div></div><p className="process-notice">财务制度问题生成带来源的答案；实际申请只提取用户提供的字段，确认提交后才触发模拟流程。</p></section>
       <section className="panel"><div className="panel-heading"><FlaskConical size={20} /><div><h3>持续关注</h3><p>有限样例不代表所有场景。</p></div></div><p className="process-notice">部分业务路由标签仍不匹配；申请类型同义表达仍需核对。命中引用或关键词，不等于每句话都准确。</p></section></div>
     <p className="page-footnote">该快照随前端构建更新；拒答由 Codex 逐条阅读复核。评测未执行真实审批或授权操作。</p>
+    <FeedbackReviewPanel />
   </section>
 }

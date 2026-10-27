@@ -67,6 +67,7 @@ sequenceDiagram
 | 路由、生成与字段提取 | `backend/services`、`backend/prompt` | 业务逻辑，不保存模型密钥到响应 |
 | 检索与知识库 Tool | `backend/rag` | SQLite 片段与可选 Chroma 向量 |
 | 数据库与流程记录 | `backend/db` | `data/app.db` |
+| 回答反馈 | `backend/api/feedback.py`、`backend/db/feedback_repository.py` | 按 assistant 消息编号保存最新反馈；React 评测页只读汇总 |
 | n8n 模板 | `integrations/n8n` | 模板无凭据；运行数据在命名卷 |
 | Dify 复刻 | `integrations/dify` | 独立运行目录与插件卷，未打进应用镜像 |
 | 评测 | `eval` | 独立临时数据库、语料哈希和逐题报告 |

@@ -63,6 +63,7 @@ class ProcessExtractionTests(unittest.TestCase):
                 "update_rag_query_answer", "_build_agent_rag_metadata", "stream_chat_model",
             )}
             mocks["get_chat_session_title"].return_value = "申请"
+            mocks["save_chat_message"].return_value = 42
             mocks["_build_agent_rag_metadata"].return_value = {}
             mocks["route_question"].return_value = AgentRouteDecision(
                 AgentRouteType.PROCESS_APPLY, "流程申请", True, "权限申请",
@@ -77,6 +78,7 @@ class ProcessExtractionTests(unittest.TestCase):
             events = asyncio.run(collect(response))
             self.assertNotIn("error", [e["event_type"] for e in events])
             final = next(e for e in events if e["event_type"] == "final")
+            self.assertEqual(final['message_id'], 42)
             payload = json.loads(json.loads(final["content"])["generate_answer"])
             self.assertEqual(payload["fields"]["applicant"], "张三")
             self.assertEqual(final["metadata"]["process_extraction"], payload)
