@@ -3,9 +3,23 @@ import sqlite3
 from typing import Literal
 from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel, Field, model_validator
-from backend.db.feedback_repository import list_feedback, save_feedback
+from backend.db.feedback_repository import FeedbackConflict, list_feedback, review_feedback, save_feedback
 
 router = APIRouter()
+ReviewStatus = Literal['pending', 'in_progress', 'resolved']
+
+
+class FeedbackReviewRequest(BaseModel):
+    model_config = {'str_strip_whitespace': True, 'extra': 'forbid'}
+    status: ReviewStatus
+    note: str = Field(default='', max_length=1000)
+    expected_revision: int = Field(ge=1, le=9223372036854775807)
+
+    @model_validator(mode='after')
+    def require_resolution_note(self):
+        if self.status == 'resolved' and not self.note:
+            raise ValueError('标记已解决时必须填写处理说明和复核结果。')
+        return self
 
 
 class FeedbackRequest(BaseModel):
@@ -38,8 +52,22 @@ def submit_feedback(session_id: str, request: FeedbackRequest, message_id: int =
 
 @router.get('/answer_feedback')
 def feedback_list(rating: Literal['helpful', 'unhelpful'] | None = None,
-                  page: int = Query(default=1, ge=1), page_size: int = Query(default=10, ge=1, le=50)):
+                  page: int = Query(default=1, ge=1), page_size: int = Query(default=10, ge=1, le=50),
+                  review_status: ReviewStatus | None = None):
     try:
-        return list_feedback(rating=rating, page=page, page_size=page_size)
+        return list_feedback(rating=rating, page=page, page_size=page_size, review_status=review_status)
     except sqlite3.Error as exc:
         raise HTTPException(503, '反馈列表暂不可用，请稍后刷新。') from exc
+
+
+@router.post('/answer_feedback/{message_id}/review')
+def submit_review(request: FeedbackReviewRequest, message_id: int = Path(gt=0, le=9223372036854775807)):
+    try:
+        result = review_feedback(message_id, **request.model_dump())
+    except FeedbackConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except sqlite3.Error as exc:
+        raise HTTPException(503, '处理结果尚未确认保存，请刷新列表核对后重试。') from exc
+    if result is None:
+        raise HTTPException(404, '反馈不存在或已删除。')
+    return result

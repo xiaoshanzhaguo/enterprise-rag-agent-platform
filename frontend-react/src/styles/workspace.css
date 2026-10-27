@@ -171,6 +171,14 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; }
 .feedback-answer { max-height: 150px; overflow-y: auto; color: var(--muted); }
 .feedback-comment { padding: 10px; background: #f4f7ef; border-radius: 5px; }
 .feedback-record small { color: var(--muted); font-size: 11px; }
+.feedback-resolution { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.review-badge { display: inline-block; padding: 3px 8px; border-radius: 5px; font-size: 11px; }
+.review-pending { background: #fff3de; color: #916328; }
+.review-in_progress { background: #eaf2fb; color: #3b6285; }
+.review-resolved { background: #eaf4e9; color: #2a654a; }
+.review-counts { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.review-counts span { padding: 8px 12px; background: #f4f7ef; border: 1px solid var(--line); border-radius: 6px; }
+.review-counts strong { color: var(--ink); margin-left: 8px; }
 @media (max-width: 1400px) { .conversation-surface .workspace-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) { .session-workspace { grid-template-columns: minmax(0, 1fr); } .session-list { max-height: 180px; } }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 20; background: #fff; padding: 10px; }

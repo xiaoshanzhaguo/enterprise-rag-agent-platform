@@ -175,6 +175,9 @@ CREATE_TABLE_SQL = [
         rating TEXT NOT NULL CHECK (rating IN ('helpful', 'unhelpful')),
         reason TEXT NOT NULL DEFAULT '',
         comment TEXT NOT NULL DEFAULT '',
+        review_status TEXT NOT NULL DEFAULT 'pending',
+        review_note TEXT NOT NULL DEFAULT '',
+        revision INTEGER NOT NULL DEFAULT 1,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
     )
@@ -209,6 +212,11 @@ CREATE_INDEX_SQL = [
 # 如果本地已经有旧版 app.db，它不会自动给旧表补充新增字段。
 # 所以新增字段后，需要在 init_database() 里按这个清单执行轻量 ALTER TABLE 迁移。
 TABLE_COLUMN_MIGRATIONS = {
+    "answer_feedback": [
+        ("review_status", "TEXT NOT NULL DEFAULT 'pending'"),
+        ("review_note", "TEXT NOT NULL DEFAULT ''"),
+        ("revision", "INTEGER NOT NULL DEFAULT 1"),
+    ],
     "n8n_execution_records": [
         ("request_id", "TEXT"),
         ("response_status_code", "INTEGER"),

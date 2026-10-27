@@ -1,5 +1,6 @@
 """隔离的会话浏览器验收：真实 SQLite/SSE，固定模型输出，不调用外部 API。"""
 import os
+import argparse
 from pathlib import Path
 import sys
 import tempfile
@@ -31,12 +32,18 @@ def model_answer(client, messages):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--feedback', action='store_true', help='准备一条待处理的模拟负反馈')
+    args = parser.parse_args()
     init_database()
     ensure_chat_session('history-a', mode='企业知识库问答', title='年假制度咨询')
     save_chat_message('history-a', 'user', '年假应该提前多久申请？')
-    save_chat_message('history-a', 'assistant', '请提前 3 个工作日申请。[来源:leave_policy.md#chunk-1]', metadata={
+    message_id = save_chat_message('history-a', 'assistant', '请提前 3 个工作日申请。[来源:leave_policy.md#chunk-1]', metadata={
         'rag_preview_chunks': [{'rank': 1, 'file_name': 'leave_policy.md', 'chunk_id': 1,
                                 'source': 'leave_policy.md#chunk-1', 'text_preview': '年假应提前 3 个工作日申请。'}]})
+    if args.feedback:
+        from backend.db.feedback_repository import save_feedback
+        save_feedback('history-a', message_id, rating='unhelpful', reason='incomplete', comment='浏览器验收：需要核对审批流程。')
     with runtime, patch('backend.api.chat.get_client', return_value=object()), \
          patch('backend.services.agent_service.route_question', return_value=AgentRouteDecision(AgentRouteType.IRRELEVANT, '隔离验收普通对话', False)), \
          patch('backend.services.agent_service._stream_model_answer', side_effect=model_answer):
