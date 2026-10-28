@@ -368,6 +368,17 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
             rewritten_query=normalized_question,
         )
 
+    corporate_scope = re.search(r"公司|企业|办公|员工|业务|客户", normalized_question)
+    security_asset = re.search(r"办公设备|电脑|源代码|源码|业务代码|客户(?:业务)?数据", normalized_question)
+    security_rule = re.search(r"安全|规范|制度|允许|能否|可否|能|可|同步|上传|拷贝|复制|安装|个人|私人|交接|离职|清理", normalized_question)
+    if corporate_scope and security_asset and security_rule:
+        return AgentRouteDecision(
+            route_type=AgentRouteType.IT_SUPPORT,
+            reason="问题涉及企业数据或设备使用与安全制度，需要 IT 知识库依据",
+            should_use_rag=True,
+            rewritten_query=normalized_question,
+        )
+
     if any(keyword in normalized_question for keyword in ["vpn", "gitlab", "账号", "权限", "电脑", "网络", "登录失败"]):
         return AgentRouteDecision(
             route_type=AgentRouteType.IT_SUPPORT,

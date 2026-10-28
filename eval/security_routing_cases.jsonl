@@ -1,0 +1,8 @@
+{"id":"security_01","question":"按公司安全制度，业务源码能上传到员工自己的代码仓库吗？","expected_route":"it_support","expected_need_knowledge_base":true}
+{"id":"security_02","question":"公司的办公电脑允许安装未经批准的软件吗？","expected_route":"it_support","expected_need_knowledge_base":true}
+{"id":"security_03","question":"把客户业务数据拷贝到个人网盘是否符合公司的安全规范？","expected_route":"it_support","expected_need_knowledge_base":true}
+{"id":"security_04","question":"公司电脑在离职交接前，业务资料应按什么要求清理？","expected_route":"it_support","expected_need_knowledge_base":true}
+{"id":"security_05","question":"能将公司的业务代码复制到自己的私人笔记本用于办公吗？","expected_route":"it_support","expected_need_knowledge_base":true}
+{"id":"security_06","question":"版本发布前安全检查未通过，可以跳过检查直接上线吗？","expected_route":"product_doc","expected_need_knowledge_base":true}
+{"id":"security_07","question":"员工年假需要提前几天提交申请？","expected_route":"knowledge_qa","expected_need_knowledge_base":true}
+{"id":"security_08","question":"差旅住宿报销有哪些金额标准？","expected_route":"finance_process","expected_need_knowledge_base":true}

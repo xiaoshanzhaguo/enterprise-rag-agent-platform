@@ -1,0 +1,591 @@
+{
+  "executed_at_utc": "2026-10-28T12:00:48.623964+00:00",
+  "model": "deepseek-chat",
+  "temperature": 0,
+  "scope": "production_model_routing_only",
+  "cases_sha256": "21e2cba90f7b86ba703c9495d19c8c5d458ea42198fc8a8d6da72edcd546d11d",
+  "prompt_sha256": "5ceb00e8b8cfdee83ddf149b468b50631cd71e8d8d94c0d871c1011a79ecb009",
+  "results": [
+    {
+      "id": "hr_01",
+      "question": "员工年假至少要提前几个工作日提交？",
+      "expected_route": "knowledge_qa",
+      "group": "original",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询公司年假申请提前时限的制度规定",
+      "duration_ms": 1192.58
+    },
+    {
+      "id": "hr_02",
+      "question": "试用期员工每月最多有几天带薪病假，超过的部分怎么办？",
+      "expected_route": "knowledge_qa",
+      "group": "original",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询试用期员工带薪病假天数及超假处理，属于HR制度问答",
+      "duration_ms": 1148.24
+    },
+    {
+      "id": "hr_03",
+      "question": "远程办公每月默认最多几天，超过后由谁审批？",
+      "expected_route": "knowledge_qa",
+      "group": "original",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问远程办公天数及审批规则，属于企业HR制度咨询",
+      "duration_ms": 1127.67
+    },
+    {
+      "id": "hr_04",
+      "question": "新员工缺少离职证明或学历证明时，需要在到岗后多久补交？",
+      "expected_route": "knowledge_qa",
+      "group": "original",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询新员工入职材料补交时限，属于HR制度问答",
+      "duration_ms": 1173.67
+    },
+    {
+      "id": "hr_05",
+      "question": "普通岗位和管理岗位的试用期分别多久？",
+      "expected_route": "knowledge_qa",
+      "group": "original",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问公司试用期制度，属于HR制度咨询",
+      "duration_ms": 888.76
+    },
+    {
+      "id": "finance_01",
+      "question": "日常费用发生后，报销申请需要在多久内提交？",
+      "expected_route": "finance_process",
+      "group": "original",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询日常费用报销的提交时限，属于财务制度规则",
+      "duration_ms": 1030.42
+    },
+    {
+      "id": "finance_02",
+      "question": "打车报销需要哪些材料？缺少行程单会怎样？",
+      "expected_route": "finance_process",
+      "group": "original",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询打车报销所需材料及缺少行程单的后果，属于财务制度问答",
+      "duration_ms": 991.4
+    },
+    {
+      "id": "finance_03",
+      "question": "单张发票金额超过5000元，需要谁复核？",
+      "expected_route": "finance_process",
+      "group": "original",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问发票金额超限的复核审批人，属于财务制度规则咨询",
+      "duration_ms": 1130.49
+    },
+    {
+      "id": "finance_04",
+      "question": "差旅的一线城市和其他城市住宿标准各是多少？超标需要谁审批？",
+      "expected_route": "finance_process",
+      "group": "original",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询差旅住宿标准及超标审批规则，属于财务制度问答",
+      "duration_ms": 994.15
+    },
+    {
+      "id": "finance_05",
+      "question": "供应商单笔付款超过10万元，需要谁审批？",
+      "expected_route": "finance_process",
+      "group": "original",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询供应商付款审批权限的财务制度",
+      "duration_ms": 1036.26
+    },
+    {
+      "id": "it_01",
+      "question": "VPN提示720错误应该如何处理？",
+      "expected_route": "it_support",
+      "group": "original",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: VPN连接错误属于实际技术故障排查，需要企业IT支持知识库",
+      "duration_ms": 1902.61
+    },
+    {
+      "id": "it_02",
+      "question": "VPN连续输错密码几次会锁定，锁定多久？",
+      "expected_route": "it_support",
+      "group": "original",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问VPN密码错误锁定规则，属于IT支持制度咨询",
+      "duration_ms": 1029.57
+    },
+    {
+      "id": "it_03",
+      "question": "GitLab Maintainer权限的审批角色有哪些？我只咨询规则，不发起申请。",
+      "expected_route": "it_support",
+      "group": "original",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询GitLab权限审批角色规则，属于IT权限制度咨询",
+      "duration_ms": 992.63
+    },
+    {
+      "id": "it_04",
+      "question": "GitLab临时项目权限默认有效期多久，到期后怎么办？",
+      "expected_route": "it_support",
+      "group": "original",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问GitLab临时项目权限有效期及到期处理，属于企业IT权限规则咨询",
+      "duration_ms": 1141.29
+    },
+    {
+      "id": "it_05",
+      "question": "办公设备安全规范允许把公司源代码同步到个人GitHub吗？",
+      "expected_route": "it_support",
+      "group": "original",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问公司源码外传与个人仓库使用限制，属企业安全制度",
+      "duration_ms": 1042.93
+    },
+    {
+      "id": "product_01",
+      "question": "企业知识助手产品FAQ中支持上传哪些文档格式？",
+      "expected_route": "product_doc",
+      "group": "original",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问产品FAQ支持的文档格式，属于产品资料咨询",
+      "duration_ms": 1027.29
+    },
+    {
+      "id": "product_02",
+      "question": "企业知识助手产品FAQ里，扫描件图片能直接提取文字吗？",
+      "expected_route": "product_doc",
+      "group": "original",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问企业知识助手产品FAQ中的扫描件文字提取能力，属于产品资料咨询",
+      "duration_ms": 1192.29
+    },
+    {
+      "id": "product_03",
+      "question": "版本发布前至少提前多久冻结需求？冻结后允许哪些变更？",
+      "expected_route": "product_doc",
+      "group": "original",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问版本发布前的需求冻结时限与变更规则，属于产品发布治理规范",
+      "duration_ms": 996.81
+    },
+    {
+      "id": "product_04",
+      "question": "涉及登录的版本发布，灰度比例从多少开始，需要观察多久才能扩大到50%？",
+      "expected_route": "product_doc",
+      "group": "original",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问版本发布灰度放量比例与观察时长，属于产品发布治理规范",
+      "duration_ms": 1007.03
+    },
+    {
+      "id": "product_05",
+      "question": "客户反馈被分为P1时，多久给出处理计划，多久同步一次进展？",
+      "expected_route": "product_doc",
+      "group": "original",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 客户问题分级及处理进度规范属于产品资料",
+      "duration_ms": 1110.76
+    },
+    {
+      "id": "process_01",
+      "question": "我是研发部张三，申请VPN权限，权限级别为只读，审批人为李经理，补充信息是远程办公。",
+      "expected_route": "process_apply",
+      "group": "original",
+      "actual_route": "process_apply",
+      "correct": true,
+      "need_knowledge_base": false,
+      "reason": "Agent 判断: 用户明确发起VPN权限申请并提交审批信息，属于流程申请",
+      "duration_ms": 1308.49
+    },
+    {
+      "id": "process_02",
+      "question": "我是测试部王芳，申请GitLab权限，权限级别为Reporter，审批人为赵主管，补充信息是查看项目A代码。",
+      "expected_route": "process_apply",
+      "group": "original",
+      "actual_route": "process_apply",
+      "correct": true,
+      "need_knowledge_base": false,
+      "reason": "Agent 判断: 用户明确发起GitLab权限申请并提交审批信息",
+      "duration_ms": 1050.13
+    },
+    {
+      "id": "process_03",
+      "question": "我是张三，申请VPN权限，权限级别为只读，审批人为李经理，补充信息是居家办公。",
+      "expected_route": "process_apply",
+      "group": "original",
+      "actual_route": "process_apply",
+      "correct": true,
+      "need_knowledge_base": false,
+      "reason": "Agent 判断: 用户明确发起VPN权限申请并提交审批信息",
+      "duration_ms": 1441.73
+    },
+    {
+      "id": "process_04",
+      "question": "我是产品部陈晨，申请GitLab权限。",
+      "expected_route": "process_apply",
+      "group": "original",
+      "actual_route": "process_apply",
+      "correct": true,
+      "need_knowledge_base": false,
+      "reason": "Agent 判断: 用户明确申请GitLab权限，属于发起权限申请流程",
+      "duration_ms": 1570.77
+    },
+    {
+      "id": "process_05",
+      "question": "请帮我开通VPN账号，我要提交申请。",
+      "expected_route": "process_apply",
+      "group": "original",
+      "actual_route": "process_apply",
+      "correct": true,
+      "need_knowledge_base": false,
+      "reason": "Agent 判断: 用户明确要求开通VPN账号并提交申请，属于实际流程申请。",
+      "duration_ms": 1079.42
+    },
+    {
+      "id": "refusal_01",
+      "question": "星辰科技2027年度董事长奖金的准确金额是多少？",
+      "expected_route": "knowledge_qa",
+      "group": "original",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问特定公司内部奖金金额，需查询企业知识库",
+      "duration_ms": 1112.65
+    },
+    {
+      "id": "refusal_02",
+      "question": "财务报销制度规定的公司开票税号具体是哪一串数字？",
+      "expected_route": "finance_process",
+      "group": "original",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问公司开票税号，属于财务制度与内部事实查询",
+      "duration_ms": 1042.9
+    },
+    {
+      "id": "refusal_03",
+      "question": "公司VPN服务器的公网IP地址具体是多少？",
+      "expected_route": "it_support",
+      "group": "original",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问公司VPN服务器公网IP，属于内部IT事实，需要知识库",
+      "duration_ms": 1103.25
+    },
+    {
+      "id": "refusal_04",
+      "question": "员工年假未休完时，每天折算现金的具体金额是多少？",
+      "expected_route": "knowledge_qa",
+      "group": "original",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询年假未休折算现金的HR制度标准",
+      "duration_ms": 1244.18
+    },
+    {
+      "id": "refusal_05",
+      "question": "财务报销系统的管理员账号和初始密码分别是什么？",
+      "expected_route": "finance_process",
+      "group": "original",
+      "actual_route": "it_support",
+      "correct": false,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问系统管理员账号和初始密码，属于内部IT账号信息查询",
+      "duration_ms": 1343.63
+    },
+    {
+      "id": "holdout_product_01",
+      "question": "正式上线前，需求什么时候锁定？锁定后还能改哪些内容？",
+      "expected_route": "product_doc",
+      "group": "holdout",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问产品正式上线前的需求锁定时间及锁定后可变更内容，属于产品发布治理规范",
+      "duration_ms": 1266.48
+    },
+    {
+      "id": "holdout_product_02",
+      "question": "新版本先给一小部分用户开放时，如何判断可以继续扩大范围？",
+      "expected_route": "product_doc",
+      "group": "holdout",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问新版本灰度放量后扩大范围的判断标准，属于产品发布治理规范",
+      "duration_ms": 1369.82
+    },
+    {
+      "id": "holdout_product_03",
+      "question": "客户报告严重影响使用的问题后，产品团队按什么节奏同步处理进度？",
+      "expected_route": "product_doc",
+      "group": "holdout",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 客户问题分级及处理进度规范属于产品资料",
+      "duration_ms": 993.48
+    },
+    {
+      "id": "holdout_product_04",
+      "question": "产品 FAQ 的功能说明在哪里查看？",
+      "expected_route": "product_doc",
+      "group": "holdout",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问产品FAQ功能说明的查看位置，属于产品资料咨询",
+      "duration_ms": 965.96
+    },
+    {
+      "id": "holdout_it_01",
+      "question": "我的账号今天一直登录失败，应该怎么排查？",
+      "expected_route": "it_support",
+      "group": "holdout",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 账号登录失败属于实际技术故障排查，需要IT支持知识库依据",
+      "duration_ms": 1537.28
+    },
+    {
+      "id": "holdout_it_02",
+      "question": "VPN连接失败并提示认证错误，怎么处理？",
+      "expected_route": "it_support",
+      "group": "holdout",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: VPN连接失败与认证错误属于实际技术故障排查，需要企业IT支持知识库依据",
+      "duration_ms": 1117.78
+    },
+    {
+      "id": "holdout_process_01",
+      "question": "我是研发部赵明，请帮我开通GitLab只读权限。",
+      "expected_route": "process_apply",
+      "group": "holdout",
+      "actual_route": "process_apply",
+      "correct": true,
+      "need_knowledge_base": false,
+      "reason": "Agent 判断: 用户明确请求开通GitLab只读权限，属于发起权限申请流程",
+      "duration_ms": 1058.08
+    },
+    {
+      "id": "holdout_finance_01",
+      "question": "差旅费用报销需要提供哪些票据？",
+      "expected_route": "finance_process",
+      "group": "holdout",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询差旅报销所需票据，属于财务制度问答",
+      "duration_ms": 1087.52
+    },
+    {
+      "id": "security_01",
+      "question": "按公司安全制度，业务源码能上传到员工自己的代码仓库吗？",
+      "expected_route": "it_support",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问公司安全制度对业务源码上传个人仓库的规定，属于企业安全制度咨询",
+      "duration_ms": 1133.1
+    },
+    {
+      "id": "security_02",
+      "question": "公司的办公电脑允许安装未经批准的软件吗？",
+      "expected_route": "it_support",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问公司办公电脑软件安装规定，属于企业安全制度咨询",
+      "duration_ms": 1047.92
+    },
+    {
+      "id": "security_03",
+      "question": "把客户业务数据拷贝到个人网盘是否符合公司的安全规范？",
+      "expected_route": "it_support",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问客户业务数据外传与个人网盘使用是否符合企业安全制度，需查知识库",
+      "duration_ms": 1419.34
+    },
+    {
+      "id": "security_04",
+      "question": "公司电脑在离职交接前，业务资料应按什么要求清理？",
+      "expected_route": "it_support",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问离职设备资料清理的企业安全制度要求",
+      "duration_ms": 1224.11
+    },
+    {
+      "id": "security_05",
+      "question": "能将公司的业务代码复制到自己的私人笔记本用于办公吗？",
+      "expected_route": "it_support",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "it_support",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问公司业务代码在个人设备上的使用限制，属于企业安全制度",
+      "duration_ms": 1075.36
+    },
+    {
+      "id": "security_06",
+      "question": "版本发布前安全检查未通过，可以跳过检查直接上线吗？",
+      "expected_route": "product_doc",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "product_doc",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 询问版本发布前安全检查的准入规则，属于产品发布治理规范",
+      "duration_ms": 1445.4
+    },
+    {
+      "id": "security_07",
+      "question": "员工年假需要提前几天提交申请？",
+      "expected_route": "knowledge_qa",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "knowledge_qa",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询年假申请提前时限，属于HR制度问答",
+      "duration_ms": 1113.28
+    },
+    {
+      "id": "security_08",
+      "question": "差旅住宿报销有哪些金额标准？",
+      "expected_route": "finance_process",
+      "expected_need_knowledge_base": true,
+      "group": "security",
+      "actual_route": "finance_process",
+      "correct": true,
+      "need_knowledge_base": true,
+      "reason": "Agent 判断: 咨询差旅住宿报销金额标准，属于财务制度问答",
+      "duration_ms": 1011.86
+    }
+  ],
+  "summary": {
+    "all": {
+      "total": 46,
+      "correct": 45,
+      "model_errors": 0,
+      "process_intent_correct": 46,
+      "knowledge_base_correct": 8,
+      "knowledge_base_total": 8
+    },
+    "original": {
+      "total": 30,
+      "correct": 29,
+      "model_errors": 0,
+      "process_intent_correct": 30
+    },
+    "holdout": {
+      "total": 8,
+      "correct": 8,
+      "model_errors": 0,
+      "process_intent_correct": 8
+    },
+    "security": {
+      "total": 8,
+      "correct": 8,
+      "model_errors": 0,
+      "process_intent_correct": 8,
+      "knowledge_base_correct": 8,
+      "knowledge_base_total": 8
+    }
+  },
+  "changes": [
+    {
+      "id": "it_05",
+      "expected": "it_support",
+      "before": "knowledge_qa",
+      "after": "it_support",
+      "change": "improved"
+    },
+    {
+      "id": "security_01",
+      "expected": "it_support",
+      "before": "knowledge_qa",
+      "after": "it_support",
+      "change": "improved"
+    },
+    {
+      "id": "security_03",
+      "expected": "it_support",
+      "before": "knowledge_qa",
+      "after": "it_support",
+      "change": "improved"
+    },
+    {
+      "id": "security_04",
+      "expected": "it_support",
+      "before": "knowledge_qa",
+      "after": "it_support",
+      "change": "improved"
+    },
+    {
+      "id": "security_05",
+      "expected": "it_support",
+      "before": "knowledge_qa",
+      "after": "it_support",
+      "change": "improved"
+    }
+  ]
+}
