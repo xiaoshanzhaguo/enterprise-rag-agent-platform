@@ -129,6 +129,9 @@ def _message_row_to_dict(row) -> dict[str, Any]:
         agent_route = metadata.get("agent_route")
         if isinstance(agent_route, dict):
             message["agent_route"] = agent_route
+        execution_trace = metadata.get('execution_trace')
+        if isinstance(execution_trace, dict):
+            message['execution_trace'] = execution_trace
 
     if row["role"] == "assistant":
         try:
@@ -374,7 +377,7 @@ def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]
     """
     mode_sessions: dict[str, dict[str, Any]] = {}
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         for mode_name in mode_names:
             session = connection.execute(
                 """
@@ -390,19 +393,9 @@ def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]
             if not session:
                 continue
 
-            rows = connection.execute(
-                """
-                SELECT role, content, raw_content, metadata_json
-                FROM chat_messages
-                WHERE session_id = ?
-                ORDER BY message_order ASC, id ASC
-                """,
-                (session["id"],),
-            ).fetchall()
-
             mode_sessions[mode_name] = {
                 "session_id": session["id"],
-                "messages": [_message_row_to_dict(row) for row in rows],
+                "messages": get_session_messages(session['id']),
             }
 
     return mode_sessions

@@ -49,11 +49,22 @@ export interface ChatSessionSummary {
   message_count: number
 }
 
+export interface ExecutionTraceSummary {
+  trace_id: string
+  status: 'running' | 'completed' | 'failed'
+  total_ms: number
+  route_type?: string
+  retrieval_mode?: string
+  hit_count?: number
+  answer_strategy?: 'model' | 'process_extraction' | 'evidence_refusal'
+  stages: Array<{ name: string; status: 'completed' | 'skipped' | 'failed'; duration_ms: number }>
+}
+
 export interface ChatSessionDetail extends Omit<ChatSessionSummary, 'title' | 'message_count'> {
   title: string | null
   messages: Array<{
     role: string; content: string; raw_content?: string; message_id?: number; feedback?: AnswerFeedback
-    agent_route?: AgentRouteMetadata; rag_preview_chunks?: RagPreviewChunk[]
+    agent_route?: AgentRouteMetadata; rag_preview_chunks?: RagPreviewChunk[]; execution_trace?: ExecutionTraceSummary
   }>
 }
 
@@ -89,6 +100,7 @@ export interface RagPreviewChunk {
 
 // 后端 final 事件里返回的 Agent 元数据。
 export interface AgentStreamMetadata {
+  execution_trace?: ExecutionTraceSummary
   agent_route?: AgentRouteMetadata // Agent 判断结果。
   rag_preview_chunks?: RagPreviewChunk[] // 本轮实际命中的引用 chunk 列表。
   rag_status_info?: unknown // 后端附带的知识库状态，当前右侧面板暂时不用展开。

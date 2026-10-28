@@ -70,3 +70,12 @@ test('历史反馈绑定数据库消息编号，不用前端列表下标代替',
   assert.equal(restored[0].messageId, 52)
   assert.deepEqual(restored[0].feedback, feedback)
 })
+test('历史执行摘要按回答恢复，缺少摘要的旧消息不伪造数据', () => {
+  const trace = { trace_id: 'trace-a', status: 'completed', total_ms: 300, stages: [{ name: 'retrieval', status: 'skipped', duration_ms: 0 }] }
+  const restored = restoreMessages({ session_id: 'a', messages: [
+    { role: 'assistant', content: '旧回答' },
+    { role: 'assistant', content: '新回答', execution_trace: trace },
+  ] })
+  assert.equal(restored[0].metadata.execution_trace, undefined)
+  assert.deepEqual(restored[1].metadata.execution_trace, trace)
+})

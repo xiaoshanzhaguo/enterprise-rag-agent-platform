@@ -15,6 +15,6 @@ export function restoreMessages(session: ChatSessionDetail): ChatMessage[] {
     status: 'complete',
     messageId: message.message_id,
     feedback: message.feedback,
-    metadata: message.role === 'assistant' ? { agent_route: message.agent_route, rag_preview_chunks: message.rag_preview_chunks } : undefined,
+    metadata: message.role === 'assistant' ? { agent_route: message.agent_route, rag_preview_chunks: message.rag_preview_chunks, execution_trace: message.execution_trace } : undefined,
   }))
 }

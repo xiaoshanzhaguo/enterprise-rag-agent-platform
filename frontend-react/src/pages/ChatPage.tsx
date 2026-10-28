@@ -19,6 +19,7 @@ import { Bot, Database, FileSearch, SendHorizontal, RefreshCw } from 'lucide-rea
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { answerBody } from '../api/sessionMessages'
 import { AnswerFeedbackForm } from '../components/AnswerFeedbackForm'
+import { AnswerExecutionDetails } from '../components/AnswerExecutionDetails'
 // streamAgentAnswer 负责调用后端 /agent_stream，并用 ReadableStream 逐步解析 SSE 事件。
 import { streamAgentAnswer } from '../api/chatApi'
 import { formatApiError } from '../api/httpClient'
@@ -454,6 +455,7 @@ export function ChatPage({ sessionId, initialMessages, onSettled, onStreamingCha
       setAgentTrace((currentTrace) => ({
         ...(currentTrace ?? buildInitialAgentTrace()), // 如果没有旧状态，仍然补一份初始结构。
         status: 'error', // 标记本轮 Agent 执行失败。页面可以根据这个状态显示错误样式。
+        metadata: event.metadata,
         errorMessage: event.error_message || event.content || 'Agent 执行失败。', // 保存错误文案。
       }))
     }
@@ -548,6 +550,7 @@ export function ChatPage({ sessionId, initialMessages, onSettled, onStreamingCha
                 ...message,
                 // 这一行设置错误时显示的内容。它用了逻辑或 || 做兜底。
                 content: event.error_message || event.content || '流式问答失败，请稍后重试。',
+                metadata: event.metadata,
                 // 页面可以根据这个状态显示错误样式。
                 status: 'error',
               }
@@ -743,6 +746,7 @@ export function ChatPage({ sessionId, initialMessages, onSettled, onStreamingCha
                   ) : null}
 
                   <p>{message.content || (message.status === 'streaming' ? '正在等待后端返回内容...' : '')}</p>
+                  {message.role === 'assistant' && message.metadata?.execution_trace && message.status !== 'streaming' ? <AnswerExecutionDetails trace={message.metadata.execution_trace} /> : null}
                   {message.role === 'assistant' && message.status === 'complete' && message.messageId ? <AnswerFeedbackForm
                     sessionId={sessionId} messageId={message.messageId} initialFeedback={message.feedback} /> : null}
                   {message.role === 'assistant' && message.metadata?.rag_preview_chunks?.length ? <button className="text-button" type="button"
@@ -879,7 +883,9 @@ export function ChatPage({ sessionId, initialMessages, onSettled, onStreamingCha
                   {/* 小节标题。 */}
                   <h4>检索命中信息</h4>
                   {/* 检索过程说明文本。 */}
-                  <p className="trace-text">{agentTrace.retrieveText || '等待检索结果。'}</p>
+                  <p className="trace-text">{agentTrace.retrieveText || (agentTrace.status === 'complete'
+                    ? currentAgentRoute?.need_knowledge_base ? `本条回答检索命中 ${currentRagPreviewChunks.length} 个片段。` : currentAgentRoute ? '本条回答已跳过知识库检索。' : '该历史回答未保存检索过程。'
+                    : '等待检索结果。')}</p>
                 </section>
 
                 {/* 引用来源：展示本轮真正用于回答的 chunk。 */}

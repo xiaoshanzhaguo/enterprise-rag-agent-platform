@@ -21,6 +21,8 @@ from __future__ import annotations
 
 # 导入 JSON 工具，用于解析 Agent 决策结果和保存分步骤 Agent 结果
 import json
+import logging
+from backend.services.execution_trace import ExecutionTrace
 # 导入类型标注工具，让函数输入输出更清晰
 from typing import Any
 
@@ -612,6 +614,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
         matched_chunks: list[dict[str, Any]] = []
         # 当前回答对应的 rag_queries 主键。检索先发生，答案后生成，所以需要生成结束后再回填 answer_text。
         rag_query_id: int | None = None
+        trace = ExecutionTrace()
 
         try:
             # 优先使用前端传入的展示文本，避免上传文件场景把全文展示进聊天气泡
@@ -644,6 +647,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     session_id=request.session_id,
                     task_type=request.task_type,
                     content="企业知识库问答 Agent 已开始",
+                    metadata={'execution_trace': trace.snapshot('running')},
                 )
             )
 
@@ -661,6 +665,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             # 执行路由分类、意图分类和 query rewrite
             # knowledge_base_id 表示本轮要查询哪个企业知识库；session_id 只表示当前员工聊天会话。
             knowledge_base_id = request.user_options.get("knowledge_base_id")
+            trace.begin('routing')
             route_decision = route_question(
                 question=request.input_text,
                 use_rag=request.use_rag,
@@ -669,6 +674,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 session_id=request.session_id,
                 knowledge_base_id=knowledge_base_id,
             )
+            trace.end()
+            trace.context['route_type'] = route_decision.route_type.value
             # 读取数据
             route_type = route_decision.route_type
             route_type_label = ROUTE_TYPE_LABELS.get(route_type, route_type.value)
@@ -734,6 +741,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             # 如果判断需要知识库，则执行 RAG 检索
             if need_knowledge_base:
                 # 调用 Agent 检索链路，优先使用改写 query，改写无命中时回退原始问题
+                trace.begin('retrieval')
                 matched_chunks, retrieval_mode, effective_retrieval_query, retrieval_note = _retrieve_agent_rag_chunks(
                     session_id=request.session_id,
                     rewritten_query=retrieval_query,
@@ -782,6 +790,11 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 # 不需要知识库时明确告诉用户本轮跳过检索
                 retrieve_text = "已跳过知识库检索，本轮将按普通对话生成回答。"
 
+            if need_knowledge_base:
+                trace.end()
+            else:
+                trace.skip('retrieval')
+            trace.context.update(retrieval_mode=retrieval_mode if need_knowledge_base else 'skipped', hit_count=len(matched_chunks))
             # 保存检索步骤结果
             final_result[STEP_RETRIEVE_EVIDENCE] = retrieve_text
             # 通知前端：检索步骤完成
@@ -806,12 +819,14 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 )
             )
 
+            trace.begin('answer')
             # 累计最终回答正文
             answer_text = ""
             process_result = None
 
             # 流程类输出经过校验的 JSON；只提取原文，不从知识库或历史猜测申请信息。
             if route_type == AgentRouteType.PROCESS_APPLY:
+                trace.context['answer_strategy'] = 'process_extraction'
                 process_result = extract_process_fields(request.input_text, client)
                 answer_text = process_result.model_dump_json(indent=2)
                 yield to_sse(
@@ -823,6 +838,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 )
             # 其他问题需要知识库但没有可靠证据时，不调用模型强答。
             elif need_knowledge_base and not matched_chunks:
+                trace.context['answer_strategy'] = 'evidence_refusal'
                 answer_text = f"{NO_RAG_EVIDENCE_MESSAGE}。请补充更具体的问题，或上传包含该规则的企业文档后再提问。"
                 # 以 delta 形式发送，保证前端生成回答步骤能看到内容
                 yield to_sse(
@@ -836,6 +852,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 )
             else:
                 # 构造 Agent 最终回答专用系统提示词，避免沿用旧内容助手身份
+                trace.context['answer_strategy'] = 'model'
                 system_prompt = _build_agent_answer_system_prompt(has_rag_evidence=bool(matched_chunks))
                 # 初始化模型上下文
                 messages = [{"role": "system", "content": system_prompt}]
@@ -885,6 +902,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                         )
                     )
 
+            trace.end()
             # 清理模型可能误返回的 JSON 或完整步骤文本，只保留最终回答正文
             if process_result is None:
                 answer_text = _normalize_agent_answer_text(answer_text)
@@ -918,6 +936,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             if process_result is not None:
                 assistant_metadata = assistant_metadata or {}
                 assistant_metadata["process_extraction"] = process_result.model_dump()
+            assistant_metadata = assistant_metadata or {}
+            assistant_metadata['execution_trace'] = trace.snapshot('completed')
             # 保存 assistant 消息；如果本轮有引用片段，则把引用模块元数据一起保存
             assistant_message_id = save_chat_message(
                 session_id=request.session_id,
@@ -933,6 +953,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                 answer_text=answer_text,
             )
 
+            logging.getLogger(__name__).info('agent_run trace_id=%s status=completed processing_ms=%s',
+                trace.trace_id, assistant_metadata['execution_trace']['total_ms'])
             # 发送最终完成事件
             yield to_sse(
                 StreamEvent(
@@ -947,6 +969,9 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             )
 
         except Exception as e:
+            trace.end('failed')
+            failure_trace = trace.snapshot('failed')
+            logging.getLogger(__name__).warning('agent_run trace_id=%s status=failed', trace.trace_id)
             # 将异常包装成 SSE error 事件返回前端
             yield to_sse(
                 StreamEvent(
@@ -954,6 +979,7 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
                     session_id=request.session_id,
                     task_type=request.task_type,
                     error_message=str(e),
+                    metadata={'execution_trace': failure_trace},
                     is_final=True,
                 )
             )

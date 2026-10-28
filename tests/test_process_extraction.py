@@ -79,6 +79,7 @@ class ProcessExtractionTests(unittest.TestCase):
             self.assertNotIn("error", [e["event_type"] for e in events])
             final = next(e for e in events if e["event_type"] == "final")
             self.assertEqual(final['message_id'], 42)
+            self.assertEqual(final['metadata']['execution_trace']['answer_strategy'], 'process_extraction')
             payload = json.loads(json.loads(final["content"])["generate_answer"])
             self.assertEqual(payload["fields"]["applicant"], "张三")
             self.assertEqual(final["metadata"]["process_extraction"], payload)
