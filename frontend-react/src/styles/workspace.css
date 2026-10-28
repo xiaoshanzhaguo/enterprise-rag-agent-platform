@@ -191,6 +191,9 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; }
 .execution-stages li { padding-left: 2px; }
 .execution-stages strong { float: right; margin-left: 8px; font-weight: 500; }
 .answer-execution .page-footnote { margin-top: 12px; }
+.routing-comparison { display: grid; gap: 18px; }
+.routing-comparison summary { color: var(--accent); font-size: 12px; cursor: pointer; }
+.routing-changes { padding-left: 20px; color: var(--muted); font-size: 12px; line-height: 1.9; }
 @media (max-width: 1400px) { .conversation-surface .workspace-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) { .session-workspace { grid-template-columns: minmax(0, 1fr); } .session-list { max-height: 180px; } }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 20; background: #fff; padding: 10px; }

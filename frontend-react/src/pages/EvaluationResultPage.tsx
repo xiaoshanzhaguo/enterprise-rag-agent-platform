@@ -1,6 +1,7 @@
 import { BarChart3, CheckCheck, FlaskConical } from 'lucide-react'
 import { metrics, model, executed_at_utc } from '../../../eval/week4_after_fix_report.json'
 import { FeedbackReviewPanel } from '../components/FeedbackReviewPanel'
+import { RoutingComparisonPanel } from '../components/RoutingComparisonPanel'
 
 const metricItems = [
   ['检索命中', metrics.retrieval_hit, '预期来源进入检索结果'],
@@ -24,5 +25,6 @@ export function EvaluationResultPage() {
       <section className="panel"><div className="panel-heading"><FlaskConical size={20} /><div><h3>持续关注</h3><p>有限样例不代表所有场景。</p></div></div><p className="process-notice">部分业务路由标签仍不匹配；申请类型同义表达仍需核对。命中引用或关键词，不等于每句话都准确。</p></section></div>
     <p className="page-footnote">该快照随前端构建更新；拒答由 Codex 逐条阅读复核。评测未执行真实审批或授权操作。</p>
     <FeedbackReviewPanel />
+    <RoutingComparisonPanel />
   </section>
 }

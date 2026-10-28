@@ -138,6 +138,7 @@ Dify 不随根 Compose 启动。按 [Dify 部署与导入说明](integrations/di
 - [回答反馈验收](docs/answer_feedback.md)：消息编号、反馈持久化、问题原因与评测页查看。
 - [回答执行摘要](docs/answer_execution.md)：计时边界、异常展示与历史恢复验收。
 - [求职展示渐进优化](docs/portfolio_improvements.md)：后续按质量、稳定性和可复现演示逐步推进。
+- [产品路由修复对照](docs/product_routing_improvement.md)：原 30 题从 25/30 到 28/30，另有 8 题相似表达回归；仅评测路由。
 
 ## 项目范围
 

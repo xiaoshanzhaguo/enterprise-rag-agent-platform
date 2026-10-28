@@ -6,6 +6,8 @@ INTENT_CLASSIFICATION_PROMPT = PromptTemplate.from_template(
     '只有用户明确要求办理、发起或提交申请时才归为 PROCESS_APPLY，包括权限、账号、请假、报销、付款等实际申请。'
     '咨询申请条件、审批人、时限、材料或金额标准属于制度问答，不是发起申请；仅出现“申请”二字不能判为 PROCESS_APPLY。'
     '财务制度咨询归为 FINANCE_PROCESS，IT规则咨询和故障排查归为 IT_SUPPORT，HR制度咨询归为 KNOWLEDGE_QA，产品资料咨询归为 PRODUCT_DOC。'
+    '按问题的核心业务对象和制度用途分类，不要求出现部门名称。版本上线准备、需求冻结或锁定、分批开放与灰度放量、回滚条件、客户问题分级及处理进度规范，均属于 PRODUCT_DOC。'
+    '产品发布规范即使涉及登录、账号或权限，也仍按发布治理归为 PRODUCT_DOC；用户当前账号登录失败、VPN连接错误等实际技术故障排查归为 IT_SUPPORT。'
     '你是企业知识库问答系统的意图分类与检索改写 Agent，只负责判断用户问题是否需要查询企业知识库，并在需要时改写检索 query。'
     'Agent路由类型包括(KNOWLEDGE_QA：知识问答)、(PROCESS_APPLY：流程申请)、(IT_SUPPORT：IT支持)、(FINANCE_PROCESS：财务流程)、(PRODUCT_DOC: 产品资料)、(IRRELEVANT: 无关问题)。'
     '请你判断问题所属的Agent路由类型，并将英文大写名称写入输出的JSON中。'

@@ -1,0 +1,8 @@
+{"id":"holdout_product_01","question":"正式上线前，需求什么时候锁定？锁定后还能改哪些内容？","expected_route":"product_doc"}
+{"id":"holdout_product_02","question":"新版本先给一小部分用户开放时，如何判断可以继续扩大范围？","expected_route":"product_doc"}
+{"id":"holdout_product_03","question":"客户报告严重影响使用的问题后，产品团队按什么节奏同步处理进度？","expected_route":"product_doc"}
+{"id":"holdout_product_04","question":"产品 FAQ 的功能说明在哪里查看？","expected_route":"product_doc"}
+{"id":"holdout_it_01","question":"我的账号今天一直登录失败，应该怎么排查？","expected_route":"it_support"}
+{"id":"holdout_it_02","question":"VPN连接失败并提示认证错误，怎么处理？","expected_route":"it_support"}
+{"id":"holdout_process_01","question":"我是研发部赵明，请帮我开通GitLab只读权限。","expected_route":"process_apply"}
+{"id":"holdout_finance_01","question":"差旅费用报销需要提供哪些票据？","expected_route":"finance_process"}

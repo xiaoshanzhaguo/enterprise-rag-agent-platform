@@ -354,6 +354,20 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
             rewritten_query=normalized_question,
         )
 
+    # 先判断发布治理主题，避免规范里的“登录/权限”抢占 IT 故障路由。
+    product_context = re.search(
+        r"版本发布|发布(?:流程|规范|检查)|灰度(?:发布|比例|放量)|需求(?:冻结|锁定)|(?:冻结|锁定)需求|客户反馈|"
+        r"客户报告.*(?:处理|进度|分级)|产品\s*faq",
+        normalized_question,
+    )
+    if product_context:
+        return AgentRouteDecision(
+            route_type=AgentRouteType.PRODUCT_DOC,
+            reason="问题涉及产品发布治理或客户反馈处理规范，属于产品资料",
+            should_use_rag=True,
+            rewritten_query=normalized_question,
+        )
+
     if any(keyword in normalized_question for keyword in ["vpn", "gitlab", "账号", "权限", "电脑", "网络", "登录失败"]):
         return AgentRouteDecision(
             route_type=AgentRouteType.IT_SUPPORT,
@@ -370,7 +384,7 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
             rewritten_query=normalized_question
         )
 
-    if any(keyword in normalized_question for keyword in ["产品 FAQ", "版本发布", "客户反馈", "功能说明"]):
+    if any(keyword in normalized_question for keyword in ["产品 faq", "版本发布", "客户反馈", "功能说明"]):
         return AgentRouteDecision(
             route_type=AgentRouteType.PRODUCT_DOC,
             reason="问题包含产品资料关键词，属于产品资料",
