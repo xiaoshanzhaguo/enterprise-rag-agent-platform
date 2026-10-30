@@ -54,7 +54,7 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: var(--text-
 .app-shell.sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
 .sidebar-collapsed .sidebar { width: 64px; box-shadow: none; }
 .sidebar-collapsed .brand-block { left: 14px; right: 14px; }
-.sidebar-collapsed .sidebar-toggle { top: 56px; right: 17px; }
+.sidebar-collapsed .sidebar-toggle { opacity: 0; visibility: hidden; pointer-events: none; }
 .sidebar-collapsed .brand-block h1, .sidebar-collapsed .nav-caption, .sidebar-collapsed .nav-item > span { opacity: 0; visibility: hidden; }
 .sidebar-collapsed .brand-block h1, .sidebar-collapsed .nav-item > span { max-width: 0; }
 .content-shell { grid-template-rows: 72px minmax(0, 1fr); }
@@ -222,7 +222,7 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: var(--text-
   .sidebar-heading { height: 64px; }
   .brand-block, .sidebar-collapsed .brand-block { top: 14px; left: 16px; right: 60px; }
   .brand-block h1, .sidebar-collapsed .brand-block h1 { max-width: 150px; opacity: 1; visibility: visible; }
-  .sidebar-toggle, .sidebar-collapsed .sidebar-toggle { top: 18px; right: 16px; width: 32px; height: 32px; box-shadow: none; }
+  .sidebar-toggle, .sidebar-collapsed .sidebar-toggle { top: 18px; right: 16px; width: 32px; height: 32px; box-shadow: none; opacity: 1; visibility: visible; pointer-events: auto; }
   .sidebar-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 8px; gap: 4px; }
   .nav-group, .nav-list { display: contents; }
   .nav-group + .nav-group { margin: 0; }
