@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, Database, MessagesSquare, BarChart3, ClipboardList, FileClock, Layers3, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ArrowUpRight, Database, MessagesSquare, BarChart3, ClipboardList, FileClock, Layers3, Pin } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 const navigationItems = [
@@ -15,17 +15,25 @@ const navigationGroups = [
 ]
 
 export function MainLayout() {
-  const [manuallyCollapsed, setManuallyCollapsed] = useState(false)
+  const [pinned, setPinned] = useState(() => {
+    try { return localStorage.getItem('workspace-sidebar-pinned') !== '0' }
+    catch { return true }
+  })
   const [hovered, setHovered] = useState(false)
   const [keyboardFocus, setKeyboardFocus] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
-  const preview = manuallyCollapsed && (hovered || keyboardFocus)
-  const collapsed = manuallyCollapsed && !preview
+  const collapsed = !(pinned || hovered || keyboardFocus)
+  function togglePin() {
+    const next = !pinned
+    setPinned(next)
+    try { localStorage.setItem('workspace-sidebar-pinned', next ? '1' : '0') }
+    catch { /* 存储不可用时仍可切换固定状态。 */ }
+  }
   const { pathname } = useLocation()
   const active = navigationItems.find(item => item.to === pathname)
 
-  return <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}${preview ? ' sidebar-preview' : ''}`}>
+  return <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}${pinned ? ' sidebar-pinned' : ''}`}>
     <a href="#workspace-main" className="skip-link">跳到主要内容</a>
     <div className="sidebar-rail"><aside className="sidebar"
       onPointerEnter={event => {
@@ -47,14 +55,10 @@ export function MainLayout() {
         <div className="brand-mark"><Layers3 size={20} aria-hidden="true" /></div>
         <h1>知行工作台</h1>
       </NavLink>
-      <button type="button" className="sidebar-toggle" onClick={() => {
-        setManuallyCollapsed(!collapsed)
-        setHovered(false)
-        setKeyboardFocus(false)
-      }}
-        aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'} title={collapsed ? '展开侧边栏' : '收起侧边栏'}
-        aria-expanded={!collapsed} aria-controls="workspace-navigation">
-        {collapsed ? <PanelLeftOpen size={19} aria-hidden="true" /> : <PanelLeftClose size={19} aria-hidden="true" />}
+      <button type="button" className="sidebar-toggle" onClick={togglePin}
+        aria-label={pinned ? '取消固定侧栏' : '固定侧栏展开'} title={pinned ? '取消固定后，移开鼠标自动收起' : '固定侧栏展开'}
+        aria-pressed={pinned} aria-expanded={!collapsed} aria-controls="workspace-navigation">
+        <Pin size={17} aria-hidden="true" />
       </button>
       </div>
       <nav id="workspace-navigation" className="sidebar-navigation" aria-label="主导航">
