@@ -94,7 +94,7 @@ a {
 .brand-block h1 {
   margin: 2px 0 0;
   max-width: 190px;
-  font-size: 18px;
+  font-size: 1.375rem;
   line-height: 1.25;
 }
 
@@ -102,7 +102,7 @@ a {
 .eyebrow {
   margin: 0;
   color: #5d6b62;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -163,12 +163,12 @@ a {
 
 /* 状态卡里的标签文字。 */
 .sidebar-status span {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 /* API 地址可能较长，需要允许换行。 */
 .sidebar-status strong {
-  font-size: 13px;
+  font-size: var(--text-md);
   word-break: break-all;
 }
 
@@ -192,7 +192,7 @@ a {
 /* 顶部栏标题，尺寸比页面标题小，避免和业务页面标题抢层级。 */
 .topbar h2 {
   margin: 2px 0 0;
-  font-size: 20px;
+  font-size: 1.375rem;
   line-height: 1.2;
 }
 
@@ -214,7 +214,7 @@ a {
   background: #f6f7f4;
   color: #68756d;
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 /* 次级按钮，用于设置、角色切换等低频操作。 */
@@ -248,7 +248,7 @@ a {
 /* 页面主标题。 */
 .page-header h2 {
   margin: 4px 0 8px;
-  font-size: 28px;
+  font-size: 1.875rem;
   line-height: 1.2;
 }
 
@@ -287,7 +287,7 @@ a {
 /* 面板标题。 */
 .panel-heading h3 {
   margin: 0 0 4px;
-  font-size: 18px;
+  font-size: 1.375rem;
 }
 
 /* 面板说明文字。 */
@@ -305,7 +305,7 @@ a {
 /* 表单字段标题。 */
 .field span {
   color: #39463e;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 700;
 }
 
@@ -389,7 +389,7 @@ a {
 /* 元信息标题，例如“知识库”。 */
 .meta-list dt {
   color: #68756d;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 /* 元信息值，例如文档数。 */
@@ -430,7 +430,7 @@ a {
   background: #e9f1fb;
   color: #295b8a;
   padding: 3px 8px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -478,7 +478,7 @@ a {
 /* 日志时间列。 */
 .table-row span {
   color: #68756d;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* 日志类型列。 */
@@ -512,13 +512,13 @@ a {
 /* 指标名称。 */
 .metric-card span {
   color: #68756d;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* 指标值。 */
 .metric-card strong {
   color: #1d6f56;
-  font-size: 24px;
+  font-size: 1.625rem;
 }
 
 /* 404 等空状态页面。 */
@@ -588,7 +588,7 @@ a {
   gap: 12px;
   align-items: center;
   color: #68756d;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 /* 消息发送方名称。 */
@@ -620,7 +620,7 @@ a {
   border-left: 3px solid #b9d4c8;
   padding: 0 0 0 12px;
   color: #5d6b62;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* 单条 Agent 步骤。 */
@@ -657,7 +657,7 @@ a {
   background: #edf6f1;
   color: #1d6f56;
   padding: 3px 9px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -679,7 +679,7 @@ a {
 .trace-section h4 {
   margin: 0;
   color: #24352b;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 /* Agent 判断结果的结构化字段列表。 */
@@ -701,14 +701,14 @@ a {
 /* Agent 判断字段名。 */
 .trace-meta-list dt {
   color: #68756d;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 /* Agent 判断字段值。 */
 .trace-meta-list dd {
   margin: 3px 0 0;
   color: #24352b;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 800;
   word-break: break-word;
 }
@@ -717,7 +717,7 @@ a {
 .trace-text {
   margin: 0;
   color: #4f5d54;
-  font-size: 13px;
+  font-size: var(--text-md);
   white-space: pre-wrap;
 }
 
@@ -754,7 +754,7 @@ a {
 .citation-card-header span {
   overflow: hidden;
   color: #24352b;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -773,7 +773,7 @@ a {
   background: #e9f1fb;
   color: #295b8a;
   padding: 2px 7px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -781,7 +781,7 @@ a {
 .citation-card p {
   margin: 0;
   color: #5d6b62;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* 上传结果卡片：展示 /index_document 返回的 chunk 数、分类等结果。 */
@@ -803,7 +803,7 @@ a {
 /* 上传结果字段。 */
 .upload-result-card span {
   color: #4f5d54;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* 管理员知识库状态头部：左侧当前知识库，右侧刷新按钮。 */
@@ -832,7 +832,7 @@ a {
 /* 文档状态辅助文字。 */
 .admin-status-header span {
   color: #68756d;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* 流程字段提取面板：承载 AI 整理后的申请字段，与下方常见流程列表分开。 */
@@ -867,7 +867,7 @@ a {
 /* 提取状态说明使用较弱颜色，减少对结构化字段的干扰。 */
 .process-extraction-heading span {
   color: #68756d;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* 结构化申请字段列表：桌面端按两列展示，提高信息扫描效率。 */
@@ -890,14 +890,14 @@ a {
 /* 申请字段名称使用小号弱化文字。 */
 .process-field-list dt {
   color: #68756d;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 /* 申请字段值允许长项目名换行，防止撑破右侧面板。 */
 .process-field-list dd {
   margin: 4px 0 0;
   color: #24352b;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -911,7 +911,7 @@ a {
   margin: 0;
   list-style: none;
   color: #53695b;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .process-steps span { color: #1d6f56; font-weight: 800; margin-right: 6px; }
@@ -920,12 +920,12 @@ a {
 .process-notice { color: #53695b; line-height: 1.7; margin: 0; }
 .process-success { display: flex; gap: 12px; padding: 16px; border: 1px solid #b9d4c8; border-radius: 8px; background: #f5faf7; color: #1d6f56; }
 .process-success svg { flex-shrink: 0; }
-.process-success p { margin: 6px 0 0; line-height: 1.6; font-size: 13px; }
+.process-success p { margin: 6px 0 0; line-height: 1.6; font-size: var(--text-md); }
 .process-record-details { display: grid; gap: 14px; margin: 0; }
-.process-record-details dt { color: #68756d; font-size: 12px; }
-.process-record-details dd { margin: 6px 0 0; overflow-wrap: anywhere; font-size: 14px; }
-.process-simulation-note { padding-top: 16px; border-top: 1px solid #dce3da; color: #68756d; line-height: 1.7; font-size: 13px; }
-.process-new-confirm { display: flex; gap: 8px; align-items: flex-start; color: #68756d; font-size: 13px; line-height: 1.6; }
+.process-record-details dt { color: #68756d; font-size: var(--text-sm); }
+.process-record-details dd { margin: 6px 0 0; overflow-wrap: anywhere; font-size: var(--text-base); }
+.process-simulation-note { padding-top: 16px; border-top: 1px solid #dce3da; color: #68756d; line-height: 1.7; font-size: var(--text-md); }
+.process-new-confirm { display: flex; gap: 8px; align-items: flex-start; color: #68756d; font-size: var(--text-md); line-height: 1.6; }
 .process-new-confirm input { margin-top: 4px; }
 .process-secondary-button { border: 1px solid #bdcbbf; border-radius: 8px; background: #fff; color: #24352b; padding: 10px 16px; cursor: pointer; }
 .process-secondary-button:disabled { opacity: 0.5; cursor: not-allowed; }
