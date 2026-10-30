@@ -9,8 +9,8 @@
 
 /* 页面全局变量和基础字体设置。 */
 :root {
-  color: #17211b;
-  background: #f6f7f4;
+  color: var(--ink);
+  background: var(--canvas);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
@@ -65,8 +65,8 @@ a {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  border-right: 1px solid #dce3da;
-  background: #fbfcf8;
+  border-right: 1px solid var(--line);
+  background: var(--surface-muted);
   padding: 24px;
 }
 
@@ -85,7 +85,7 @@ a {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #1d6f56;
+  background: var(--accent);
   color: #ffffff;
   font-weight: 800;
 }
@@ -101,7 +101,7 @@ a {
 /* 小号说明文字，例如 Enterprise Agent、员工侧、管理员侧。 */
 .eyebrow {
   margin: 0;
-  color: #5d6b62;
+  color: var(--muted);
   font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0;
@@ -122,14 +122,14 @@ a {
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 12px;
-  color: #37443c;
+  color: var(--ink);
 }
 
 /* 鼠标悬停和当前激活路由使用同一套强调样式。 */
 .nav-item:hover,
 .nav-item.active {
-  border-color: #b9d4c8;
-  background: #edf6f1;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
 }
 
 /* 导航项里的标题和说明上下排列。 */
@@ -141,35 +141,7 @@ a {
 /* 辅助说明文字统一使用弱化颜色。 */
 .nav-item small,
 .muted-text {
-  color: #68756d;
-}
-
-/* 侧边栏底部状态卡片，用于显示当前 API 地址。 */
-.sidebar-status {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-top: auto;
-  border: 1px solid #dce3da;
-  border-radius: 8px;
-  padding: 12px;
-  color: #4f5d54;
-}
-
-/* 状态卡里的文字上下排列。 */
-.sidebar-status div {
-  display: grid;
-}
-
-/* 状态卡里的标签文字。 */
-.sidebar-status span {
-  font-size: var(--text-sm);
-}
-
-/* API 地址可能较长，需要允许换行。 */
-.sidebar-status strong {
-  font-size: var(--text-md);
-  word-break: break-all;
+  color: var(--muted);
 }
 
 /* 右侧主内容区域。 */
@@ -184,7 +156,7 @@ a {
   justify-content: space-between;
   gap: 20px;
   align-items: center;
-  border-bottom: 1px solid #dce3da;
+  border-bottom: 1px solid var(--line);
   background: #ffffff;
   padding: 18px 32px;
 }
@@ -209,10 +181,10 @@ a {
   gap: 8px;
   align-items: center;
   min-width: 180px;
-  border: 1px solid #dce3da;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f6f7f4;
-  color: #68756d;
+  background: var(--canvas);
+  color: var(--muted);
   padding: 9px 12px;
   font-size: var(--text-base);
 }
@@ -223,10 +195,10 @@ a {
   gap: 8px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #cbd6cf;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
-  color: #24352b;
+  color: var(--ink);
   padding: 9px 12px;
   font-weight: 700;
 }
@@ -256,7 +228,7 @@ a {
 .page-header p {
   max-width: 720px;
   margin: 0;
-  color: #5d6b62;
+  color: var(--muted);
 }
 
 /* 两列工作区：左侧主操作，右侧状态或证据。 */
@@ -271,7 +243,7 @@ a {
 .panel {
   display: grid;
   gap: 18px;
-  border: 1px solid #dce3da;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   padding: 20px;
@@ -293,7 +265,7 @@ a {
 /* 面板说明文字。 */
 .panel-heading p {
   margin: 0;
-  color: #66736b;
+  color: var(--muted);
 }
 
 /* 表单字段容器，包含 label 文本和输入控件。 */
@@ -304,7 +276,7 @@ a {
 
 /* 表单字段标题。 */
 .field span {
-  color: #39463e;
+  color: var(--ink);
   font-size: var(--text-base);
   font-weight: 700;
 }
@@ -314,10 +286,10 @@ a {
 .field select,
 .field textarea {
   width: 100%;
-  border: 1px solid #cbd6cf;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
-  color: #17211b;
+  color: var(--ink);
   padding: 11px 12px;
 }
 
@@ -330,8 +302,8 @@ a {
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  border-color: #1d6f56;
-  outline: 3px solid #d8eee5;
+  border-color: var(--accent);
+  outline: 3px solid var(--accent-soft);
 }
 
 /* 主按钮样式，用于发送、上传、返回等主要动作。 */
@@ -341,9 +313,9 @@ a {
   align-items: center;
   justify-content: center;
   width: fit-content;
-  border: 1px solid #1d6f56;
+  border: 1px solid var(--accent);
   border-radius: 8px;
-  background: #1d6f56;
+  background: var(--accent);
   color: #ffffff;
   padding: 10px 14px;
   font-weight: 700;
@@ -351,8 +323,8 @@ a {
 
 /* 禁用按钮样式，提示当前功能尚未接入或条件不满足。 */
 .primary-button:disabled {
-  border-color: #aab8af;
-  background: #aab8af;
+  border-color: #a5b0bf;
+  background: #a5b0bf;
   cursor: not-allowed;
 }
 
@@ -380,15 +352,15 @@ a {
 /* 元信息卡片和配置行共用浅色块样式。 */
 .meta-list div,
 .config-row {
-  border: 1px solid #e1e7e3;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
-  background: #fbfcf8;
+  background: var(--surface-muted);
 }
 
 /* 元信息标题，例如“知识库”。 */
 .meta-list dt {
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-sm);
 }
 
@@ -412,7 +384,7 @@ a {
   grid-template-columns: 18px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
-  border-bottom: 1px solid #edf1ee;
+  border-bottom: 1px solid var(--line);
   padding-bottom: 10px;
 }
 
@@ -427,8 +399,8 @@ a {
 .file-row small,
 .tag {
   border-radius: 999px;
-  background: #e9f1fb;
-  color: #295b8a;
+  background: var(--accent-soft);
+  color: var(--accent);
   padding: 3px 8px;
   font-size: var(--text-sm);
   font-weight: 700;
@@ -442,7 +414,7 @@ a {
 
 /* 配置行里的说明文字。 */
 .config-row span {
-  color: #66736b;
+  color: var(--muted);
 }
 
 /* 标签列表横向排列，空间不足时自动换行。 */
@@ -454,7 +426,7 @@ a {
 /* 简单表格列表，用于日志等线性数据展示。 */
 .table-list {
   display: grid;
-  border: 1px solid #e1e7e3;
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -465,7 +437,7 @@ a {
   grid-template-columns: 90px 160px minmax(0, 1fr);
   gap: 14px;
   align-items: center;
-  border-bottom: 1px solid #e9eee9;
+  border-bottom: 1px solid var(--line);
   background: #ffffff;
   padding: 12px 14px;
 }
@@ -477,19 +449,19 @@ a {
 
 /* 日志时间列。 */
 .table-row span {
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-md);
 }
 
 /* 日志类型列。 */
 .table-row strong {
-  color: #24352b;
+  color: var(--ink);
 }
 
 /* 日志描述列。 */
 .table-row p {
   margin: 0;
-  color: #5d6b62;
+  color: var(--muted);
 }
 
 /* 指标卡片网格，用于评测结果。 */
@@ -503,21 +475,21 @@ a {
 .metric-card {
   display: grid;
   gap: 8px;
-  border: 1px solid #e1e7e3;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: var(--surface-muted);
   padding: 16px;
 }
 
 /* 指标名称。 */
 .metric-card span {
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-md);
 }
 
 /* 指标值。 */
 .metric-card strong {
-  color: #1d6f56;
+  color: var(--accent);
   font-size: 1.625rem;
 }
 
@@ -537,9 +509,9 @@ a {
   min-height: 320px;
   max-height: 520px;
   overflow-y: auto;
-  border: 1px solid #e1e7e3;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: var(--surface-muted);
   padding: 14px;
 }
 
@@ -549,13 +521,13 @@ a {
   gap: 6px;
   align-content: center;
   min-height: 280px;
-  color: #68756d;
+  color: var(--muted);
   text-align: center;
 }
 
 /* 空状态标题文字。 */
 .chat-empty strong {
-  color: #24352b;
+  color: var(--ink);
 }
 
 /* 单条聊天消息气泡：默认是 AI 助手消息，靠左展示。 */
@@ -563,7 +535,7 @@ a {
   display: grid;
   gap: 8px;
   max-width: min(86%, 720px);
-  border: 1px solid #dce3da;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   padding: 12px;
@@ -572,8 +544,8 @@ a {
 /* 用户消息靠右展示，用浅绿区分提问和回答。 */
 .chat-message.user {
   justify-self: end;
-  border-color: #b9d4c8;
-  background: #edf6f1;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
 }
 
 /* AI 消息靠左展示，保持白底，便于阅读长回答和引用内容。 */
@@ -587,20 +559,20 @@ a {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-sm);
 }
 
 /* 消息发送方名称。 */
 .chat-message-meta strong {
-  color: #24352b;
+  color: var(--ink);
 }
 
 /* 生成中、失败等状态标签。 */
 .chat-message-meta span {
   border-radius: 999px;
-  background: #e9f1fb;
-  color: #295b8a;
+  background: var(--accent-soft);
+  color: var(--accent);
   padding: 2px 8px;
   font-weight: 700;
 }
@@ -608,7 +580,7 @@ a {
 /* 聊天正文：保留换行，避免后端返回的分段回答挤成一行。 */
 .chat-message p {
   margin: 0;
-  color: #24352b;
+  color: var(--ink);
   white-space: pre-wrap;
 }
 
@@ -617,9 +589,9 @@ a {
   display: grid;
   gap: 6px;
   margin: 0;
-  border-left: 3px solid #b9d4c8;
+  border-left: 3px solid var(--accent-border);
   padding: 0 0 0 12px;
-  color: #5d6b62;
+  color: var(--muted);
   font-size: var(--text-md);
 }
 
@@ -632,9 +604,9 @@ a {
 .agent-trace-panel {
   display: grid;
   gap: 14px;
-  border: 1px solid #e1e7e3;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: var(--surface-muted);
   padding: 14px;
 }
 
@@ -648,14 +620,14 @@ a {
 
 /* Agent 状态条左侧标题。 */
 .agent-trace-status strong {
-  color: #24352b;
+  color: var(--ink);
 }
 
 /* Agent 状态标签。 */
 .agent-trace-status span {
   border-radius: 999px;
-  background: #edf6f1;
-  color: #1d6f56;
+  background: var(--accent-soft);
+  color: var(--accent);
   padding: 3px 9px;
   font-size: var(--text-sm);
   font-weight: 800;
@@ -671,14 +643,14 @@ a {
 .trace-section {
   display: grid;
   gap: 10px;
-  border-top: 1px solid #e1e7e3;
+  border-top: 1px solid var(--line);
   padding-top: 12px;
 }
 
 /* Agent 过程小节标题。 */
 .trace-section h4 {
   margin: 0;
-  color: #24352b;
+  color: var(--ink);
   font-size: var(--text-base);
 }
 
@@ -692,7 +664,7 @@ a {
 
 /* Agent 判断字段容器。 */
 .trace-meta-list div {
-  border: 1px solid #e1e7e3;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   padding: 9px;
@@ -700,14 +672,14 @@ a {
 
 /* Agent 判断字段名。 */
 .trace-meta-list dt {
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-sm);
 }
 
 /* Agent 判断字段值。 */
 .trace-meta-list dd {
   margin: 3px 0 0;
-  color: #24352b;
+  color: var(--ink);
   font-size: var(--text-md);
   font-weight: 800;
   word-break: break-word;
@@ -716,7 +688,7 @@ a {
 /* Agent 过程说明文本：保留换行，方便阅读后端 step_complete 返回内容。 */
 .trace-text {
   margin: 0;
-  color: #4f5d54;
+  color: var(--muted);
   font-size: var(--text-md);
   white-space: pre-wrap;
 }
@@ -731,7 +703,7 @@ a {
 .citation-card {
   display: grid;
   gap: 8px;
-  border: 1px solid #dce3da;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   padding: 10px;
@@ -747,13 +719,13 @@ a {
 
 /* 引用 chunk 排名。 */
 .citation-card-header strong {
-  color: #1d6f56;
+  color: var(--accent);
 }
 
 /* 引用 chunk 来源文档名。 */
 .citation-card-header span {
   overflow: hidden;
-  color: #24352b;
+  color: var(--ink);
   font-size: var(--text-md);
   font-weight: 800;
   text-overflow: ellipsis;
@@ -770,8 +742,8 @@ a {
 /* 引用 chunk 标签。 */
 .citation-tags small {
   border-radius: 999px;
-  background: #e9f1fb;
-  color: #295b8a;
+  background: var(--accent-soft);
+  color: var(--accent);
   padding: 2px 7px;
   font-size: var(--text-sm);
   font-weight: 700;
@@ -780,7 +752,7 @@ a {
 /* 引用 chunk 预览文本。 */
 .citation-card p {
   margin: 0;
-  color: #5d6b62;
+  color: var(--muted);
   font-size: var(--text-md);
 }
 
@@ -788,21 +760,21 @@ a {
 .upload-result-card {
   display: grid;
   gap: 6px;
-  border: 1px solid #b9d4c8;
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  background: #edf6f1;
-  color: #24352b;
+  background: var(--accent-soft);
+  color: var(--ink);
   padding: 12px;
 }
 
 /* 上传结果标题。 */
 .upload-result-card strong {
-  color: #1d6f56;
+  color: var(--accent);
 }
 
 /* 上传结果字段。 */
 .upload-result-card span {
-  color: #4f5d54;
+  color: var(--muted);
   font-size: var(--text-md);
 }
 
@@ -812,9 +784,9 @@ a {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  border: 1px solid #e1e7e3;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: var(--surface-muted);
   padding: 12px;
 }
 
@@ -826,12 +798,12 @@ a {
 
 /* 当前知识库名称。 */
 .admin-status-header strong {
-  color: #24352b;
+  color: var(--ink);
 }
 
 /* 文档状态辅助文字。 */
 .admin-status-header span {
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-md);
 }
 
@@ -839,9 +811,9 @@ a {
 .process-extraction-panel {
   display: grid;
   gap: 14px;
-  border: 1px solid #b9d4c8;
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  background: #f5faf7;
+  background: var(--accent-soft);
   padding: 14px;
 }
 
@@ -850,7 +822,7 @@ a {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  color: #1d6f56;
+  color: var(--accent);
 }
 
 /* 标题区文字纵向排列，避免说明文字与标题挤在同一行。 */
@@ -861,12 +833,12 @@ a {
 
 /* 提取结果主标题使用较深颜色，保持企业工具界面的信息层级。 */
 .process-extraction-heading strong {
-  color: #24352b;
+  color: var(--ink);
 }
 
 /* 提取状态说明使用较弱颜色，减少对结构化字段的干扰。 */
 .process-extraction-heading span {
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-md);
 }
 
@@ -881,7 +853,7 @@ a {
 /* 单个申请字段使用白色底块，与提取面板背景形成轻微层级。 */
 .process-field-list div {
   min-width: 0;
-  border: 1px solid #dce3da;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   padding: 10px;
@@ -889,14 +861,14 @@ a {
 
 /* 申请字段名称使用小号弱化文字。 */
 .process-field-list dt {
-  color: #68756d;
+  color: var(--muted);
   font-size: var(--text-sm);
 }
 
 /* 申请字段值允许长项目名换行，防止撑破右侧面板。 */
 .process-field-list dd {
   margin: 4px 0 0;
-  color: #24352b;
+  color: var(--ink);
   font-size: var(--text-md);
   font-weight: 800;
   overflow-wrap: anywhere;
@@ -910,24 +882,24 @@ a {
   padding: 0;
   margin: 0;
   list-style: none;
-  color: #53695b;
+  color: var(--muted);
   font-size: var(--text-base);
 }
 
-.process-steps span { color: #1d6f56; font-weight: 800; margin-right: 6px; }
+.process-steps span { color: var(--accent); font-weight: 800; margin-right: 6px; }
 .process-form-panel, .process-result-panel { display: grid; gap: 18px; align-content: start; }
 .process-form-panel > .primary-button { justify-self: start; }
-.process-notice { color: #53695b; line-height: 1.7; margin: 0; }
-.process-success { display: flex; gap: 12px; padding: 16px; border: 1px solid #b9d4c8; border-radius: 8px; background: #f5faf7; color: #1d6f56; }
+.process-notice { color: var(--muted); line-height: 1.7; margin: 0; }
+.process-success { display: flex; gap: 12px; padding: 16px; border: 1px solid var(--accent-border); border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
 .process-success svg { flex-shrink: 0; }
 .process-success p { margin: 6px 0 0; line-height: 1.6; font-size: var(--text-md); }
 .process-record-details { display: grid; gap: 14px; margin: 0; }
-.process-record-details dt { color: #68756d; font-size: var(--text-sm); }
+.process-record-details dt { color: var(--muted); font-size: var(--text-sm); }
 .process-record-details dd { margin: 6px 0 0; overflow-wrap: anywhere; font-size: var(--text-base); }
-.process-simulation-note { padding-top: 16px; border-top: 1px solid #dce3da; color: #68756d; line-height: 1.7; font-size: var(--text-md); }
-.process-new-confirm { display: flex; gap: 8px; align-items: flex-start; color: #68756d; font-size: var(--text-md); line-height: 1.6; }
+.process-simulation-note { padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); line-height: 1.7; font-size: var(--text-md); }
+.process-new-confirm { display: flex; gap: 8px; align-items: flex-start; color: var(--muted); font-size: var(--text-md); line-height: 1.6; }
 .process-new-confirm input { margin-top: 4px; }
-.process-secondary-button { border: 1px solid #bdcbbf; border-radius: 8px; background: #fff; color: #24352b; padding: 10px 16px; cursor: pointer; }
+.process-secondary-button { border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); padding: 10px 16px; cursor: pointer; }
 .process-secondary-button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (min-width: 901px) and (max-width: 1200px) {
@@ -941,7 +913,7 @@ a {
 
   .sidebar {
     border-right: 0;
-    border-bottom: 1px solid #dce3da;
+    border-bottom: 1px solid var(--line);
   }
 
   .topbar {
@@ -986,7 +958,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #cbd6cf;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   padding: 9px 12px;
@@ -995,7 +967,7 @@ a {
 .role-select-control select {
   border: 0;
   background: transparent;
-  color: #24352b;
+  color: var(--ink);
   font-weight: 700;
   outline: none;
 }

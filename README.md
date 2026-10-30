@@ -2,7 +2,7 @@
 
 一个面向企业内部资料查询和轻量流程辅助的 RAG + Agent 项目。以 React 工作台为主要入口，用 FastAPI、LangChain、SQLite 与可选 ChromaDB 串起文档入库、引用回答、字段提取、n8n 模拟流程和执行记录；另用 Dify 复刻简化知识问答，比较代码实现与低代码交付。
 
-![执行日志与申请详情](docs/screenshots/day26-execution-desktop.png)
+![蓝色工作台与执行日志](docs/screenshots/blue-theme-desktop.png)
 
 ## 可以演示什么
 
