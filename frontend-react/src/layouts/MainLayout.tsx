@@ -1,4 +1,5 @@
-import { ArrowUpRight, Database, MessagesSquare, BarChart3, ClipboardList, FileClock, Layers3 } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowUpRight, Database, MessagesSquare, BarChart3, ClipboardList, FileClock, Layers3, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 const navigationItems = [
@@ -10,25 +11,39 @@ const navigationItems = [
 ]
 
 export function MainLayout() {
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('workspace-sidebar-collapsed') === 'true' }
+    catch { return false }
+  })
+  function toggleSidebar() {
+    const next = !collapsed
+    setCollapsed(next)
+    try { localStorage.setItem('workspace-sidebar-collapsed', String(next)) }
+    catch { /* 存储不可用时仍可正常切换。 */ }
+  }
   const { pathname } = useLocation()
   const active = navigationItems.find(item => item.to === pathname)
 
-  return <div className="app-shell">
+  return <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}`}>
     <a href="#workspace-main" className="skip-link">跳到主要内容</a>
     <aside className="sidebar">
-      <NavLink to="/chat" className="brand-block" aria-label="企业知识与流程工作台首页">
+      <NavLink to="/chat" className="brand-block" aria-label="知行工作台首页" title={collapsed ? '知行工作台' : undefined}>
         <div className="brand-mark"><Layers3 size={24} aria-hidden="true" /></div>
-        <div><p className="eyebrow">ENTERPRISE / WORKSPACE</p><h1>知行工作台</h1></div>
+        <h1>知行工作台</h1>
       </NavLink>
-      <div><p className="nav-caption">工作空间</p><nav className="nav-list" aria-label="主导航">
+      <div><p className="nav-caption">工作空间</p><nav id="workspace-navigation" className="nav-list" aria-label="主导航">
         {navigationItems.map(({ to, label, icon: Icon, subtitle }) =>
-          <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink key={to} to={to} aria-label={label} title={collapsed ? label : undefined} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Icon size={19} aria-hidden="true" /><span><strong>{label}</strong><small>{subtitle}</small></span>
           </NavLink>)}
       </nav></div>
     </aside>
     <div className="content-shell"><header className="topbar">
-      <div className="breadcrumb"><span>企业工作台</span><span aria-hidden="true">/</span><strong>{active?.label || '页面'}</strong></div>
+      <div className="topbar-leading"><button type="button" className="sidebar-toggle" onClick={toggleSidebar}
+        aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'} title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+        aria-expanded={!collapsed} aria-controls="workspace-navigation">
+        {collapsed ? <PanelLeftOpen size={21} aria-hidden="true" /> : <PanelLeftClose size={21} aria-hidden="true" />}
+      </button><div className="breadcrumb"><span>企业工作台</span><span aria-hidden="true">/</span><strong>{active?.label || '页面'}</strong></div></div>
       <div className="topbar-actions"><span className="environment-tag"><i />本地工作空间</span>
         <NavLink className="topbar-shortcut" to="/workflow">发起申请<ArrowUpRight size={15} aria-hidden="true" /></NavLink></div>
     </header><main className="main-panel" id="workspace-main" tabIndex={-1}><Outlet /></main></div>
