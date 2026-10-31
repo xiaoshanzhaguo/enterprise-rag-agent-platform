@@ -106,7 +106,7 @@ export function ChatWorkspacePage() {
   const current = sessions.find(session => session.session_id === activeId)
   const canEdit = !!activeId && !busy && !streaming.includes(activeId) && loaded?.session_id === activeId
   return <section className="page-stack">
-    <header className="page-header"><div><p className="eyebrow">KNOWLEDGE / 会话工作区</p><h2>{current?.title || (loaded?.session_id === activeId && loaded.title) || '企业知识问答'}</h2><p>按会话整理问题，恢复历史回答与引用依据。</p></div>
+    <header className="page-header"><div><p className="eyebrow">会话工作区</p><h2>{current?.title || (loaded?.session_id === activeId && loaded.title) || '企业知识问答'}</h2><p>按会话整理问题，恢复历史回答与引用依据。</p></div>
       <div className="session-actions"><button className="ghost-button" disabled={!canEdit} onClick={() => { setActionId(activeId); setTitle(current?.title || loaded?.title || '新会话'); setAction('rename') }}><Pencil size={15} />重命名</button>
         <button className="ghost-button danger-button" disabled={!canEdit} onClick={() => { setActionId(activeId); setAction('delete') }}><Trash2 size={15} />删除会话</button></div></header>
     {action && actionId === activeId && <section className="panel session-confirm" aria-label={action === 'rename' ? '重命名会话' : '删除确认'}>

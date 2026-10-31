@@ -14,7 +14,7 @@ const metricItems = [
 
 export function EvaluationResultPage() {
   return <section className="page-stack">
-    <header className="page-header"><div><p className="eyebrow">QUALITY / 回答质量</p><h2>用证据，衡量回答。</h2><p>查看最近一次验收快照，了解系统的表现与边界。</p></div></header>
+    <header className="page-header"><div><p className="eyebrow">回答质量</p><h2>用证据，衡量回答。</h2><p>查看最近一次验收快照，了解系统的表现与边界。</p></div></header>
     <section className="panel"><div className="panel-heading"><BarChart3 size={21} aria-hidden="true" /><div><h3>第四周 · 修复后验收快照</h3><p>来自已保存的真实模型评测报告，不代表当前线上实时指标。</p></div></div>
       <div className="eval-snapshot"><span>{new Date(executed_at_utc).toLocaleDateString('zh-CN')}</span><span>{model}</span><span>30 个问题 / 12 份文档</span><span>关键词检索 · Top 3</span></div>
     </section>

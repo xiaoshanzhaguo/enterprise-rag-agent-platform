@@ -75,7 +75,7 @@ export function ExecutionLogPage() {
   const counts = !loading && !error ? data?.status_counts : undefined
   const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined
   return <section className="page-stack">
-    <header className="page-header"><div><p className="eyebrow">OPERATIONS / 流程追踪</p><h2>每一次申请，都有记录。</h2><p>查看流程状态、核对申请字段，追溯已保存的模拟回执。</p></div>
+    <header className="page-header"><div><p className="eyebrow">流程追踪</p><h2>每一次申请，都有记录。</h2><p>查看流程状态、核对申请字段，追溯已保存的模拟回执。</p></div>
       <button type="button" className="ghost-button" disabled={loading} onClick={() => setRevision(v => v + 1)}><RefreshCw size={16} className={loading ? 'spin' : ''} aria-hidden="true" />刷新记录</button></header>
     <div className="metric-grid log-metrics" aria-label="全部流程记录统计">
       {[['全部申请', total, '所有已记录的流程申请'], ['模拟完成', counts?.simulated, '有效回执已保存'], ['待核对', counts ? counts.running + counts.timeout : undefined, '执行中或响应超时'], ['执行失败', counts?.failed, '请核对失败原因']].map(([label, value, note], index) =>
@@ -105,7 +105,7 @@ export function ExecutionLogPage() {
         </>}
     </section>
     {selected && <section className="panel execution-detail" aria-label="申请执行详情" aria-busy={detailLoading}>
-      <div className="section-title"><div><p className="eyebrow">EXECUTION DETAIL</p><h3>申请执行详情</h3></div><button className="ghost-button" type="button" aria-label="关闭详情" onClick={() => setSelected(null)}><X size={17} /></button></div>
+      <div className="section-title"><h3>申请执行详情</h3><button className="ghost-button" type="button" aria-label="关闭详情" onClick={() => setSelected(null)}><X size={17} /></button></div>
       {detailError ? <ErrorNotice message={detailError} retry={() => setRevision(v => v + 1)} /> : detailLoading || !detail || detail.request_id !== selected ? <p role="status">正在读取详情…</p> : <>
         <div className="detail-status"><StatusBadge status={detail.status} /><p>{statusHelp[detail.status]}</p></div>
         <dl className="detail-identifiers"><div><dt>完整申请编号</dt><dd><code>{detail.request_id}</code></dd></div><div><dt>模拟工单编号</dt><dd>{detail.output?.ticket_id || '尚无有效回执'}</dd></div><div><dt>创建 / 完成时间</dt><dd>{formatTime(detail.started_at)} / {formatTime(detail.finished_at)}</dd></div></dl>
