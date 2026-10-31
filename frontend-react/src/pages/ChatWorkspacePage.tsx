@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { MessageSquare, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { MessageSquare, Plus, RefreshCw } from 'lucide-react'
 import { ChatPage } from './ChatPage'
 import { createSession, deleteSession, fetchSession, fetchSessions, renameSession } from '../api/sessionApi'
 import { restoreMessages } from '../api/sessionMessages'
 import { formatApiError } from '../api/httpClient'
 import { EmptyState, ErrorNotice } from '../components/WorkspaceUI'
+import { SessionActionsMenu } from '../components/SessionActionsMenu'
+import { SessionActionDialog } from '../components/SessionActionDialog'
 import type { ChatSessionDetail, ChatSessionSummary } from '../types/chat'
 
 function sessionErrorText(error: unknown, fallback: string) {
@@ -28,9 +30,11 @@ export function ChatWorkspacePage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
+  const actionTrigger = useRef<HTMLButtonElement | null>(null)
   const [streaming, setStreaming] = useState<string[]>([])
   const [action, setAction] = useState<'rename' | 'delete' | null>(null)
   const [actionId, setActionId] = useState('')
+  const [actionError, setActionError] = useState('')
   const [title, setTitle] = useState('')
   const onSettled = useCallback(() => setRevision(value => value + 1), [])
   const onStreamingChange = useCallback((id: string, isBusy: boolean) => {
@@ -83,47 +87,52 @@ export function ChatWorkspacePage() {
   }
 
   async function confirmAction() {
-    if (busyRef.current || !activeId || activeId !== actionId || streaming.includes(activeId)) return
+    if (busyRef.current || !action || !actionId || streaming.includes(actionId)) return
     busyRef.current = true
-    const targetId = activeId
-    setBusy(true); setSessionError('')
+    const targetId = actionId
+    setBusy(true); setActionError('')
     try {
       if (action === 'rename') {
         await renameSession(targetId, title.trim())
+        setSessions(current => current.map(session => session.session_id === targetId ? { ...session, title: title.trim() } : session))
         setLoaded(current => current?.session_id === targetId ? { ...current, title: title.trim() } : current)
       } else if (action === 'delete') {
         await deleteSession(targetId)
         const next = sessions.find(session => session.session_id !== targetId)
         setSessions(current => current.filter(session => session.session_id !== targetId))
-        setLoaded(null)
-        setParams(next ? { session: next.session_id } : {}, { replace: true })
+        if (targetId === activeId) {
+          setLoaded(null)
+          setParams(next ? { session: next.session_id } : {}, { replace: true })
+        }
       }
       setAction(null); onSettled()
-    } catch (error) { setSessionError(sessionErrorText(error, '操作未完成，请刷新列表核对后重试。')) }
+    } catch (error) { setActionError(sessionErrorText(error, '操作未完成，请核对后重试。')) }
     finally { busyRef.current = false; setBusy(false) }
   }
 
-  const current = sessions.find(session => session.session_id === activeId)
-  const canEdit = !!activeId && !busy && !streaming.includes(activeId) && loaded?.session_id === activeId
+  const actionSession = sessions.find(session => session.session_id === actionId)
   return <section className="page-stack">
     <header className="page-header"><div><p className="eyebrow">会话工作区</p><h2>智能问答</h2><p>按会话整理问题，恢复历史回答与引用依据。</p></div></header>
-    {action && actionId === activeId && <section className="panel session-confirm" aria-label={action === 'rename' ? '重命名会话' : '删除确认'}>
+    {action && <SessionActionDialog title={action === 'rename' ? '重命名会话' : '删除确认'} busy={busy} returnFocusTo={actionTrigger} onClose={() => setAction(null)}>
+      {actionError && <ErrorNotice message={actionError} />}
       {action === 'rename' ? <form onSubmit={event => { event.preventDefault(); void confirmAction() }}><label className="field"><span>会话名称（最多 80 字）</span><input autoFocus value={title} maxLength={80} disabled={busy} onChange={event => setTitle(event.target.value)} /></label>
-        <div className="session-actions"><button type="submit" className="primary-button" disabled={busy || !title.trim()}>保存名称</button><button type="button" className="ghost-button" disabled={busy} onClick={() => setAction(null)}>取消</button></div></form>
-        : <><h3>确认删除“{current?.title || loaded?.title || '此会话'}”？</h3><p>会话、消息与其临时文档将被删除，无法恢复。公共知识库与流程执行记录不会被删除。</p><div className="session-actions"><button className="ghost-button danger-button" disabled={busy} onClick={() => void confirmAction()}>确认删除</button><button className="ghost-button" disabled={busy} onClick={() => setAction(null)}>取消</button></div></>}
-    </section>}
+        <div className="session-actions"><button type="button" className="ghost-button" disabled={busy} onClick={() => setAction(null)}>取消</button><button type="submit" className="primary-button" disabled={busy || !title.trim() || streaming.includes(actionId)}>保存名称</button></div></form>
+        : <><p>确定删除会话“<strong>{actionSession?.title || title || '此会话'}</strong>”吗？</p><p className="session-delete-notice">会话、消息与其临时文档将被删除，无法恢复。公共知识库与流程执行记录不会被删除。</p><div className="session-actions"><button type="button" className="ghost-button" disabled={busy} onClick={() => setAction(null)}>取消</button><button type="button" className="primary-button danger-solid-button" disabled={busy || streaming.includes(actionId)} onClick={() => void confirmAction()}>确认删除</button></div></>}
+    </SessionActionDialog>}
     <div className="session-workspace"><aside className="panel session-sidebar" aria-label="会话列表">
       <div className="section-title"><strong><MessageSquare size={16} />最近会话</strong><button className="text-button" aria-label="刷新会话列表" disabled={listLoading} onClick={onSettled}><RefreshCw size={15} /></button></div>
       <button className="primary-button" disabled={busy} onClick={() => void create()}><Plus size={16} />新建会话</button>
       {sessionError && <ErrorNotice message={sessionError} retry={onSettled} />}
-      {listLoading && !sessions.length ? <p role="status">正在读取会话…</p> : <div className="session-list">{sessions.map(session => <button key={session.session_id} className={`session-item ${activeId === session.session_id ? 'active' : ''}`} disabled={busy}
+      {listLoading && !sessions.length ? <p role="status">正在读取会话…</p> : <div className="session-list">{sessions.map(session => <div key={session.session_id} className={`session-row ${activeId === session.session_id ? 'active' : ''}`}>
+        <button type="button" className="session-item" disabled={busy}
         onClick={() => { setAction(null); setParams({ session: session.session_id }) }} aria-current={activeId === session.session_id ? 'true' : undefined}>
-        <strong>{session.title}</strong><small>{streaming.includes(session.session_id) ? '生成中' : `${session.message_count} 条消息`}</small></button>)}</div>}
-      {activeId && <section className="session-current-actions" aria-label="当前会话操作">
-        <span>当前会话</span><strong title={current?.title || (loaded?.session_id === activeId ? loaded.title : '') || undefined}>{current?.title || (loaded?.session_id === activeId ? loaded.title : '') || '正在读取…'}</strong>
-        <div className="session-actions"><button type="button" className="ghost-button" disabled={!canEdit} onClick={() => { setActionId(activeId); setTitle(current?.title || loaded?.title || '新会话'); setAction('rename') }}><Pencil size={15} aria-hidden="true" />重命名</button>
-          <button type="button" className="ghost-button danger-button" aria-label="删除会话" disabled={!canEdit} onClick={() => { setActionId(activeId); setAction('delete') }}><Trash2 size={15} aria-hidden="true" />删除</button></div>
-      </section>}
+        <strong title={session.title}>{session.title}</strong><small>{streaming.includes(session.session_id) ? '生成中' : `${session.message_count} 条消息`}</small></button>
+        <SessionActionsMenu title={session.title} disabled={busy || streaming.includes(session.session_id)} onAction={(next, trigger) => {
+          if (busyRef.current || streaming.includes(session.session_id)) return
+          actionTrigger.current = trigger
+          setActionId(session.session_id); setTitle(session.title); setActionError(''); setAction(next)
+        }} />
+      </div>)}</div>}
       <p className="page-footnote">显示最近 50 个问答会话。切换会中断当前前端接收，不会自动重发问题。</p>
     </aside><div className="conversation-surface">
       {!activeId ? <section className="panel"><EmptyState title="开始一段新对话" action={<button className="primary-button" disabled={busy} onClick={() => void create()}>新建会话</button>}>会话会保存到服务器，刷新后可继续查看。</EmptyState></section>
