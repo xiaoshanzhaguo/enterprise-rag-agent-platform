@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, Database, MessagesSquare, BarChart3, ClipboardList, FileClock, Layers3, Pin } from 'lucide-react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Database, MessagesSquare, BarChart3, ClipboardList, FileClock, Layers3, Pin } from 'lucide-react'
+import { NavLink, Outlet } from 'react-router-dom'
 
 const navigationItems = [
   { to: '/chat', label: '智能问答', icon: MessagesSquare },
@@ -30,8 +30,6 @@ export function MainLayout() {
     try { localStorage.setItem('workspace-sidebar-pinned', next ? '1' : '0') }
     catch { /* 存储不可用时仍可切换固定状态。 */ }
   }
-  const { pathname } = useLocation()
-  const active = navigationItems.find(item => item.to === pathname)
 
   return <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}${pinned ? ' sidebar-pinned' : ''}`}>
     <a href="#workspace-main" className="skip-link">跳到主要内容</a>
@@ -72,10 +70,6 @@ export function MainLayout() {
         </div>)}
       </nav>
     </aside></div>
-    <div className="content-shell"><header className="topbar">
-      <div className="breadcrumb"><span>企业工作台</span><span aria-hidden="true">/</span><strong>{active?.label || '页面'}</strong></div>
-      <div className="topbar-actions"><span className="environment-tag"><i />本地工作空间</span>
-        <NavLink className="topbar-shortcut" to="/workflow">发起申请<ArrowUpRight size={15} aria-hidden="true" /></NavLink></div>
-    </header><main className="main-panel" id="workspace-main" tabIndex={-1}><Outlet /></main></div>
+    <div className="content-shell"><main className="main-panel" id="workspace-main" tabIndex={-1}><Outlet /></main></div>
   </div>
 }

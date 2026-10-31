@@ -53,10 +53,9 @@ a {
   min-height: 100vh;
 }
 
-/* 右侧内容外壳：顶部栏和主内容区都放在这里。 */
+/* 右侧内容外壳：直接呈现业务页面。 */
 .content-shell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: block;
   min-width: 0;
 }
 
@@ -148,45 +147,6 @@ a {
 .main-panel {
   min-width: 0;
   padding: 32px;
-}
-
-/* 顶部栏：展示当前控制台标题、搜索入口和用户角色入口。 */
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-  background: #ffffff;
-  padding: 18px 32px;
-}
-
-/* 顶部栏标题，尺寸比页面标题小，避免和业务页面标题抢层级。 */
-.topbar h2 {
-  margin: 2px 0 0;
-  font-size: 1.375rem;
-  line-height: 1.2;
-}
-
-/* 顶部栏右侧操作区。 */
-.topbar-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-/* 顶部搜索占位入口，后续可接全局搜索。 */
-.topbar-search {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  min-width: 180px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--canvas);
-  color: var(--muted);
-  padding: 9px 12px;
-  font-size: var(--text-base);
 }
 
 /* 次级按钮，用于设置、角色切换等低频操作。 */
@@ -914,21 +874,6 @@ a {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
-  }
-
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 18px 20px;
-  }
-
-  .topbar-actions {
-    width: 100%;
-  }
-
-  .topbar-search {
-    flex: 1;
-    min-width: 0;
   }
 
   .workspace-grid {
