@@ -106,9 +106,7 @@ export function ChatWorkspacePage() {
   const current = sessions.find(session => session.session_id === activeId)
   const canEdit = !!activeId && !busy && !streaming.includes(activeId) && loaded?.session_id === activeId
   return <section className="page-stack">
-    <header className="page-header"><div><p className="eyebrow">会话工作区</p><h2>{current?.title || (loaded?.session_id === activeId && loaded.title) || '企业知识问答'}</h2><p>按会话整理问题，恢复历史回答与引用依据。</p></div>
-      <div className="session-actions"><button className="ghost-button" disabled={!canEdit} onClick={() => { setActionId(activeId); setTitle(current?.title || loaded?.title || '新会话'); setAction('rename') }}><Pencil size={15} />重命名</button>
-        <button className="ghost-button danger-button" disabled={!canEdit} onClick={() => { setActionId(activeId); setAction('delete') }}><Trash2 size={15} />删除会话</button></div></header>
+    <header className="page-header"><div><p className="eyebrow">会话工作区</p><h2>智能问答</h2><p>按会话整理问题，恢复历史回答与引用依据。</p></div></header>
     {action && actionId === activeId && <section className="panel session-confirm" aria-label={action === 'rename' ? '重命名会话' : '删除确认'}>
       {action === 'rename' ? <form onSubmit={event => { event.preventDefault(); void confirmAction() }}><label className="field"><span>会话名称（最多 80 字）</span><input autoFocus value={title} maxLength={80} disabled={busy} onChange={event => setTitle(event.target.value)} /></label>
         <div className="session-actions"><button type="submit" className="primary-button" disabled={busy || !title.trim()}>保存名称</button><button type="button" className="ghost-button" disabled={busy} onClick={() => setAction(null)}>取消</button></div></form>
@@ -121,6 +119,11 @@ export function ChatWorkspacePage() {
       {listLoading && !sessions.length ? <p role="status">正在读取会话…</p> : <div className="session-list">{sessions.map(session => <button key={session.session_id} className={`session-item ${activeId === session.session_id ? 'active' : ''}`} disabled={busy}
         onClick={() => { setAction(null); setParams({ session: session.session_id }) }} aria-current={activeId === session.session_id ? 'true' : undefined}>
         <strong>{session.title}</strong><small>{streaming.includes(session.session_id) ? '生成中' : `${session.message_count} 条消息`}</small></button>)}</div>}
+      {activeId && <section className="session-current-actions" aria-label="当前会话操作">
+        <span>当前会话</span><strong title={current?.title || (loaded?.session_id === activeId ? loaded.title : '') || undefined}>{current?.title || (loaded?.session_id === activeId ? loaded.title : '') || '正在读取…'}</strong>
+        <div className="session-actions"><button type="button" className="ghost-button" disabled={!canEdit} onClick={() => { setActionId(activeId); setTitle(current?.title || loaded?.title || '新会话'); setAction('rename') }}><Pencil size={15} aria-hidden="true" />重命名</button>
+          <button type="button" className="ghost-button danger-button" aria-label="删除会话" disabled={!canEdit} onClick={() => { setActionId(activeId); setAction('delete') }}><Trash2 size={15} aria-hidden="true" />删除</button></div>
+      </section>}
       <p className="page-footnote">显示最近 50 个问答会话。切换会中断当前前端接收，不会自动重发问题。</p>
     </aside><div className="conversation-surface">
       {!activeId ? <section className="panel"><EmptyState title="开始一段新对话" action={<button className="primary-button" disabled={busy} onClick={() => void create()}>新建会话</button>}>会话会保存到服务器，刷新后可继续查看。</EmptyState></section>

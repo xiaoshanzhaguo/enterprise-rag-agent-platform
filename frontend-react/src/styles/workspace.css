@@ -150,6 +150,12 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: var(--text-
 .session-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 500; }
 .session-item small { color: var(--muted); font-size: var(--text-xs); }
 .session-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.session-current-actions { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); min-width: 0; }
+.session-current-actions > span { color: var(--muted); font-size: var(--text-xs); }
+.session-current-actions > strong { color: var(--ink); font-size: var(--text-sm); font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.session-current-actions .session-actions { flex-wrap: nowrap; gap: 6px; }
+.session-current-actions .ghost-button { flex: 1; gap: 5px; padding: 8px 6px; font-size: var(--text-sm); white-space: nowrap; }
+.session-current-actions .ghost-button svg { flex-shrink: 0; }
 .session-confirm { display: grid; gap: 12px; }
 .session-confirm form { display: grid; gap: 14px; max-width: 520px; }
 .session-confirm h3 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
