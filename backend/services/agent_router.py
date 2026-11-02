@@ -329,6 +329,27 @@ def _is_explicit_application_request(question: str) -> bool:
     ))
 
 
+def _resolve_system_access_route(question: str) -> AgentRouteType | None:
+    """将访问意图绑定到邻近系统对象，避免财务应用与底层 IT 资源互相抢占。"""
+    targets = list(re.finditer(
+        r"(?P<finance>(?:财务|报销|费用报销|差旅报销|付款|支付|发票|费控|会计)"
+        r"(?:业务|管理|审批|报销)?(?:系统|平台))|"
+        r"(?P<it>vpn|gitlab|linux|windows|服务器|数据库|防火墙|路由器|交换机|域控|"
+        r"操作系统|计算机(?:系统)?|电脑)",
+        question,
+    ))
+    # 从后向前选择带访问意图的对象；遇到下一个对象或句子边界即停止关联。
+    # 例如“财务系统的数据库管理员”绑定数据库，“通过 VPN 访问财务系统的账号”绑定财务系统。
+    for index in range(len(targets) - 1, -1, -1):
+        target = targets[index]
+        end = targets[index + 1].start() if index + 1 < len(targets) else len(question)
+        context = re.split(r"[。！？；!?;\n]", question[target.end():end], maxsplit=1)[0][:24]
+        # “管理员”也可能是人员职业；必须有实际账号、凭据或访问诉求才按系统对象分类。
+        if re.search(r"账号|账户|凭据|密码|口令|权限|登录|认证", context):
+            return AgentRouteType.FINANCE_PROCESS if target.lastgroup == "finance" else AgentRouteType.IT_SUPPORT
+    return None
+
+
 def route_question_by_rules(question: str) -> AgentRouteDecision:
     """
     LLM 不可用时使用的规则兜底 Router。
@@ -375,6 +396,15 @@ def route_question_by_rules(question: str) -> AgentRouteDecision:
         return AgentRouteDecision(
             route_type=AgentRouteType.IT_SUPPORT,
             reason="问题涉及企业数据或设备使用与安全制度，需要 IT 知识库依据",
+            should_use_rag=True,
+            rewritten_query=normalized_question,
+        )
+
+    system_access_route = _resolve_system_access_route(normalized_question)
+    if system_access_route is not None:
+        return AgentRouteDecision(
+            route_type=system_access_route,
+            reason="按账号、凭据或访问意图所关联的系统对象区分财务业务与 IT 支持",
             should_use_rag=True,
             rewritten_query=normalized_question,
         )
