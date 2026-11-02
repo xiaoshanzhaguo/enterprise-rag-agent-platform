@@ -6,6 +6,10 @@ RUN npm ci
 COPY frontend-react/ ./
 # 评测页展示构建时的已验收快照。
 COPY eval/week4_after_fix_report.json /app/eval/week4_after_fix_report.json
+COPY eval/routing_before_report.json \
+     eval/routing_after_report.json \
+     eval/security_routing_before_report.json \
+     eval/security_routing_after_report.json /app/eval/
 RUN npm run build
 
 FROM nginx:stable-alpine
