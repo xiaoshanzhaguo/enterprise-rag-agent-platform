@@ -75,6 +75,39 @@ CREATE_TABLE_SQL = [
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
     """,
+    # 文档级索引任务；只记录 SQLite 状态，不执行向量化或历史回填。
+    """
+    CREATE TABLE IF NOT EXISTS rag_index_tasks (
+        operation_id TEXT PRIMARY KEY,
+        document_id INTEGER NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('not_requested', 'pending', 'ready', 'failed')),
+        input_manifest_json TEXT NOT NULL,
+        input_sha256 TEXT NOT NULL,
+        target_profile_json TEXT,
+        target_sha256 TEXT,
+        expected_chunk_count INTEGER NOT NULL CHECK (expected_chunk_count > 0),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+        state_version INTEGER NOT NULL DEFAULT 1 CHECK (state_version > 0),
+        attempt_token TEXT,
+        owner_instance_id TEXT,
+        claimed_at TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+        CHECK (status = 'pending' OR attempt_token IS NULL),
+        CHECK (
+            (attempt_token IS NULL AND owner_instance_id IS NULL AND claimed_at IS NULL)
+            OR (attempt_token IS NOT NULL AND owner_instance_id IS NOT NULL
+                AND claimed_at IS NOT NULL AND status = 'pending')
+        ),
+        CHECK (
+            (status = 'not_requested' AND target_profile_json IS NULL AND target_sha256 IS NULL)
+            OR (status <> 'not_requested' AND target_profile_json IS NOT NULL AND target_sha256 IS NOT NULL)
+        )
+    )
+    """,
     # 保存切块后的内容
     """
     CREATE TABLE IF NOT EXISTS document_chunks (
@@ -192,6 +225,7 @@ CREATE_TABLE_SQL = [
 
 # 索引
 CREATE_INDEX_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_rag_index_tasks_status_updated ON rag_index_tasks(status, updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_session_id ON documents(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_knowledge_base_id ON documents(knowledge_base_id)",

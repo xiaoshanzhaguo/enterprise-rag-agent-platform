@@ -83,7 +83,8 @@ def init_database(database_url: str | None = None) -> None:
     """
     # 获取数据库连接
     with closing(get_connection(database_url)) as connection, connection:
-        # 依次执行所有建表 SQL
+        # 按依赖顺序建表（含 documents 后的 rag_index_tasks）。
+        # 只创建任务结构，不回填历史文档或启动任何索引执行。
         for statement in CREATE_TABLE_SQL:
             connection.execute(statement)
 

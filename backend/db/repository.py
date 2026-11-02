@@ -23,6 +23,7 @@
 # 哈希算法模块，给上传文档生成唯一指纹
 import hashlib
 import json
+import sqlite3
 from contextlib import closing
 from datetime import datetime
 from typing import Any
@@ -607,6 +608,223 @@ def save_chat_message(
         return int(cursor.lastrowid)
 
 
+def _prepare_document_storage_scope(
+    session_id: str, *, mode: str = "unknown", knowledge_base_id: str | None = None,
+) -> tuple[str | None, str, str]:
+    """准备父记录；文档主事务由调用方另行持有。"""
+    # 确保当前员工聊天会话存在。这个 session 代表“谁触发了上传动作”。
+    ensure_chat_session(session_id=session_id, mode=mode)
+    # 只有显式传入 knowledge_base_id 时，才把文档写入企业公共知识库。
+    # 没传时保持旧逻辑：文档仍属于当前 session，兼容内容分析等旧入口。
+    normalized_knowledge_base_id = ensure_knowledge_base(knowledge_base_id) if knowledge_base_id else None
+    if normalized_knowledge_base_id:
+        # documents 表历史上有 session_id 外键。公共知识库文档统一挂到内部 session，
+        # 这样普通用户删除聊天 session 时，不会误删公共知识库文档。
+        storage_session_id = build_knowledge_base_storage_session_id(normalized_knowledge_base_id)
+        ensure_chat_session(
+            session_id=storage_session_id,
+            mode="knowledge_base",
+            title=f"知识库文档存储：{normalized_knowledge_base_id}",
+        )
+    else:
+        storage_session_id = session_id
+    # documents.knowledge_base_id 目前是 NOT NULL。旧 session 文档没有独立知识库范围时，
+    # 写入默认值只做兼容占位；真正检索范围仍然由 session_id 决定。
+    document_knowledge_base_id = normalized_knowledge_base_id or SESSION_SCOPED_KNOWLEDGE_BASE_ID
+    return normalized_knowledge_base_id, storage_session_id, document_knowledge_base_id
+
+
+def _save_document_with_chunks_in_connection(
+    connection: sqlite3.Connection, *, session_id: str, file_name: str | None,
+    chunks: list[str], storage_session_id: str, normalized_knowledge_base_id: str | None,
+    document_knowledge_base_id: str, source_type: str = "upload",
+    knowledge_base_type: str = "general", department: str | None = None,
+    process_type: str | None = None, process_status: str = "active",
+) -> tuple[list[dict[str, Any]], bool]:
+    """仅使用传入连接保存/复用文档；不打开连接、不提交，返回块和是否复用。"""
+    # 生成当前本地时间，统一用于文档和 chunk 的 created_at
+    now = _current_timestamp()
+    # 生成文档指纹
+    content_hash = hashlib.sha256("\n\n".join(chunks).encode("utf-8")).hexdigest()
+
+    # 在调用方连接上保存文档和文本块。
+    # 查询是否已经保存过同名同内容文档，避免刷新后重复上传造成重复索引。
+    # 公共知识库文档按 knowledge_base_id 去重；旧入口文档仍按 session_id 去重。
+    duplicate_where_clause = "knowledge_base_id = ?" if normalized_knowledge_base_id else "session_id = ?"
+    duplicate_where_value = normalized_knowledge_base_id or session_id
+    existing_document = connection.execute(
+        f"""
+        SELECT id
+        FROM documents
+        WHERE {duplicate_where_clause}
+          AND content_hash = ?
+          AND (
+              file_name = ?
+              OR (file_name IS NULL AND ? IS NULL)
+          )
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        (duplicate_where_value, content_hash, file_name, file_name),
+    ).fetchone()
+
+    # 如果已经存在同名同内容文档，则直接复用已有 chunk 元数据
+    if existing_document:
+        # 即使文档内容重复，也允许用户通过本轮上传修正文档分类。
+        # 这样前端选择 HR / 财务 / IT / 产品 后，不会因为复用旧 chunk 而保留过期分类。
+        connection.execute(
+            """
+            UPDATE documents
+            SET
+                knowledge_base_id = ?,
+                knowledge_base_type = ?,
+                department = ?,
+                process_type = ?,
+                process_status = ?,
+                source_type = ?
+            WHERE id = ?
+            """,
+            (
+                document_knowledge_base_id,
+                knowledge_base_type or "general",
+                department,
+                process_type,
+                process_status or "active",
+                source_type,
+                existing_document["id"],
+            ),
+        )
+
+        # 读取已有文本块，返回给向量库 upsert，确保 ChromaDB 缺失时也能补写
+        existing_chunks = connection.execute(
+            """
+            SELECT
+                document_chunks.id AS db_chunk_id,
+                document_chunks.document_id AS document_id,
+                document_chunks.file_name AS file_name,
+                document_chunks.chunk_index AS chunk_id,
+                document_chunks.chunk_text AS text,
+                document_chunks.text_length AS text_length,
+                document_chunks.created_at AS created_at,
+                documents.knowledge_base_id AS knowledge_base_id,
+                documents.knowledge_base_type AS knowledge_base_type,
+                documents.department AS department,
+                documents.process_type AS process_type,
+                documents.process_status AS process_status
+            FROM document_chunks
+            INNER JOIN documents ON documents.id = document_chunks.document_id
+            WHERE document_chunks.document_id = ?
+            ORDER BY document_chunks.chunk_index ASC
+            """,
+            (existing_document["id"],),
+        ).fetchall()
+
+        # 更新内部知识库 session 时间，表示公共知识库文档被复用或更新。
+        connection.execute(
+            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+            (now, storage_session_id),
+        )
+        # 同时刷新触发上传的用户 session，便于历史会话列表体现最近使用过。
+        connection.execute(
+            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+            (now, session_id),
+        )
+        # 将已有 sqlite3.Row 转为普通字典，保持返回结构和新插入分支一致
+        return ([
+            {
+                "chunk_id": row["chunk_id"],
+                "db_chunk_id": row["db_chunk_id"],
+                "document_id": row["document_id"],
+                "file_name": row["file_name"],
+                "text": row["text"],
+                "text_length": row["text_length"],
+                "created_at": row["created_at"],
+                "knowledge_base_id": row["knowledge_base_id"],
+                "knowledge_base_type": row["knowledge_base_type"],
+                "department": row["department"],
+                "process_type": row["process_type"],
+                "process_status": row["process_status"],
+            }
+            for row in existing_chunks
+        ], True)
+
+    # 先保存文档主记录，后续 chunk 通过 document_id 关联到这条文档；同一会话允许累计多份文档
+    document_cursor = connection.execute(
+        """
+        INSERT INTO documents (
+            session_id,
+            knowledge_base_id,
+            file_name,
+            content_hash,
+            source_type,
+            knowledge_base_type,
+            department,
+            process_type,
+            process_status,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            storage_session_id,
+            document_knowledge_base_id,
+            file_name,
+            content_hash,
+            source_type,
+            knowledge_base_type or "general",
+            department,
+            process_type,
+            process_status or "active",
+            now,
+        ),
+    )
+    # 取出刚插入的 documents.id，作为 document_chunks.document_id
+    document_id = int(document_cursor.lastrowid)
+
+    # 收集写入数据库后的 chunk 元数据，返回给 RAG 检索层使用
+    saved_chunks = []
+    # 从 1 开始给 chunk 编号，便于前端展示和检索排序
+    for index, chunk_text in enumerate(chunks, start=1):
+        # 保存单个文本块到 document_chunks 表
+        chunk_cursor = connection.execute(
+            """
+            INSERT INTO document_chunks (document_id, file_name, chunk_index, chunk_text, text_length, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (document_id, file_name, index, chunk_text, len(chunk_text), now),
+        )
+        # 将数据库 chunk 主键和检索所需字段加入返回列表
+        saved_chunks.append(
+            {
+                "chunk_id": index,
+                "db_chunk_id": int(chunk_cursor.lastrowid),
+                "document_id": document_id,
+                "file_name": file_name,
+                "text": chunk_text,
+                "text_length": len(chunk_text),
+                "created_at": now,
+                "knowledge_base_id": document_knowledge_base_id,
+                "knowledge_base_type": knowledge_base_type or "general",
+                "department": department,
+                "process_type": process_type,
+                "process_status": process_status or "active",
+            }
+        )
+
+    # 更新内部知识库 session 时间，表示公共知识库文档发生变化
+    connection.execute(
+        "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+        (now, storage_session_id),
+    )
+    # 同时刷新触发上传的用户 session，便于历史会话列表体现最近使用过。
+    connection.execute(
+        "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+        (now, session_id),
+    )
+    # 返回保存后的 chunk 元数据
+    return saved_chunks, False
+
+
 def save_document_with_chunks(
     session_id: str,
     file_name: str | None,
@@ -643,214 +861,19 @@ def save_document_with_chunks(
     :param process_status: 流程状态，例如 active、draft、archived
     :return: 文本块元数据列表
     """
-    # 如果没有会话 ID 或没有切分结果，就没有可保存的数据
     if not session_id or not chunks:
         return []
-
-    # 确保当前员工聊天会话存在。这个 session 代表“谁触发了上传动作”。
-    ensure_chat_session(session_id=session_id, mode=mode)
-    # 只有显式传入 knowledge_base_id 时，才把文档写入企业公共知识库。
-    # 没传时保持旧逻辑：文档仍属于当前 session，兼容内容分析等旧入口。
-    normalized_knowledge_base_id = ensure_knowledge_base(knowledge_base_id) if knowledge_base_id else None
-    if normalized_knowledge_base_id:
-        # documents 表历史上有 session_id 外键。公共知识库文档统一挂到内部 session，
-        # 这样普通用户删除聊天 session 时，不会误删公共知识库文档。
-        storage_session_id = build_knowledge_base_storage_session_id(normalized_knowledge_base_id)
-        ensure_chat_session(
-            session_id=storage_session_id,
-            mode="knowledge_base",
-            title=f"知识库文档存储：{normalized_knowledge_base_id}",
+    normalized_id, storage_id, document_kb_id = _prepare_document_storage_scope(
+        session_id, mode=mode, knowledge_base_id=knowledge_base_id,
+    )
+    with closing(get_connection()) as connection, connection:
+        saved_chunks, _ = _save_document_with_chunks_in_connection(
+            connection, session_id=session_id, file_name=file_name, chunks=chunks,
+            storage_session_id=storage_id, normalized_knowledge_base_id=normalized_id,
+            document_knowledge_base_id=document_kb_id, source_type=source_type,
+            knowledge_base_type=knowledge_base_type, department=department,
+            process_type=process_type, process_status=process_status,
         )
-    else:
-        storage_session_id = session_id
-    # documents.knowledge_base_id 目前是 NOT NULL。旧 session 文档没有独立知识库范围时，
-    # 写入默认值只做兼容占位；真正检索范围仍然由 session_id 决定。
-    document_knowledge_base_id = normalized_knowledge_base_id or SESSION_SCOPED_KNOWLEDGE_BASE_ID
-    # 生成当前本地时间，统一用于文档和 chunk 的 created_at
-    now = _current_timestamp()
-    # 生成文档指纹
-    content_hash = hashlib.sha256("\n\n".join(chunks).encode("utf-8")).hexdigest()
-
-    # 打开数据库连接，保存文档和文本块
-    with get_connection() as connection:
-        # 查询是否已经保存过同名同内容文档，避免刷新后重复上传造成重复索引。
-        # 公共知识库文档按 knowledge_base_id 去重；旧入口文档仍按 session_id 去重。
-        duplicate_where_clause = "knowledge_base_id = ?" if normalized_knowledge_base_id else "session_id = ?"
-        duplicate_where_value = normalized_knowledge_base_id or session_id
-        existing_document = connection.execute(
-            f"""
-            SELECT id
-            FROM documents
-            WHERE {duplicate_where_clause}
-              AND content_hash = ?
-              AND (
-                  file_name = ?
-                  OR (file_name IS NULL AND ? IS NULL)
-              )
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
-            """,
-            (duplicate_where_value, content_hash, file_name, file_name),
-        ).fetchone()
-
-        # 如果已经存在同名同内容文档，则直接复用已有 chunk 元数据
-        if existing_document:
-            # 即使文档内容重复，也允许用户通过本轮上传修正文档分类。
-            # 这样前端选择 HR / 财务 / IT / 产品 后，不会因为复用旧 chunk 而保留过期分类。
-            connection.execute(
-                """
-                UPDATE documents
-                SET
-                    knowledge_base_id = ?,
-                    knowledge_base_type = ?,
-                    department = ?,
-                    process_type = ?,
-                    process_status = ?,
-                    source_type = ?
-                WHERE id = ?
-                """,
-                (
-                    document_knowledge_base_id,
-                    knowledge_base_type or "general",
-                    department,
-                    process_type,
-                    process_status or "active",
-                    source_type,
-                    existing_document["id"],
-                ),
-            )
-
-            # 读取已有文本块，返回给向量库 upsert，确保 ChromaDB 缺失时也能补写
-            existing_chunks = connection.execute(
-                """
-                SELECT
-                    document_chunks.id AS db_chunk_id,
-                    document_chunks.document_id AS document_id,
-                    document_chunks.file_name AS file_name,
-                    document_chunks.chunk_index AS chunk_id,
-                    document_chunks.chunk_text AS text,
-                    document_chunks.text_length AS text_length,
-                    document_chunks.created_at AS created_at,
-                    documents.knowledge_base_id AS knowledge_base_id,
-                    documents.knowledge_base_type AS knowledge_base_type,
-                    documents.department AS department,
-                    documents.process_type AS process_type,
-                    documents.process_status AS process_status
-                FROM document_chunks
-                INNER JOIN documents ON documents.id = document_chunks.document_id
-                WHERE document_chunks.document_id = ?
-                ORDER BY document_chunks.chunk_index ASC
-                """,
-                (existing_document["id"],),
-            ).fetchall()
-
-            # 更新内部知识库 session 时间，表示公共知识库文档被复用或更新。
-            connection.execute(
-                "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
-                (now, storage_session_id),
-            )
-            # 同时刷新触发上传的用户 session，便于历史会话列表体现最近使用过。
-            connection.execute(
-                "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
-                (now, session_id),
-            )
-            # 提交更新时间
-            connection.commit()
-            # 将已有 sqlite3.Row 转为普通字典，保持返回结构和新插入分支一致
-            return [
-                {
-                    "chunk_id": row["chunk_id"],
-                    "db_chunk_id": row["db_chunk_id"],
-                    "document_id": row["document_id"],
-                    "file_name": row["file_name"],
-                    "text": row["text"],
-                    "text_length": row["text_length"],
-                    "created_at": row["created_at"],
-                    "knowledge_base_id": row["knowledge_base_id"],
-                    "knowledge_base_type": row["knowledge_base_type"],
-                    "department": row["department"],
-                    "process_type": row["process_type"],
-                    "process_status": row["process_status"],
-                }
-                for row in existing_chunks
-            ]
-
-        # 先保存文档主记录，后续 chunk 通过 document_id 关联到这条文档；同一会话允许累计多份文档
-        document_cursor = connection.execute(
-            """
-            INSERT INTO documents (
-                session_id,
-                knowledge_base_id,
-                file_name,
-                content_hash,
-                source_type,
-                knowledge_base_type,
-                department,
-                process_type,
-                process_status,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                    storage_session_id,
-                    document_knowledge_base_id,
-                file_name,
-                content_hash,
-                source_type,
-                knowledge_base_type or "general",
-                department,
-                process_type,
-                process_status or "active",
-                now,
-            ),
-        )
-        # 取出刚插入的 documents.id，作为 document_chunks.document_id
-        document_id = int(document_cursor.lastrowid)
-
-        # 收集写入数据库后的 chunk 元数据，返回给 RAG 检索层使用
-        saved_chunks = []
-        # 从 1 开始给 chunk 编号，便于前端展示和检索排序
-        for index, chunk_text in enumerate(chunks, start=1):
-            # 保存单个文本块到 document_chunks 表
-            chunk_cursor = connection.execute(
-                """
-                INSERT INTO document_chunks (document_id, file_name, chunk_index, chunk_text, text_length, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (document_id, file_name, index, chunk_text, len(chunk_text), now),
-            )
-            # 将数据库 chunk 主键和检索所需字段加入返回列表
-            saved_chunks.append(
-                {
-                    "chunk_id": index,
-                    "db_chunk_id": int(chunk_cursor.lastrowid),
-                    "document_id": document_id,
-                    "file_name": file_name,
-                    "text": chunk_text,
-                    "text_length": len(chunk_text),
-                    "created_at": now,
-                    "knowledge_base_id": document_knowledge_base_id,
-                    "knowledge_base_type": knowledge_base_type or "general",
-                    "department": department,
-                    "process_type": process_type,
-                    "process_status": process_status or "active",
-                }
-            )
-
-        # 更新内部知识库 session 时间，表示公共知识库文档发生变化
-        connection.execute(
-            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
-            (now, storage_session_id),
-        )
-        # 同时刷新触发上传的用户 session，便于历史会话列表体现最近使用过。
-        connection.execute(
-            "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
-            (now, session_id),
-        )
-        # 提交事务，让文档、chunks 和会话更新时间一起生效
-        connection.commit()
-        # 返回保存后的 chunk 元数据
         return saved_chunks
 
 
