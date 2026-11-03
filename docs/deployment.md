@@ -1,6 +1,6 @@
 # 启动、部署与排错
 
-默认交付 React + FastAPI；n8n 和旧版 Streamlit 按需启用，Dify 独立部署。以下命令都在仓库根目录执行，除非特别注明。
+默认使用本机原生 React + FastAPI，不依赖 Docker。SQLite 与 ChromaDB 为本地文件存储；n8n、旧版 Streamlit、Dify 是可选独立入口，R1 索引管理不要求启动它们。以下命令都在仓库根目录执行，除非特别注明。
 
 ## 1. 准备配置
 
@@ -12,7 +12,7 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 
 填写 `DEEPSEEK_API_KEY`、`BASE_URL`、`LLM_MODEL`。示例为官方 DeepSeek 接口，兼容服务的地址与模型名由该服务决定。历史基线使用 `deepseek-chat`；示例模型名称变化不代表旧指标已对新模型验证。官方接口参数见 [DeepSeek 文档](https://api-docs.deepseek.com/)。
 
-先以 keyword 模式启动可避免首次下载 Embedding 权重。切换 vector 前配置 `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL`，必要时配置云端 Embedding 的地址与 Key；已有关键词索引并不自动代表向量库完整，需重新索引相应文档。
+先以 keyword 模式启动可避免首次下载 Embedding 权重。切换 vector 前配置 `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL`，必要时配置云端 Embedding 的地址与 Key；已有关键词文档不自动代表向量索引完整，也不会批量重建历史文档。模型切换须先确认目标 Collection 兼容，详见下节。
 
 ## 2. 本地开发
 
@@ -34,7 +34,31 @@ npm run dev
 
 健康检查 `GET /health` 只检查数据库与存储可用性，不证明模型凭据有效、模型回答正确或 n8n 工作流已发布。模型调用和流程触发分别按演示链路验证。
 
-## 3. Docker 主入口
+### R1 向量配置与恢复
+
+2026-11-03 原生验收使用以下模型设置；保留已有服务地址和 Key，不将真实凭据写入文档或前端：
+
+```dotenv
+RAG_RETRIEVAL_MODE=vector
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=qwen3.7-text-embedding-flash
+```
+
+云端模式配置配套的 `EMBEDDING_BASE_URL`、`EMBEDDING_API_KEY`；同时留空时复用聊天模型的兼容服务配置。修改 `.env` 后重启 FastAPI，修改代理配置后重启 Vite。关闭原生服务时，在各自启动终端按 Ctrl+C；SQLite/Chroma 数据保留，不需要 Docker 停止命令。
+
+当前真实返回维度为 1024。受管 Adapter 只获取既有目标 Collection，不会自动创建、删除或重建它；新环境首次启用 vector 前需由运维准备并核验 Collection。历史 `rag_chunks` 只读检查为 1024 维、l2，但历史向量的模型来源未确认；相同维度不代表相同向量空间。未确认前使用 keyword，或在专用进程中将 SQLite、向量存储路径和 Collection 全部隔离后测试；不要直接把新模型的查询向量送入历史业务 Collection。当前没有前端 Collection 选择器，换知识库 ID 本身不能完成 Collection 隔离。
+
+索引失败时从管理页显式重试；pending 未领取可继续，已领取只查询。若原进程已退出而任务仍 claimed，操作人员必须确认所有旧执行者已停止后使用 CLI：
+
+```powershell
+.venv\Scripts\python.exe -m backend.cli.rag_index_recovery inspect "任务UUID"
+# 将版本替换为 inspect 返回的 state_version，确认旧执行者已全部停止后再执行：
+.venv\Scripts\python.exe -m backend.cli.rag_index_recovery recover "任务UUID" --expected-state-version 2 --confirm-execution-stopped
+```
+
+该命令只转为 failed/interrupted，不执行索引；随后在页面查询并显式 retry。禁止因请求超时就执行 recover，CLI 不检测进程，也不能阻止存活的旧进程写 Chroma。输入或模型配置冲突需先核对，不能绕过 Profile 校验覆盖任务。
+
+## 3. Docker（可选历史部署方式）
 
 需要 Docker Linux 引擎与 Compose。新增 `Dockerfile.web` 使用 Node 22 构建 React，再由 Nginx 提供页面；后端使用 `Dockerfile.backend`。两个 Python 镜像先从官方 CPU 索引安装 `torch==2.12.0+cpu`，避免间接下载 CUDA 运行库，未配置 GPU 部署。安装方式参考 [PyTorch 官方 CPU 安装说明](https://pytorch.org/get-started/locally/#no-cuda)。首次下载 Python、CPU 运行库和基础镜像仍可能较久，先查看构建或容器日志。
 
@@ -126,4 +150,4 @@ docker compose stop backend web
 | n8n 502 / 504 | 检查运行位置对应 URL、生产 Webhook、Header Auth、响应节点；先按编号核对，不自动重发 |
 | vector 首次索引很慢 | 检查权重下载；可先用 keyword 模式完成演示，不能把回退结果称作纯向量检索 |
 
-本轮实际构建、接口与代理验证结果见 [第 27 天交付记录](day27_delivery.md)。
+历史 Docker 检查与 2026-11-03 R1 原生环境验收分别见 [交付记录](day27_delivery.md)；R1 验收不以 Docker 可用为前提。

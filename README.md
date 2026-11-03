@@ -13,6 +13,7 @@
 - **执行记录**：从 SQLite 读取真实申请，支持状态筛选、编号查询、分页、详情与超时提示。
 - **可复核评测**：30 题覆盖 HR、财务、IT、产品、流程申请和无依据拒答，区分离线检索基线与真实模型输出。
 - **回答反馈**：对已保存的回答标记有帮助或无帮助、选择问题原因并补充说明；评测页按状态处理负反馈，记录复核说明，并回到原会话核对。
+- **RAG 索引管理（R1）**：原子保存文档、Chunk 与索引任务，展示文本保存和向量索引的独立状态；支持查询、继续执行、失败重试，以及受控 CLI 人工恢复。
 
 当前为本机演示项目：n8n 生成模拟表格、通知和工单，不执行真实审批、通知或授权。React 的知识库上传入口支持 `.md` / `.txt`，单文件上限 2MB；旧版 Streamlit 入口保留附加文本处理及会话界面。
 
@@ -40,9 +41,11 @@ flowchart LR
   Eval[独立评测库 / 30 题] --> Router
 ```
 
-这是逻辑架构；容器代理、数据流与持久化说明见 [架构说明](docs/architecture.md)。Dify 是独立对照应用，原系统不通过 Dify 回答问题。
+这是逻辑架构；原生运行、可选容器代理、数据流与持久化说明见 [架构说明](docs/architecture.md)。R1 索引链路采用 API → Service → Repository / Adapter：Repository 管理 SQLite 事务与任务状态，Service 编排领取、绑定与执行，Adapter 复用现有 Embedding 和 ChromaDB。Dify 是独立对照应用，原系统不通过 Dify 回答问题。
 
 ## 本地开发启动
+
+默认采用本机原生运行，知识库与 R1 索引管理不依赖 Docker、n8n 或 Dify。SQLite 和 ChromaDB 使用本地文件存储，无需单独启动数据库服务。
 
 在项目根目录操作。后端建议使用 Python 3.11；本机既有 Python 3.13 虚拟环境也已完成单元测试。前端使用 Node.js 22.12+ 的 22.x 版本及 npm。已有可用 `.venv` 时跳过创建步骤。
 
@@ -55,6 +58,8 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 编辑 `.env` 中的模型配置：`DEEPSEEK_API_KEY`、`BASE_URL`、`LLM_MODEL`。示例使用官方 DeepSeek API 地址；接兼容服务时按实际地址与可用模型填写。[DeepSeek 配置说明](https://api-docs.deepseek.com/)
 
 示例默认 `RAG_RETRIEVAL_MODE=keyword`，便于先跑通。选择 `vector` 后需要可用的 Embedding 服务或本地模型；首次加载本地模型需下载权重，实际检索方式会记录在结果中。
+
+2026-11-03 的 R1 真实验收使用 `EMBEDDING_PROVIDER=openai`、`EMBEDDING_MODEL=qwen3.7-text-embedding-flash`，实际返回 1024 维；服务地址与 Key 使用已有的 `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY`。修改 `.env` 后重启 FastAPI。受管索引要求目标 Collection 已存在，不会自动重建；历史业务向量的模型来源未确认，即使同为 1024 维，也不能据此认定与新模型可混用。详见 [配置与兼容性](docs/deployment.md#r1-向量配置与恢复)。
 
 ```powershell
 .venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 18000
@@ -70,7 +75,7 @@ npm run dev
 
 打开 Vite 输出的地址，通常为 [工作台](http://localhost:5173)。默认 `/api` 代理至 `http://127.0.0.1:18000`，可在 `frontend-react/.env.local` 设置 `BACKEND_PROXY_TARGET` 后重启 Vite。后端启动时初始化 SQLite；[健康检查](http://127.0.0.1:18000/health) 与 [API 文档](http://127.0.0.1:18000/docs) 可单独访问。
 
-## Docker 启动
+## Docker 启动（可选历史部署方式）
 
 先启动 Docker Desktop 的 Linux 引擎，准备好 `.env`，再执行：
 
@@ -113,7 +118,9 @@ Dify 不随根 Compose 启动。按 [Dify 部署与导入说明](integrations/di
 .venv\Scripts\python.exe eval/run_week4.py --mode live --output eval/local/live_report.json
 ```
 
-前端在 `frontend-react` 目录执行 `npm run build` 与 `npm run lint`。旧的 `eval/run_eval.py` 仍服务于旧语料，不代表第四周结果。
+前端在 `frontend-react` 目录执行 `npm test`、`npm run build` 与 `npm run lint`。旧的 `eval/run_eval.py` 仍服务于旧语料，不代表第四周结果。
+
+R1 于 2026-11-03 完成原生环境真实浏览器验收：上传后 SQLite 任务为 `ready`，React 显示索引成功且刷新可恢复，真实向量检索召回测试文档并展示引用。本轮后端针对性测试 71/71、前端 25/25，类型检查、ESLint、生产构建通过；完整后端沿用此前 227/227 基线，未重复全量运行。离线检索 20/20、规则路由及流程意图 30/30，离线模式不评估生成答案与引用质量。详细范围见 [R1 验收记录](docs/day27_delivery.md#r1-原生环境最终验收2026-11-03)；接口见 [数据与接口协议](docs/data_contract.md#6-r1-索引任务与管理接口)。
 
 2026-10-26 的修复后单次真实模型基线（`deepseek-chat`、keyword、top_k=3）：
 
