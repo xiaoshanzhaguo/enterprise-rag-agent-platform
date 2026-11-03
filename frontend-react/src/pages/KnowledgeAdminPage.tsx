@@ -16,12 +16,14 @@
 import { FileText, RefreshCw, UploadCloud } from 'lucide-react'
 import { formatApiError } from '../api/httpClient'
 // 在这个页面里：useState 保存知识库列表、分类列表、loading、错误信息；useEffect 页面首次加载后请求后端数据。
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 // 只从 React 里导入 ChangeEvent 这个“类型”，用于 TypeScript 类型标注，不会作为运行时代码打包。
 // 只导入 React 事件类型，用于给文件选择 input 的 onChange 事件标注类型。
 import type { ChangeEvent } from 'react'
-import { fetchKnowledgeBaseCategories, fetchKnowledgeBases, fetchRagStatus, indexKnowledgeBaseDocument } from '../api/knowledgeBaseApi'
-import type { IndexDocumentResponse, KnowledgeBaseCategory, KnowledgeBaseItem, RagStatusResponse } from '../types/knowledgeBase'
+import * as knowledgeBaseApi from '../api/knowledgeBaseApi'
+import { KnowledgeIndexController } from '../api/knowledgeIndexState'
+import { DocumentIndexStatus } from '../components/DocumentIndexStatus'
+import type { KnowledgeBaseCategory, KnowledgeBaseItem } from '../types/knowledgeBase'
 
 
 // 管理员上传文档时使用的固定 session_id。
@@ -48,24 +50,24 @@ export const KnowledgeAdminPage = () => {
   // 保存当前文件输入框里选择的文件对象。
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  // 保存当前知识库的文档状态，例如文档数、chunk 数和文件列表。
-  const [ragStatus, setRagStatus] = useState<RagStatusResponse | null>(null)
-
-  // 保存最近一次上传成功后的后端响应，方便管理员确认 chunk 数和分类。
-  const [uploadResult, setUploadResult] = useState<IndexDocumentResponse | null>(null)
-
   // 标记页面是否正在加载配置。
   // 初始值是：true，因为页面刚打开时就要请求知识库和分类配置。当请求完成后，会执行 setIsLoading(false)。页面里的 <select disabled={isLoading}> 会根据它禁用或启用。
   const [isLoading, setIsLoading] = useState(true)
 
-  // 标记当前是否正在上传并索引文档。
-  const [isUploading, setIsUploading] = useState(false)
-
-  // 标记当前是否正在刷新右侧文档状态。
-  const [isStatusLoading, setIsStatusLoading] = useState(false)
-
   // 保存接口失败时的错误提示。
   const [errorMessage, setErrorMessage] = useState('')
+  const [isReadingFile, setIsReadingFile] = useState(false)
+  const readingFile = useRef(false)
+  const indexController = useMemo(() => new KnowledgeIndexController({
+    session_id: ADMIN_UPLOAD_SESSION_ID, knowledge_base_id: selectedKnowledgeBaseId, user_role: ADMIN_USER_ROLE,
+  }, knowledgeBaseApi), [selectedKnowledgeBaseId])
+  const indexState = useSyncExternalStore(indexController.subscribe, indexController.getSnapshot)
+  const ragStatus = indexState.status
+  const uploadResult = indexState.upload
+  const isUploading = indexState.uploading || isReadingFile
+  const isStatusLoading = indexState.loading
+  const visibleError = errorMessage || indexState.error || indexState.queryError
+
 
   // 页面首次渲染后加载知识库和分类配置。
   // 因为这个 useEffect 最后依赖数组是 []，所以它只会在组件首次挂载后执行一次。
@@ -89,8 +91,8 @@ export const KnowledgeAdminPage = () => {
 
         // 知识库列表和分类列表互不依赖，可以并行请求。
         const [knowledgeBaseResponse, categoryResponse] = await Promise.all([
-          fetchKnowledgeBases(),
-          fetchKnowledgeBaseCategories(),
+          knowledgeBaseApi.fetchKnowledgeBases(),
+          knowledgeBaseApi.fetchKnowledgeBaseCategories(),
         ])
 
         // 如果组件已经卸载，就不再更新状态。
@@ -130,65 +132,11 @@ export const KnowledgeAdminPage = () => {
     }
   }, [])
 
-  // 当目标知识库变化时，自动刷新这个知识库的文档状态。
+  // 切换知识库或离开页面时取消 GET 和轮询；不重新提交索引任务。
   useEffect(() => {
-    // 没有选中知识库时，清空右侧文档状态。
-    // 这段的作用：如果当前没有选中知识库，就不要请求文档状态；同时把右侧 ragStatus 清空，避免继续显示旧知识库的文档状态。
-    // 它主要防的是这几种状态：
-    // 1. 页面刚打开时，selectedKnowledgeBaseId 还是 ''
-    // 2. 后端返回的 knowledge_bases 是空数组，默认值仍然是 ''
-    // 3. 将来如果你加了“请清空知识库”的空选项，用户可能手动选回‘’
-    if (!selectedKnowledgeBaseId) {
-      // 清空状态，避免页面显示上一个知识库的旧文档。
-      // 状态清空已移动到 handleKnowledgeBaseChange，避免在 effect 中同步 setState。
-      // 直接结束本次 effect。
-      return
-    }
-
-    // ignore 用来避免组件卸载后继续 setState。
-    // ignore 为 false 表示组件还未卸载。
-    let ignore = false
-
-    // 异步加载当前选中知识库的文档状态。
-    async function loadStatus() {
-      try {
-        // 进入文档状态加载中。
-        setIsStatusLoading(true)
-        // 调用后端 RAG 状态接口。
-        const response = await fetchRagStatus(ADMIN_UPLOAD_SESSION_ID, selectedKnowledgeBaseId)
-
-        // 如果组件还存在，就写入状态。
-        if (!ignore) {
-          // 保存文档状态，右侧面板会展示文档数、chunk 数和文件列表。
-          setRagStatus(response)
-        }
-      } catch (error) {
-        // 如果请求失败，展示错误信息。
-        if (!ignore) {
-          // 尽量展示真实错误；拿不到时展示兜底文案。
-          setErrorMessage(formatApiError(error, '加载文档状态失败，请稍后重试。'))
-          // 清空文档状态，避免旧数据误导用户。
-          setRagStatus(null)
-        }
-      } finally {
-        // 组件还存在时才结束加载。
-        if (!ignore) {
-          // 结束文档状态加载。
-          setIsStatusLoading(false)
-        }
-      }
-    }
-
-    // 立即加载当前知识库状态。
-    loadStatus()
-
-    // 清理函数：组件卸载或 selectedKnowledgeBaseId 改变时执行。
-    return () => {
-      // 标记旧请求不再允许更新状态。
-      // 标记当前这次 effect 已失效，旧请求回来后不允许再更新状态。
-      ignore = true
-    }
-  }, [selectedKnowledgeBaseId])
+    indexController.start()
+    return () => indexController.dispose()
+  }, [indexController])
 
   // 根据 selectedCategoryId 找到当前选中的分类对象。
   const selectedCategory = categories.find((item) => item.category_id === selectedCategoryId)
@@ -196,45 +144,14 @@ export const KnowledgeAdminPage = () => {
   // 根据 selectedKnowledgeBaseId 找到当前选中的知识库对象。
   const selectedKnowledgeBase = knowledgeBases.find((item) => item.knowledge_base_id === selectedKnowledgeBaseId)
 
-  // 切换目标知识库时，先清空旧状态，再保存新的知识库 ID。
-  // 这样右侧不会短暂展示上一个知识库的数据，也能避免在 useEffect 中同步调用 setState。
   function handleKnowledgeBaseChange(event: ChangeEvent<HTMLSelectElement>) {
-    // 读取下拉框当前选中的知识库 ID。
-    const nextKnowledgeBaseId = event.target.value
-    // 清空旧知识库状态，等待后续 useEffect 请求新知识库数据。
-    setRagStatus(null)
-    // 清空上一轮上传结果，避免它和新知识库范围混在一起展示。
-    setUploadResult(null)
-    // 保存新知识库 ID，触发上面的状态加载 effect。
-    setSelectedKnowledgeBaseId(nextKnowledgeBaseId)
+    setErrorMessage('')
+    setSelectedKnowledgeBaseId(event.target.value)
   }
 
-  // 主动刷新当前选中知识库的文档状态。
-  // 使用场景：点击“刷新”按钮，或上传文档成功后重新拉取最新文档数、chunk 数和文件列表。
-  // 注意：useEffect 只会在 selectedKnowledgeBaseId 变化时自动刷新；
-  // 如果知识库 ID 没变，但后端文档数据变了，就需要手动调用这个函数。
-  async function refreshSelectedKnowledgeBaseStatus() {
-    // 没有选中知识库时不请求后端。
-    if (!selectedKnowledgeBaseId) {
-      return
-    }
-
-    try {
-      // 进入文档状态加载中。
-      setIsStatusLoading(true)
-      // 清空旧错误。
-      setErrorMessage('')
-      // 调用状态接口，按企业知识库范围查询。
-      const response = await fetchRagStatus(ADMIN_UPLOAD_SESSION_ID, selectedKnowledgeBaseId)
-      // 写入最新状态。
-      setRagStatus(response)
-    } catch (error) {
-      // 展示接口错误。
-      setErrorMessage(formatApiError(error, '刷新文档状态失败，请稍后重试。'))
-    } finally {
-      // 结束文档状态加载。
-      setIsStatusLoading(false)
-    }
+  function refreshSelectedKnowledgeBaseStatus() {
+    setErrorMessage('')
+    void indexController.refresh()
   }
 
   // 文件选择变化时，把浏览器 File 对象保存到状态里。
@@ -265,11 +182,12 @@ export const KnowledgeAdminPage = () => {
     // 保存文件对象，后续点击上传时读取文本内容。
     setSelectedFile(file)
     // 重新选择文件后，清空上一轮上传结果。
-    setUploadResult(null)
+    indexController.clearUpload()
   }
 
   // 点击“上传并索引”后，读取文件文本并调用后端 /index_document。
   async function handleUploadDocument() {
+    if (readingFile.current || isUploading || indexState.uploadUncertain) return
     // 没有选中文件时，不允许上传。
     if (!selectedFile) {
       // 给出明确提示。
@@ -304,7 +222,8 @@ export const KnowledgeAdminPage = () => {
 
     try {
       // 进入上传中状态。
-      setIsUploading(true)
+      readingFile.current = true
+      setIsReadingFile(true)
       // 清空旧错误。
       setErrorMessage('')
       // 读取文件文本内容。当前后端接收 document_text，因此这里先支持 md、txt 等文本型文件。
@@ -313,7 +232,7 @@ export const KnowledgeAdminPage = () => {
       const documentText = await selectedFile.text()
 
       // 调用后端 /index_document，把文件内容写入企业知识库。
-      const response = await indexKnowledgeBaseDocument({
+      await indexController.upload({
         session_id: ADMIN_UPLOAD_SESSION_ID, // 兼容后端请求模型。
         document_text: documentText, // 文件正文。
         file_name: selectedFile.name, // 文件名。
@@ -324,17 +243,13 @@ export const KnowledgeAdminPage = () => {
         process_status: 'active', // 当前上传文档默认启用。
       })
 
-      // 保存上传结果，给管理员展示 chunk 数和最终分类。
-      setUploadResult(response)
-      // 上传成功后刷新右侧文档状态，让新文件立即出现在列表里。
-      // 等右侧知识库状态刷新完成后，再继续往下走。
-      await refreshSelectedKnowledgeBaseStatus()
     } catch (error) {
       // 展示上传失败原因。
-      setErrorMessage(formatApiError(error, '上传并索引文档失败，请核对文档后重试。'))
+      setErrorMessage(formatApiError(error, '读取文档失败，请重新选择文件。'))
     } finally {
       // 结束上传中状态。
-      setIsUploading(false)
+      readingFile.current = false
+      setIsReadingFile(false)
     }
   }
 
@@ -354,7 +269,7 @@ export const KnowledgeAdminPage = () => {
       </header>
 
       {/* 加载失败时展示错误信息。 */}
-      {errorMessage ? <div className="alert error" role="alert">{errorMessage}</div> : null}
+      {visibleError ? <div className="alert error" role="alert">{visibleError}</div> : null}
 
       {/* 两列布局：左侧上传入口，右侧当前配置。 */}
       <div className="workspace-grid">
@@ -401,20 +316,25 @@ export const KnowledgeAdminPage = () => {
             {/* 定义文件选择输入框。type="file" 表示这是上传文件用的输入框。 */}
             {/* 当前已经接入 /index_document，但后端接收 document_text，所以这里先支持文本型文件。 */}
             {/* 当前后端接收 document_text，所以前端先读取文本型文件内容，例如 .md、.txt、.csv、.json。 */}
-            <input type="file" accept=".md,.txt,.csv,.json" disabled={isLoading || isUploading} onChange={handleFileChange} />
+            <input type="file" accept=".md,.txt" disabled={isLoading || isUploading} onChange={handleFileChange} />
           </label>
 
           {/* 上传按钮：点击后读取文件文本，并提交给 /index_document。 */}
           {/* type="button" 表示普通按钮，不触发表单默认提交。 */}
-          <button className="primary-button" type="button" disabled={!selectedFile || !selectedKnowledgeBaseId || !selectedCategoryId || isUploading} onClick={handleUploadDocument}>
-            {isUploading ? '上传中...' : '上传并索引'}
+          <button className="primary-button" type="button" disabled={!selectedFile || !selectedKnowledgeBaseId || !selectedCategoryId || isUploading || indexState.uploadUncertain} onClick={handleUploadDocument}>
+            {isUploading ? '正在保存并处理…' : indexState.uploadUncertain ? '请先刷新核对上传结果' : '上传并索引'}
           </button>
 
           {/* 上传成功后展示后端返回的索引结果。 */}
           {uploadResult ? (
             <div className="upload-result-card">
               {/* 上传结果标题。 */}
-              <strong>索引完成</strong>
+              <strong>文本已保存</strong>
+              <DocumentIndexStatus index={uploadResult.vector_index} operationId={uploadResult.operation_id}
+                uncertain={!uploadResult.state_confirmed || indexState.uncertain.includes(uploadResult.operation_id || '')}
+                busy={indexState.busy.includes(uploadResult.operation_id || '')}
+                onQuery={() => { if (uploadResult.operation_id) void indexController.query(uploadResult.operation_id) }}
+                onExecute={action => { if (uploadResult.operation_id) void indexController.execute(uploadResult.operation_id, action) }} />
               {/* 文件名。 */}
               <span>文件：{uploadResult.file_name ?? selectedFile?.name ?? '未命名文档'}</span>
               {/* chunk 数。 */}
@@ -469,20 +389,28 @@ export const KnowledgeAdminPage = () => {
           {/* 当前知识库中的文档列表。 */}
           <div className="file-list">
             {/* 遍历后端返回的 documents。 */}
-            {(ragStatus?.documents ?? []).map((document) => (
-              // 单个文档状态行。
-              <div className="file-row" key={`${document.document_id}-${document.file_name}`}>
-                <FileText aria-hidden="true" size={16} />
-                <span>{document.file_name ?? '未命名文档'}</span>
-                <small>{document.knowledge_base_type ?? 'general'}</small>
+            {(ragStatus?.documents ?? []).map(document => {
+              const operationId = document.vector_index?.operation_id
+                || indexState.uncertainDocuments[document.document_id ?? 0]
+              return <div className="knowledge-document" key={document.document_id ?? document.file_name}>
+                <div className="knowledge-document-title">
+                  <FileText aria-hidden="true" size={17} />
+                  <strong title={document.file_name ?? '未命名文档'}>{document.file_name ?? '未命名文档'}</strong>
+                  <small>{document.knowledge_base_type ?? 'general'} · {document.chunk_count ?? 0} 个片段</small>
+                </div>
+                <DocumentIndexStatus index={document.vector_index} operationId={operationId}
+                  uncertain={Boolean(operationId && indexState.uncertain.includes(operationId))}
+                  busy={Boolean(operationId && indexState.busy.includes(operationId))}
+                  onQuery={operationId ? () => { void indexController.query(operationId) } : undefined}
+                  onExecute={operationId ? action => { void indexController.execute(operationId, action) } : undefined} />
               </div>
-            ))}
+            })}
 
             {/* 没有文档时展示空状态。 */}
-            {/* 如果当前知识库没有文档，就显示一句“当前知识库还没有已索引文档。”；如果有文档，就什么都不显示。 */}
+            {/* 如果当前知识库没有文档，就显示一句“当前知识库还没有文档。”；如果有文档，就什么都不显示。 */}
             {/* ragStatus?.documents?.length: 安全地读取 ragStatus 里面 documents 数组的长度。
             !ragStatus?.documents?.length: 如果文档数量不存在，或者文档数量是 0，就认为没有文档。*/}
-            {!ragStatus?.documents?.length ? <p className="muted-text">当前知识库还没有已索引文档。</p> : null}
+            {!ragStatus?.documents?.length ? <p className="muted-text">当前知识库还没有文档。</p> : null}
           </div>
 
           {/* 知识库配置列表。 */}

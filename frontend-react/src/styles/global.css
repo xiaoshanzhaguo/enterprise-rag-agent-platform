@@ -339,6 +339,22 @@ a {
 }
 
 /* 单个文件行，左侧图标，中间文件名，右侧分类。 */
+.knowledge-document { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.knowledge-document-title { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.knowledge-document-title > svg { flex-shrink: 0; color: var(--muted); }
+.knowledge-document-title strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-md); }
+.knowledge-document-title small { color: var(--muted); font-size: var(--text-xs); }
+.index-status-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.index-status-actions { display: flex; align-items: center; gap: 6px; }
+.index-status-actions .ghost-button { padding: 5px 9px; min-height: 30px; font-size: var(--text-xs); }
+.index-status-actions .index-action { color: var(--accent); border-color: var(--accent-border); }
+.index-status-detail { margin: 7px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.index-status .index-status-neutral { color: var(--muted); background: var(--surface-muted); border-color: var(--line); }
+.index-status .status-simulated { color: #2a654a; }
+.index-status .status-failed { color: #a44b3e; }
+.index-status .status-running { color: #39678d; }
+.index-status .status-timeout { color: #946529; }
+
 .file-row {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) auto;

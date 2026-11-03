@@ -20,6 +20,7 @@ Schema 数据模型模块。
 
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, TypeAlias, List, Dict, Any
+from backend.schema.rag_index_schema import VectorIndexStatus
 
 # 消息角色类型：限定只能是 system / user / assistant
 MessageRole: TypeAlias = Literal["system", "user", "assistant"]
@@ -86,7 +87,7 @@ class IndexDocumentRequest(BaseModel):
 
     用于接收前端上传并提取后的完整文本，交给后端切块并追加到当前会话索引。
     """
-    session_id: str  # 当前会话 ID
+    session_id: str = Field(min_length=1, pattern=r"\S")  # 当前会话 ID
     document_text: str  # 完整文档文本
     file_name: Optional[str] = None  # 文件名，可选
     knowledge_base_id: Optional[str] = None  # 文档要写入的企业知识库 ID；不传时使用默认企业知识库
@@ -109,6 +110,14 @@ class IndexDocumentResponse(BaseModel):
     department: Optional[str] = None  # 本次索引文档所属部门
     process_type: Optional[str] = None  # 本次索引文档流程类型
     process_status: str = "active"  # 本次索引文档流程状态
+    document_id: int
+    operation_id: str | None = None
+    text_status: str = "persisted"
+    state_confirmed: bool = True
+    document_reused: bool = False
+    effective_retrieval_mode: str
+    vector_index: VectorIndexStatus | None = None
+    status_url: str | None = None
 
 
 class KnowledgeBaseCategory(BaseModel):
@@ -210,6 +219,7 @@ class RagStatusResponse(BaseModel):
     chunk_count: int = 0  # 当前会话全部文档的文本块总数量
     documents: List[Dict[str, Any]] = Field(default_factory=list)  # 当前会话每份文档的状态明细
     expires_in_seconds: int = 0  # 数据库持久化后默认不过期，保留该字段兼容前端展示
+    vector_index_summary: Dict[str, int] = Field(default_factory=dict)
 
 
 class ChatHistoryRequest(BaseModel):

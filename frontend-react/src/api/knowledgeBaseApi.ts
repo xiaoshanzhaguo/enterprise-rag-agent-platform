@@ -17,6 +17,8 @@ import type {
   KnowledgeBaseCategoryListResponse,
   KnowledgeBaseListResponse,
   RagStatusResponse,
+  IndexOperationResponse,
+  IndexOperationScope,
 } from '../types/knowledgeBase'
 
 // 获取企业知识库列表，用于渲染“知识库范围”下拉框。
@@ -32,15 +34,15 @@ export function fetchKnowledgeBaseCategories() {
 }
 
 // 上传并索引企业知识库文档。
-export function indexKnowledgeBaseDocument(request: IndexDocumentRequest) {
+export function indexKnowledgeBaseDocument(request: IndexDocumentRequest, signal?: AbortSignal) {
   // 后端 /index_document 接收 JSON，不是 multipart；前端需要先把文件读成 document_text。
   // <IndexDocumentRequest, IndexDocumentResponse> 不是普通参数，而是 TypeScript 泛型参数，它们只是 TypeScript 编译阶段用来检查类型的，不会作为真实代码传到浏览器运行时。
   // 它的意思是：告诉 apiPost 这次请求体的类型是 IndexDocuemntRequest, 这次后端响应的类型是 IndexDocumentResponse。
-  return apiPost<IndexDocumentRequest, IndexDocumentResponse>('/index_document', request)
+  return apiPost<IndexDocumentRequest, IndexDocumentResponse>('/index_document', request, indexSignal(signal))
 }
 
 // 获取某个 session 或企业知识库下的 RAG 文档状态。
-export function fetchRagStatus(sessionId: string, knowledgeBaseId?: string) {
+export function fetchRagStatus(sessionId: string, knowledgeBaseId?: string, signal?: AbortSignal) {
   // URLSearchParams 用来安全拼接 query string，避免手动字符串拼接出错。
   const params = new URLSearchParams()
 
@@ -55,8 +57,37 @@ export function fetchRagStatus(sessionId: string, knowledgeBaseId?: string) {
   const queryString = params.toString()
 
   // 如果有 query 参数就拼到路径后面，没有就只访问基础路径。
-  const path = `/rag_status/${sessionId}${queryString ? `?${queryString}` : ''}`
+  const path = `/rag_status/${encodeURIComponent(sessionId)}${queryString ? `?${queryString}` : ''}`
 
   // 返回类型是 RagStatusResponse，页面可以直接读取 document_count、chunk_count 等字段。
-  return apiGet<RagStatusResponse>(path)
+  return apiGet<RagStatusResponse>(path, signal)
+}
+
+// 同步索引预算为 120 秒；HTTP 等待结束只表示结果未知，不自动重发 POST。
+function indexSignal(signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(135_000)
+  return signal ? AbortSignal.any([signal, timeout]) : timeout
+}
+
+function operationPath(operationId: string, scope: IndexOperationScope, action = '') {
+  const query = new URLSearchParams({ session_id: scope.session_id })
+  if (scope.knowledge_base_id) query.set('knowledge_base_id', scope.knowledge_base_id)
+  if (scope.user_role) query.set('user_role', scope.user_role)
+  return `/rag_index_operations/${encodeURIComponent(operationId)}${action}?${query}`
+}
+
+export function fetchIndexOperation(operationId: string, scope: IndexOperationScope, signal?: AbortSignal) {
+  return apiGet<IndexOperationResponse>(operationPath(operationId, scope), signal)
+}
+
+export function resumeIndexOperation(operationId: string, version: number, scope: IndexOperationScope, signal?: AbortSignal) {
+  return apiPost<{ expected_state_version: number }, IndexOperationResponse>(
+    operationPath(operationId, scope, '/resume'), { expected_state_version: version }, indexSignal(signal),
+  )
+}
+
+export function retryIndexOperation(operationId: string, version: number, scope: IndexOperationScope, signal?: AbortSignal) {
+  return apiPost<{ expected_state_version: number }, IndexOperationResponse>(
+    operationPath(operationId, scope, '/retry'), { expected_state_version: version }, indexSignal(signal),
+  )
 }

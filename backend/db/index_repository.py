@@ -141,6 +141,10 @@ def _get_operation(connection: sqlite3.Connection, operation_id: str) -> dict[st
     ).fetchone()
     if row is None:
         return None
+    return _decode_operation(row)
+
+
+def _decode_operation(row: sqlite3.Row) -> dict[str, Any]:
     result = dict(row)
     result["input_manifest"] = json.loads(result.pop("input_manifest_json"))
     profile = result.pop("target_profile_json")
@@ -266,6 +270,26 @@ def get_index_operation(operation_id: str) -> dict[str, Any] | None:
         return _get_operation(connection, operation_id)
 
 
+def get_document_index_operations(document_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """状态列表按已授权的文档 ID 批量读取任务，不连接 Chunk 或启动执行。"""
+    if not document_ids:
+        return {}
+    if any(type(document_id) is not int or document_id <= 0 for document_id in document_ids):
+        raise ValueError("文档 ID 必须是正整数。")
+    operations = {}
+    with closing(get_connection()) as connection:
+        connection.execute("BEGIN")
+        for start in range(0, len(document_ids), 500):
+            batch = document_ids[start:start + 500]
+            rows = connection.execute(
+                "SELECT t.*, d.file_name, d.knowledge_base_id, d.session_id AS storage_session_id "
+                "FROM rag_index_tasks t JOIN documents d ON d.id = t.document_id "
+                "WHERE t.document_id IN (" + ",".join("?" for _ in batch) + ")", batch,
+            ).fetchall()
+            operations.update({row["document_id"]: _decode_operation(row) for row in rows})
+    return operations
+
+
 def _validate_version(version: int) -> None:
     if type(version) is not int or version <= 0:
         raise ValueError("状态版本必须是正整数。")
@@ -332,6 +356,42 @@ def bind_index_profile(
         )
         if cursor.rowcount != 1:
             raise IndexOperationConflict("索引参数绑定未生效。")
+        return _require_operation(connection, operation_id)
+
+
+def recover_index_operation(
+    operation_id: str, expected_state_version: int, *, execution_stopped_confirmed: bool = False,
+) -> dict[str, Any]:
+    """停写确认后的人工恢复：仅将指定版本的 claimed pending 转为 failed/interrupted。
+
+    确认必须来自操作人员；它不是外部写入 fencing 或自动进程探测。
+    不重试、不接管、不更改输入和 attempt_count；随后须显式 retry/claim。
+    """
+    if execution_stopped_confirmed is not True:
+        raise ValueError("必须明确确认原执行进程及其他可能继续写入的实例已经停止。")
+    if not isinstance(operation_id, str):
+        raise ValueError("操作 ID 必须是 UUID 字符串。")
+    try:
+        operation_id = str(UUID(operation_id))
+    except ValueError as exc:
+        raise ValueError("操作 ID 必须是 UUID 字符串。") from exc
+    _validate_version(expected_state_version)
+    with closing(get_connection()) as connection, connection:
+        connection.execute("BEGIN IMMEDIATE")
+        operation = _require_operation(connection, operation_id)
+        if (operation["status"] != "pending" or not operation["attempt_token"]
+                or operation["state_version"] != expected_state_version):
+            raise IndexOperationConflict("仅允许恢复匹配版本且已领取的 pending 任务。")
+        cursor = connection.execute(
+            """UPDATE rag_index_tasks SET status = 'failed', error_code = 'interrupted', error_message = ?,
+               attempt_token = NULL, owner_instance_id = NULL, claimed_at = NULL,
+               state_version = state_version + 1, updated_at = ?
+               WHERE operation_id = ? AND status = 'pending' AND attempt_token = ? AND state_version = ?""",
+            (_ERROR_MESSAGES["interrupted"], _now(), operation_id,
+             operation["attempt_token"], expected_state_version),
+        )
+        if cursor.rowcount != 1:
+            raise IndexOperationConflict("人工恢复未生效，请重新检查任务状态。")
         return _require_operation(connection, operation_id)
 
 

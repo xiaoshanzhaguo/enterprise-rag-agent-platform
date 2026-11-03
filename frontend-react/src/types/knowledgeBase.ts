@@ -59,6 +59,14 @@ export interface IndexDocumentResponse {
   department?: string | null // 后端最终保存的部门字段。
   process_type?: string | null // 后端最终保存的流程类型。
   process_status: string // 后端最终保存的流程状态。
+  document_id: number
+  operation_id: string | null
+  text_status: 'persisted'
+  state_confirmed: boolean
+  document_reused: boolean
+  effective_retrieval_mode: 'keyword' | 'vector'
+  vector_index: VectorIndexStatus | null
+  status_url: string | null
 }
 
 // RAG 状态里单个文档的摘要信息。
@@ -72,6 +80,9 @@ export interface RagStatusDocument {
   department?: string | null // 文档所属部门，例如 财务部、IT 部。
   process_type?: string | null // 流程类型，例如 reimbursement、permission_apply。
   process_status?: string | null // 流程状态，例如 active、draft。
+  text_status?: 'persisted'
+  tracking_source?: 'managed' | 'legacy'
+  vector_index?: VectorIndexStatus | null
 }
 
 // /rag_status/{session_id} 接口返回的数据结构。
@@ -84,4 +95,44 @@ export interface RagStatusResponse {
   chunk_count: number // 当前范围内的 chunk 总数。
   documents: RagStatusDocument[] // 文档状态明细，右侧“当前检索上下文”会读取它。
   expires_in_seconds: number // 兼容旧前端字段；SQLite 持久化后一般不会真正过期。
+  vector_index_summary?: Partial<Record<VectorIndexStatus['status'], number>>
+}
+
+export interface VectorIndexStatus {
+  operation_id: string | null
+  status: 'not_requested' | 'pending' | 'ready' | 'failed' | 'unknown'
+  state_version: number | null
+  attempt_count: number
+  retry_count: number
+  execution_claimed: boolean
+  current_config_compatible: boolean
+  runtime_validation_required: boolean
+  resumable: boolean
+  retryable: boolean
+  error_code: string | null
+  error_message: string | null
+  updated_at: string | null
+  status_url: string | null
+  resume_url: string | null
+  retry_url: string | null
+}
+
+export interface IndexOperationResponse {
+  operation_id: string
+  document_id: number
+  file_name: string | null
+  knowledge_base_id: string | null
+  text_status: 'persisted'
+  state_confirmed: boolean
+  vector_index: VectorIndexStatus | null
+  status_url: string
+  reason: string | null
+  resume_applied: boolean
+  retry_applied: boolean
+}
+
+export interface IndexOperationScope {
+  session_id: string
+  knowledge_base_id?: string
+  user_role?: string
 }

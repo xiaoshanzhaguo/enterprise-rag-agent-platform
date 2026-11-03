@@ -46,22 +46,17 @@ RAG 相关：
 - RAG 检索记录持久化存储于 SQLite，检索预览会返回引用来源和命中原文片段
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from backend.api.rag_index import ERROR_RESPONSES, get_index_management_service, index_http_response
+from backend.services.rag_documents import IndexManagementService, infer_document_business_fields
 from backend.llm.client import get_client
-from backend.rag.chunker import split_text_into_chunks
-from backend.rag.store import save_document_chunks
 from backend.rag.store import clear_document_chunks
-from backend.rag.store import get_document_status
 from backend.rag.categories import (
-    DEFAULT_KNOWLEDGE_BASE_TYPE,
-    get_department_for_knowledge_base_type,
     list_knowledge_base_categories,
     normalize_knowledge_base_type,
 )
 from backend.rag.knowledge_bases import (
-    SESSION_SCOPED_KNOWLEDGE_BASE_ID,
-    can_manage_knowledge_base,
     normalize_knowledge_base_id,
 )
 from backend.rag.service import build_rag_preview, resolve_retrieval_mode
@@ -95,73 +90,6 @@ from backend.services.agent_service import run_agent_stream
 router = APIRouter()
 
 
-def infer_document_business_fields(file_name: str | None, document_text: str) -> dict[str, str | None]:
-    """
-    根据文件名和文档内容推断企业知识库业务标签。
-
-    为什么要做自动推断：
-    1. 当前前端上传入口还没有部门、流程类型下拉框。
-    2. 目前需要先把“知识库类型、部门、流程类型、流程状态”字段落到接口和数据库。
-    3. 自动推断可以让旧前端请求不改 UI 也能写入基本业务标签，后续再做筛选或下拉选择会更平滑。
-
-    :param file_name: 上传文件名
-    :param document_text: 文档正文
-    :return: 包含 knowledge_base_type、department、process_type、process_status 的字典
-    """
-    # 统一转小写，方便同时匹配英文文件名和中文正文关键词
-    searchable_text = f"{file_name or ''}\n{document_text[:500]}".lower()
-
-    # 先按部门/知识库类型做粗分类
-    if any(keyword in searchable_text for keyword in ["hr", "请假", "考勤", "入职", "试用期"]):
-        knowledge_base_type = "hr"
-        department = "HR"
-    elif any(keyword in searchable_text for keyword in ["finance", "财务", "报销", "差旅", "付款", "发票"]):
-        knowledge_base_type = "finance"
-        department = "财务"
-    elif any(keyword in searchable_text for keyword in ["it", "vpn", "gitlab", "设备", "数据安全"]):
-        knowledge_base_type = "it"
-        department = "IT"
-    elif any(keyword in searchable_text for keyword in ["product", "产品", "发布", "客户反馈", "faq"]):
-        knowledge_base_type = "product"
-        department = "产品"
-    else:
-        knowledge_base_type = "general"
-        department = None
-
-    # 再按具体流程关键词细分，便于后续按流程类型筛选或路由
-    process_type = None
-    if any(keyword in searchable_text for keyword in ["请假", "休假", "leave"]):
-        process_type = "leave"
-    elif any(keyword in searchable_text for keyword in ["考勤", "远程办公", "attendance"]):
-        process_type = "attendance"
-    elif any(keyword in searchable_text for keyword in ["入职", "onboarding"]):
-        process_type = "onboarding"
-    elif any(keyword in searchable_text for keyword in ["报销", "reimbursement"]):
-        process_type = "reimbursement"
-    elif any(keyword in searchable_text for keyword in ["差旅", "travel"]):
-        process_type = "travel"
-    elif any(keyword in searchable_text for keyword in ["付款", "供应商", "payment"]):
-        process_type = "payment"
-    elif "vpn" in searchable_text:
-        process_type = "vpn"
-    elif "gitlab" in searchable_text:
-        process_type = "gitlab_access"
-    elif any(keyword in searchable_text for keyword in ["设备", "数据安全", "security"]):
-        process_type = "device_security"
-    elif any(keyword in searchable_text for keyword in ["产品 faq", "faq"]):
-        process_type = "product_faq"
-    elif any(keyword in searchable_text for keyword in ["发布", "release"]):
-        process_type = "release"
-    elif any(keyword in searchable_text for keyword in ["客户反馈", "feedback"]):
-        process_type = "customer_feedback"
-
-    # 样例文档默认都是已生效制度/流程；以后草稿文档可由前端显式传 draft
-    return {
-        "knowledge_base_type": knowledge_base_type,
-        "department": department,
-        "process_type": process_type,
-        "process_status": "active",
-    }
 
 
 @router.post("/chat_history")
@@ -322,92 +250,9 @@ def knowledge_bases():
     }
 
 
-@router.post("/index_document", response_model=IndexDocumentResponse)
-def index_document(request: IndexDocumentRequest):
-    """
-    文档索引接口。
-
-    作用：
-    1. 接收前端上传并提取后的完整文本
-    2. 做文本切块
-    3. 追加存入选中的企业知识库，而不是只挂在当前聊天 session 下
-    """
-    # 当前项目还没有正式登录/RBAC，这里先用前端传入的 user_role 做演示级边界。
-    # 只有显式写入企业知识库时才校验管理员；旧的 session 临时文档入口保持兼容。
-    if request.knowledge_base_id and not can_manage_knowledge_base(request.user_role):
-        raise HTTPException(status_code=403, detail="当前角色没有知识库上传权限，请切换为知识库管理员。")
-
-    # 传了 knowledge_base_id 表示写企业公共知识库；没传则保持旧的 session 文档上传行为。
-    knowledge_base_id = normalize_knowledge_base_id(request.knowledge_base_id) if request.knowledge_base_id else None
-
-    cleaned_text = request.document_text.strip()  # 去掉首尾空白，避免无效输入
-    # 如果清理后发现文档内容是空的，就抛出一个 400 错误。阻止无效文档进入 RAG 索引流程。
-    if not cleaned_text:
-        raise HTTPException(status_code=400, detail="文档内容不能为空。")
-
-    chunks = split_text_into_chunks(cleaned_text) # 将完整文档切分成多个文本块
-    # 如果切块结果为空，也认为请求无效，直接报错。防止后面把空索引存进去。
-    if not chunks:
-        raise HTTPException(status_code=400, detail="文档切块后为空，请检查输入内容。")
-
-    # 如果前端没有显式传业务标签，就根据文件名和正文做一次轻量推断
-    inferred_fields = infer_document_business_fields(
-        file_name=request.file_name,
-        document_text=cleaned_text,
-    )
-    # 先校验前端显式传入的分类。传入未知值时直接返回 400，
-    # 这样比静默写入错误分类更容易排查“为什么按分类检索不到”的问题。
-    try:
-        requested_knowledge_base_type = normalize_knowledge_base_type(
-            request.knowledge_base_type,
-            allow_none=True,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    # 显式传入的分类优先级最高；没有传时使用轻量推断；仍为空则归到 general。
-    try:
-        knowledge_base_type = normalize_knowledge_base_type(
-            requested_knowledge_base_type
-            or inferred_fields["knowledge_base_type"]
-            or DEFAULT_KNOWLEDGE_BASE_TYPE
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    # department 只是展示字段。优先使用前端传入值；没有传时根据分类补齐；
-    # 如果分类是 general，再使用旧的自动推断值兜底。
-    department = (
-        request.department
-        or get_department_for_knowledge_base_type(knowledge_base_type)
-        or inferred_fields["department"]
-    )
-    process_type = request.process_type or inferred_fields["process_type"]
-    process_status = request.process_status or inferred_fields["process_status"] or "active"
-
-    # 把切好的块追加保存到当前会话对应的数据库 RAG store。这样后面同一会话里就能基于多份文档做检索。
-    save_document_chunks(
-        session_id=request.session_id,
-        file_name=request.file_name,
-        chunks=chunks,
-        knowledge_base_id=knowledge_base_id,
-        knowledge_base_type=knowledge_base_type,
-        department=department,
-        process_type=process_type,
-        process_status=process_status,
-    )
-
-    # 返回索引结果，方便前端展示切块数量
-    return IndexDocumentResponse(
-        session_id=request.session_id,
-        knowledge_base_id=knowledge_base_id or SESSION_SCOPED_KNOWLEDGE_BASE_ID,
-        file_name=request.file_name,
-        chunk_count=len(chunks),
-        knowledge_base_type=knowledge_base_type,
-        department=department,
-        process_type=process_type,
-        process_status=process_status,
-    )
+@router.post("/index_document", response_model=IndexDocumentResponse, responses={**ERROR_RESPONSES, 202: {"model": IndexDocumentResponse}})
+def index_document(request: IndexDocumentRequest, service: IndexManagementService = Depends(get_index_management_service)):
+    return index_http_response(lambda: service.upload(request), IndexDocumentResponse)
 
 
 @router.post("/rag_preview", response_model=RagPreviewResponse)
@@ -447,20 +292,12 @@ def rag_preview(request: RagPreviewRequest):
     )
 
 
-@router.get("/rag_status/{session_id}", response_model=RagStatusResponse)
-def rag_status(session_id: str, knowledge_base_id: str | None = Query(default=None)):
-    """
-    返回 RAG 文档状态。
-
-    如果传入 knowledge_base_id，则返回企业公共知识库状态；
-    如果不传，则兼容旧逻辑，返回当前 session 的临时文档状态。
-    """
-    # 查询当前知识库或当前会话的文档状态，并转换为响应模型
-    # **data: 把 data 字典里的 key 当成参数名; 把 data 字典里的 value 当成参数值。即："name": "Vera" → name="Vera"；"age": 25 → age=25
-    return RagStatusResponse(**get_document_status(
-        session_id,
-        knowledge_base_id=normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None,
-    ))
+@router.get("/rag_status/{session_id}", response_model=RagStatusResponse, responses=ERROR_RESPONSES)
+def rag_status(session_id: str, knowledge_base_id: str | None = Query(default=None),
+               service: IndexManagementService = Depends(get_index_management_service)):
+    return index_http_response(lambda: service.document_status(session_id,
+        knowledge_base_id=normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None),
+        RagStatusResponse, query=True)
 
 
 @router.delete("/clear_document/{session_id}")
