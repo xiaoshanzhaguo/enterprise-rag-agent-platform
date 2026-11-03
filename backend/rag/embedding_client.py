@@ -19,7 +19,7 @@ from __future__ import annotations
 
 # 导入缓存装饰器，避免每次生成 embedding 都重复加载本地模型
 from functools import lru_cache
-from typing import Any
+from typing import Any, Callable
 
 # 导入 OpenAI 兼容客户端，用于云端 embedding 独立配置场景
 from openai import OpenAI
@@ -37,7 +37,7 @@ REMOTE_EMBEDDING_BATCH_SIZE = 10
 
 
 @lru_cache(maxsize=1)
-def get_local_embedding_model() -> Any:
+def get_local_embedding_model(model_name: str | None = None, *, local_files_only: bool = False) -> Any:
     """
     加载并缓存本地 embedding 模型。
 
@@ -58,7 +58,7 @@ def get_local_embedding_model() -> Any:
         ) from exc
 
     # 加载本地 embedding 模型；首次运行会从模型仓库下载，之后会复用本地缓存
-    return SentenceTransformer(settings.embedding_model)
+    return SentenceTransformer(model_name or settings.embedding_model, local_files_only=local_files_only)
 
 
 def get_remote_embedding_client():
@@ -110,7 +110,11 @@ def generate_embedding(text: str) -> list[float]:
     return embeddings[0] if embeddings else []
 
 
-def generate_embeddings(texts: list[str]) -> list[list[float]]:
+def generate_embeddings(
+    texts: list[str], *, local_files_only: bool = False,
+    before_batch: Callable[[], None] | None = None,
+    client_options: Callable[[], dict[str, Any]] | None = None,
+) -> list[list[float]]:
     """
     为多段文本批量生成 embedding。
 
@@ -131,17 +135,19 @@ def generate_embeddings(texts: list[str]) -> list[list[float]]:
 
     # 本地模式使用开源 embedding 模型，适合演示、离线运行和控制成本
     if settings.embedding_provider == "local":
-        return generate_local_embeddings(cleaned_texts)
+        if before_batch is not None:
+            before_batch()
+        return generate_local_embeddings(cleaned_texts, local_files_only=local_files_only)
 
     # 云端 OpenAI 兼容模式，适合后续接入 OpenAI、火山方舟、阿里云等服务
     if settings.embedding_provider == "openai":
-        return generate_remote_embeddings(cleaned_texts)
+        return generate_remote_embeddings(cleaned_texts, before_batch=before_batch, client_options=client_options)
 
     # 如果配置了未知 provider，则主动报错，避免静默走错模型
     raise ValueError(f"不支持的 EMBEDDING_PROVIDER：{settings.embedding_provider}")
 
 
-def generate_local_embeddings(texts: list[str]) -> list[list[float]]:
+def generate_local_embeddings(texts: list[str], *, local_files_only: bool = False) -> list[list[float]]:
     """
     使用本地开源模型生成 embedding。
 
@@ -154,7 +160,7 @@ def generate_local_embeddings(texts: list[str]) -> list[list[float]]:
     :return: embedding 向量列表
     """
     # 获取缓存后的本地 embedding 模型
-    model = get_local_embedding_model()
+    model = get_local_embedding_model(settings.embedding_model, local_files_only=local_files_only)
     # 批量生成归一化向量，减少后续相似度计算的尺度差异
     vectors = model.encode(
         texts,
@@ -167,7 +173,10 @@ def generate_local_embeddings(texts: list[str]) -> list[list[float]]:
     ]
 
 
-def generate_remote_embeddings(texts: list[str]) -> list[list[float]]:
+def generate_remote_embeddings(
+    texts: list[str], *, before_batch: Callable[[], None] | None = None,
+    client_options: Callable[[], dict[str, Any]] | None = None,
+) -> list[list[float]]:
     """
     使用 OpenAI 兼容云端接口生成 embedding。
 
@@ -188,15 +197,22 @@ def generate_remote_embeddings(texts: list[str]) -> list[list[float]]:
 
     # 按固定大小拆分文本，避免一次请求超过云端服务限制
     for start_index in range(0, len(texts), REMOTE_EMBEDDING_BATCH_SIZE):
+        if before_batch is not None:
+            before_batch()
         # 取出当前批次文本
         batch_texts = texts[start_index:start_index + REMOTE_EMBEDDING_BATCH_SIZE]
         # 调用 OpenAI 兼容 embedding 接口
-        response = client.embeddings.create(
+        batch_client = client.with_options(**client_options()) if client_options is not None else client
+        response = batch_client.embeddings.create(
             model=settings.embedding_model,
             input=batch_texts
         )
-        # 按返回顺序追加当前批次 embedding
-        embeddings.extend(item.embedding for item in response.data)
+        # 响应可能乱序；index 是当前批次内的位置，不允许漏项、重复或越界。
+        indexes = [item.index for item in response.data]
+        if (len(indexes) != len(batch_texts) or any(type(index) is not int for index in indexes)
+                or set(indexes) != set(range(len(batch_texts)))):
+            raise ValueError("Embedding 响应位置与输入批次不匹配。")
+        embeddings.extend(item.embedding for item in sorted(response.data, key=lambda item: item.index))
 
     # 返回合并后的 embedding 列表
     return embeddings

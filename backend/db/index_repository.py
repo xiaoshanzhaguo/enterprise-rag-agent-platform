@@ -8,7 +8,7 @@ import json
 import re
 import sqlite3
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from backend.db.connection import get_connection
 from backend.db.repository import (
@@ -288,6 +288,50 @@ def claim_index_operation(
         )
         if cursor.rowcount != 1:
             raise IndexOperationConflict("任务不存在、版本已变更或已被领取。")
+        return _require_operation(connection, operation_id)
+
+
+def bind_index_profile(
+    operation_id: str, attempt_token: str, expected_state_version: int,
+    bindings: dict[str, Any],
+) -> dict[str, Any]:
+    """当前 attempt 仅能首次绑定维度/度量；同版本同值幂等，旧版本始终拒绝。"""
+    if not isinstance(operation_id, str):
+        raise ValueError("操作 ID 必须是 UUID 字符串。")
+    try:
+        operation_id = str(UUID(operation_id))
+    except ValueError as exc:
+        raise ValueError("操作 ID 必须是 UUID 字符串。") from exc
+    _validate_version(expected_state_version)
+    if not isinstance(attempt_token, str) or not attempt_token.strip():
+        raise ValueError("需要当前执行 token。")
+    if (not isinstance(bindings, dict) or not bindings
+            or not set(bindings) <= {"embedding_dimension", "distance_metric"}
+            or any(value is None for value in bindings.values())):
+        raise ValueError("只允许绑定非空的向量维度或距离度量。")
+
+    with closing(get_connection()) as connection, connection:
+        connection.execute("BEGIN IMMEDIATE")
+        operation = _require_operation(connection, operation_id)
+        if (operation["status"] != "pending" or operation["attempt_token"] != attempt_token
+                or operation["state_version"] != expected_state_version):
+            raise IndexOperationConflict("任务状态、执行 token 或版本已变更。")
+        _verify_input(connection, operation)
+        stored = _validate_profile(operation["target_profile"])
+        profile = _validate_profile(dict(stored, **bindings))
+        if any(stored[key] is not None and stored[key] != value for key, value in bindings.items()):
+            raise IndexOperationConflict("已绑定的索引参数不能被覆盖。")
+        if profile == stored:
+            return operation
+        cursor = connection.execute(
+            """UPDATE rag_index_tasks SET target_profile_json = ?, target_sha256 = ?,
+               state_version = state_version + 1, updated_at = ?
+               WHERE operation_id = ? AND status = 'pending' AND attempt_token = ? AND state_version = ?""",
+            (_json(profile), _digest({"input_sha256": operation["input_sha256"], "profile": profile}),
+             _now(), operation_id, attempt_token, expected_state_version),
+        )
+        if cursor.rowcount != 1:
+            raise IndexOperationConflict("索引参数绑定未生效。")
         return _require_operation(connection, operation_id)
 
 

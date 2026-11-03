@@ -57,7 +57,7 @@ def resolve_vector_store_dir() -> Path:
     return store_dir.resolve()
 
 
-def get_chroma_collection():
+def get_chroma_collection(*, create_if_missing: bool = True):
     """
     获取 ChromaDB collection。
 
@@ -78,8 +78,10 @@ def get_chroma_collection():
     store_dir = resolve_vector_store_dir()
     # 创建 ChromaDB 持久化客户端
     client = chromadb.PersistentClient(path=str(store_dir))
-    # 获取或创建 collection
-    return client.get_or_create_collection(name=COLLECTION_NAME)
+    # 既有调用保持原行为；受管索引可以只获取，绝不自动重建或改配置。
+    if create_if_missing:
+        return client.get_or_create_collection(name=COLLECTION_NAME)
+    return client.get_collection(name=COLLECTION_NAME, embedding_function=None)
 
 
 def build_vector_id(session_id: str, db_chunk_id: int | str) -> str:
@@ -148,6 +150,17 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
     if len(embeddings) != len(chunks):
         raise ValueError("生成 embedding 数量与 chunk 数量不一致。")
 
+    upsert_precomputed_document_chunks(session_id, chunks, embeddings)
+
+
+def upsert_precomputed_document_chunks(
+    session_id: str, chunks: list[dict[str, Any]], embeddings: list[list[float]], *, collection=None,
+) -> None:
+    """复用既有 ID 和 Metadata 映射，写入已生成向量，不再次调用 Embedding。"""
+    if not session_id or not chunks or len(embeddings) != len(chunks):
+        raise ValueError("向量写入范围或数量不合法。")
+    documents = [chunk.get("text", "") for chunk in chunks]
+
     # 构造 ChromaDB 记录 ID
     ids = [build_vector_id(session_id, chunk["db_chunk_id"]) for chunk in chunks]
 
@@ -169,7 +182,8 @@ def upsert_document_chunks(session_id: str, chunks: list[dict[str, Any]]) -> Non
     ]
 
     # 获取 Chroma collection
-    collection = get_chroma_collection()
+    if collection is None:
+        collection = get_chroma_collection()
 
     # 写入或更新向量记录
     collection.upsert(
