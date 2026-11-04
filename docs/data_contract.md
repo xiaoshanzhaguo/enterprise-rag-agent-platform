@@ -136,3 +136,30 @@ Profile 保存 provider、model、存储/端点指纹、Collection 名称、维�
 | 400 / 403 / 404 / 422 | 参数、角色、资源范围或 FastAPI 请求校验失败 |
 
 执行错误响应采用 `{ "detail": "说明", "receipt": ... }`；存储异常等无法获取回执时 `receipt` 为 null，FastAPI 自身 422 保留框架格式。`state_confirmed=false` 时 `vector_index` 为 null，前端仅查询；断网且未知 operation_id 时先刷新文档列表核对，禁止自动重新上传。React 展示规则见 [架构说明](architecture.md#r1-索引管理)。
+
+## 7. R2 单文档删除与生命周期
+
+实现提交 `30fb954`，普通会话范围保护提交 `508463a`。仅支持公共知识库中的单个 Document，不提供批量删除或撤销。
+
+`documents` 新增 `lifecycle_state`（active/deleting）及 `lifecycle_version`（初始 1，标记删除时递增）。它们控制可检索性和删除并发，不是内容版本号。`document_deletion_tasks` 保存唯一 `document_id`、UUID operation_id、知识库及 storage_session_id、文件名、Vector ID JSON、目标 Collection/存储指纹 JSON 和 SHA-256、状态、state_version、attempt_token、attempt_count、错误与时间戳。任务不设置 Document/Chunk 外键，因此最终级联删除不会丢失目标快照。
+
+| 删除任务状态 | 行为 |
+| --- | --- |
+| pending，未领取 | 可通过 retry 接口显式继续；不自动重新 DELETE |
+| pending，已领取 | 只查询；不能重复执行或按超时抢占 |
+| failed | 保留目标，Document 仍为 deleting；按版本显式 retry |
+| completed | Document/Chunk 已删除，任务仍可查询；重复删除返回原任务，不重复执行 |
+
+| 接口 | 请求与行为 |
+| --- | --- |
+| `DELETE /documents/{document_id}` | JSON `{ "expected_document_version": 1 }`；原子检查索引领取、创建/复用任务并同步尝试删除 |
+| `GET /document_deletions/{operation_id}` | 只读查询 |
+| `POST /document_deletions/{operation_id}/retry` | JSON `{ "expected_state_version": 3 }`；显式重试 failed 或继续未领取 pending |
+
+三个接口均需查询参数 `knowledge_base_id` 和有管理权限的 `user_role`（kb_admin/admin），后端校验角色及资源范围。版本字段为严格正整数，禁止额外请求字段。仍沿用项目的演示角色机制，不代表正式身份认证。
+
+删除 API 回执包括 operation/document/knowledge_base ID、文件名、status/state_version、attempt_count、execution_claimed、state_confirmed、retryable、受控 error_message、时间及 status_url；不暴露 token 或完整目标。回执与 Location 中的查询地址携带编码后的知识库及调用者角色，可直接跟随；列表投影不代填管理员身份，React 查询时使用当前页面的角色范围。
+
+200 表示查询或完成，202 表示 pending；403/404 分别为权限或范围失败，409 为索引正在执行、版本或状态冲突；502 为已确认执行失败，503 为存储不可用或结果未确认。执行已取得回执时，错误 HTTP 可直接返回删除回执对象；参数/范围等错误使用 `{ "detail": "说明" }`，不能套用 R1 的嵌套 receipt 格式。状态未确认时先查询，不能据超时推断没有删除。
+
+`GET /rag_status/{session_id}` 的每项 Document 还返回生命周期与可用的 deletion 回执；deleting 项仍保留在管理列表供查询/恢复，但不参与正常检索。完成后文档从列表移除。索引已领取时 DELETE 返回 409，未领取索引由生命周期及 CAS 阻断。人工恢复命令见 [部署说明](deployment.md#r2-删除任务与人工恢复)。

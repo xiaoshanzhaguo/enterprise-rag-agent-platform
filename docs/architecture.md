@@ -61,6 +61,30 @@ React 用 `KnowledgeIndexController` 管理只读轮询、版本合并、取消�
 
 R1 不涵盖删除一致性、文档版本及权限重构，也不自动补齐历史任务或重建 Collection。历史业务 Collection 虽只读确认维度 1024、度量 l2，但模型来源不明，不能据此确认与新模型语义兼容。状态及接口见 [数据协议](data_contract.md#6-r1-索引任务与管理接口)，验收范围见 [记录](day27_delivery.md#r1-原生环境最终验收2026-11-03)。
 
+## R2 单文档删除
+
+沿用 API → Service → Repository / Adapter 分层：`backend/api/document_deletion.py` 负责 HTTP；`services/document_deletion.py` 校验权限、协调删除与确认；`db/deletion_repository.py` 管理 SQLite 事务、CAS 和独立任务；`rag/deletion_adapter.py` 只按稳定 ID 删除并读回核验，不调用 Embedding。
+
+Document 的 `lifecycle_state` 为 `active/deleting`，与业务 `process_status`、R1 索引状态分开。删除请求在同一短事务中检查索引是否已领取、标记 deleting、保存完整 Vector ID/目标存储快照并使旧索引版本失效。独立 `document_deletion_tasks` 无 Document 外键，删除文档和 Chunk 后仍保留目标及回执。
+
+```mermaid
+flowchart LR
+  Confirm[React 二次确认] --> Prepare[事务检查索引 / 标记 deleting / 保存快照]
+  Prepare --> Claim[CAS 领取删除任务]
+  Claim --> Delete[Chroma 精确删除 / 读回核验]
+  Delete --> Finish[事务删除 Document 与 Chunk / 任务 completed]
+  Delete -->|异常或部分成功| Failed[保留 failed 任务与目标 / 显式重试]
+  Failed --> Claim
+```
+
+已领取索引与删除互斥，返回 409；未领取的索引即使拿到新版本号，也因生命周期条件无法 claim/retry，删除中不能复用上传。SQLite 物理删除与任务 completed 同事务完成；Chroma 已删但 SQLite 失败时保留 deleting 和目标，重试可再次删除同一组 ID。SQLite 与 Chroma 没有跨库原子事务，采用可恢复的幂等流程；不会根据当前 keyword/vector 模式跳过历史向量清理。
+
+关键词读取排除 deleting；向量检索先用 SQLite 活动文档 ID 白名单过滤，再回查 Chunk、正文与元数据；构造 Agent 上下文前再次核对。不存在或删除中的文档不能作为新检索证据，检索日志插入跳过失效 Chunk，避免删除竞争引发外键异常。历史已保存回答不在本轮自动清除。
+
+React `DocumentDeletionControls` / `DocumentDeletionController` 提供确认弹窗、状态查询、失败重试和未领取 pending 的显式继续。claimed pending 只查询；删除通知通过 `KnowledgeIndexController.refreshAfterDocumentChange()` 使旧列表 GET 失效，再获取最新列表，避免删除成功后旧数据重新显示。
+
+旧会话清空能力保留，API 与共享清理入口均拒绝 `knowledge_base:` 内部 session，不提供公共知识库批量清空。claimed 删除任务因进程中断停留时，操作人员确认旧执行者已停止后才能用 CLI 转 failed，再显式 retry；无自动超时接管或普通用户 recover API。接口、运行与验收分别见 [协议](data_contract.md#7-r2-单文档删除与生命周期)、[恢复操作](deployment.md#r2-删除任务与人工恢复)、[交付记录](day27_delivery.md#r2-单文档删除验收2026-11-04)。
+
 ## 流程申请
 
 ```mermaid

@@ -1,6 +1,6 @@
 # 启动、部署与排错
 
-默认使用本机原生 React + FastAPI，不依赖 Docker。SQLite 与 ChromaDB 为本地文件存储；n8n、旧版 Streamlit、Dify 是可选独立入口，R1 索引管理不要求启动它们。以下命令都在仓库根目录执行，除非特别注明。
+默认使用本机原生 React + FastAPI，不依赖 Docker。SQLite 与 ChromaDB 为本地文件存储；n8n、旧版 Streamlit、Dify 是可选独立入口，R1 索引管理和 R2 文档删除不要求启动它们。以下命令都在仓库根目录执行，除非特别注明。
 
 ## 1. 准备配置
 
@@ -57,6 +57,23 @@ EMBEDDING_MODEL=qwen3.7-text-embedding-flash
 ```
 
 该命令只转为 failed/interrupted，不执行索引；随后在页面查询并显式 retry。禁止因请求超时就执行 recover，CLI 不检测进程，也不能阻止存活的旧进程写 Chroma。输入或模型配置冲突需先核对，不能绕过 Profile 校验覆盖任务。
+
+### R2 删除任务与人工恢复
+
+R2 复用上述原生启动方式。后端初始化通过现有轻量迁移增加 Document 生命周期字段及独立删除任务表；不回填历史删除任务，不重建业务 Collection，也不批量索引历史文档。本轮迁移仅在临时测试库验证，未主动执行真实业务数据库迁移。
+
+在知识库管理页点击单个文档的“删除文档”，二次确认后即退出正常检索。正在索引时禁止删除；删除失败仍保留任务和目标，可查询后显式重试。任务已领取时只查询，未领取 pending 可显式“继续删除”；完成后文档从列表移除且不可撤销。删除不调用 Embedding，不依赖当前 vector/keyword 模式；按快照中的存储身份及稳定 ID 清理，配置不匹配时失败保留任务，不改指向其他 Collection。
+
+进程中断后，若任务一直为 claimed pending，先通过 `GET /document_deletions/{operation_id}` 或管理页查询并取得 state_version。**确认原删除执行进程及所有可能继续执行该任务的实例已停止**，再由操作人员执行：
+
+```powershell
+# 替换任务 UUID 和最新版本号；本命令只释放执行权，不执行删除。
+.venv\Scripts\python.exe -m backend.cli.document_deletion_recovery "任务UUID" --expected-state-version 2 --confirm-execution-stopped
+```
+
+恢复将任务转为 failed，清除旧 token、递增版本，保留次数和完整目标；随后页面查询并显式“重试删除”。CLI 不检测或终止进程，没有自动过期接管，也没有普通用户 recover API。请求超时或浏览器断开不构成旧执行者已停止的证据。
+
+SQLite 与 Chroma 不具备跨库原子提交；向量已删但最终 SQLite 提交失败时，任务/目标保留，重试对相同 ID 再删除即可。结果未确认时先查询，避免自动重发；不要直接改 SQL 状态或删除任务行绕过恢复流程。接口字段见 [R2 协议](data_contract.md#7-r2-单文档删除与生命周期)。
 
 ## 3. Docker（可选历史部署方式）
 
