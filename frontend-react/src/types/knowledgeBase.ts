@@ -71,6 +71,9 @@ export interface IndexDocumentResponse {
 
 // RAG 状态里单个文档的摘要信息。
 export interface RagStatusDocument {
+  lifecycle_state?: 'active' | 'deleting'
+  lifecycle_version?: number
+  deletion?: DocumentDeletionResponse | null
   document_id?: number // SQLite documents 表里的文档 ID；有些旧数据可能没有，所以可选。
   file_name?: string | null // 文档文件名，用于在前端展示“当前知识库有哪些文件”。
   chunk_count?: number // 当前文档被切成了多少个 chunk，用来判断检索材料是否完整。
@@ -135,4 +138,23 @@ export interface IndexOperationScope {
   session_id: string
   knowledge_base_id?: string
   user_role?: string
+}
+
+export interface DocumentDeletionResponse {
+  operation_id: string
+  document_id: number
+  knowledge_base_id: string
+  file_name: string | null
+  status: 'pending' | 'failed' | 'completed'
+  state_version: number
+  attempt_count: number
+  execution_claimed: boolean
+  state_confirmed: boolean
+  retryable: boolean
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  completed_at: string | null
+  status_url: string
 }

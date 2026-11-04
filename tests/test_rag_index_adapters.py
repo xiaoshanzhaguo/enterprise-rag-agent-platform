@@ -71,7 +71,8 @@ class FakeCollection:
         def matches(metadata, where):
             if "$and" in where:
                 return all(matches(metadata, item) for item in where["$and"])
-            return all(metadata.get(key) == value for key, value in where.items())
+            return all(metadata.get(key) in value['$in'] if isinstance(value, dict) and '$in' in value
+                       else metadata.get(key) == value for key, value in where.items())
         records = [row for row in self.records.values() if matches(row["metadata"], kwargs["where"])][:kwargs["n_results"]]
         return {"documents": [[row["text"] for row in records]],
                 "metadatas": [[row["metadata"] for row in records]], "distances": [[0.0] * len(records)]}
@@ -251,7 +252,7 @@ class RagIndexAdapterTests(unittest.TestCase):
             chunks = vector_store.retrieve_similar_chunks(None, "制度", "finance", "enterprise_default", top_k=3)
         self.assertTrue(chunks)
         self.assertTrue(all(c["file_name"] == "finance.md" for c in chunks))
-        self.assertEqual(self.collection.query_calls[0]["where"], {"$and": [
+        self.assertEqual(self.collection.query_calls[0]["where"]['$and'][0], {"$and": [
             {"knowledge_base_id": "enterprise_default"}, {"knowledge_base_type": "finance"},
         ]})
         self.assertTrue(all(c["document_id"] and c["db_chunk_id"] and c["chunk_id"] for c in chunks))

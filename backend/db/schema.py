@@ -71,8 +71,33 @@ CREATE_TABLE_SQL = [
         department TEXT,
         process_type TEXT,
         process_status TEXT NOT NULL DEFAULT 'active',
+        lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'deleting')),
+        lifecycle_version INTEGER NOT NULL DEFAULT 1 CHECK (lifecycle_version > 0),
         created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+    )
+    """,
+    # 删除任务不设置 Document 外键；物理删除后仍保留目标与回执。
+    """
+    CREATE TABLE IF NOT EXISTS document_deletion_tasks (
+        operation_id TEXT PRIMARY KEY,
+        document_id INTEGER NOT NULL UNIQUE,
+        knowledge_base_id TEXT NOT NULL,
+        storage_session_id TEXT NOT NULL,
+        file_name TEXT,
+        vector_ids_json TEXT NOT NULL,
+        target_store_json TEXT NOT NULL,
+        target_sha256 TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'failed', 'completed')),
+        state_version INTEGER NOT NULL DEFAULT 1 CHECK (state_version > 0),
+        attempt_token TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT,
+        CHECK (attempt_token IS NULL OR status = 'pending')
     )
     """,
     # 文档级索引任务；只记录 SQLite 状态，不执行向量化或历史回填。
@@ -225,6 +250,7 @@ CREATE_TABLE_SQL = [
 
 # 索引
 CREATE_INDEX_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_document_deletion_status ON document_deletion_tasks(status, updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_rag_index_tasks_status_updated ON rag_index_tasks(status, updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_session_id ON documents(session_id)",
@@ -256,6 +282,8 @@ TABLE_COLUMN_MIGRATIONS = {
         ("response_status_code", "INTEGER"),
     ],
     "documents": [
+        ("lifecycle_state", "TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'deleting'))"),
+        ("lifecycle_version", "INTEGER NOT NULL DEFAULT 1 CHECK (lifecycle_version > 0)"),
         ("knowledge_base_id", "TEXT NOT NULL DEFAULT 'session_scoped'"),
         ("knowledge_base_type", "TEXT NOT NULL DEFAULT 'general'"),
         ("department", "TEXT"),

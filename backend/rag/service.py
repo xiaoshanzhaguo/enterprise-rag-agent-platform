@@ -20,7 +20,7 @@ RAG 服务层模块。
 from typing import Any
 
 from backend.config import settings
-from backend.db.repository import save_rag_query_with_hits
+from backend.db.repository import save_rag_query_with_hits, filter_active_chunks
 from backend.rag.categories import normalize_knowledge_base_type
 from backend.rag.retriever import retrieve_top_chunks
 from backend.rag.store import get_document_chunks
@@ -266,6 +266,8 @@ def build_rag_context_from_chunks(matched_chunks: list[dict[str, Any]]) -> str:
     :param matched_chunks: 检索出的 chunk 列表
     :return: 一个字符串
     """
+    if any(chunk.get('document_id') is not None for chunk in matched_chunks):
+        matched_chunks = filter_active_chunks(matched_chunks)
     # 如果没有命中任何文本块，则返回明确的无依据提示，避免模型绕开知识库凭空回答
     if not matched_chunks:
         return (

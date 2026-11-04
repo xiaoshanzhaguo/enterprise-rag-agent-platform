@@ -121,6 +121,8 @@ export async function apiPatch<TResponse>(path: string, body: unknown): Promise<
   }))
 }
 
-export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
-  return parseResponse<TResponse>(await fetch(buildApiUrl(path), { method: 'DELETE', signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json' } }))
+export async function apiDelete<TResponse>(path: string, body?: unknown, signal?: AbortSignal): Promise<TResponse> {
+  return parseResponse<TResponse>(await fetch(buildApiUrl(path), { method: 'DELETE', signal: signal ?? AbortSignal.timeout(15000),
+    headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    body: body === undefined ? undefined : JSON.stringify(body) }))
 }

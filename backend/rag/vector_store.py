@@ -21,6 +21,7 @@ from typing import Any
 
 # 导入统一配置对象，读取 VECTOR_STORE_DIR 等配置
 from backend.config import settings
+from backend.db.repository import get_active_document_ids, filter_active_chunks
 # 导入 embedding 生成函数
 from backend.rag.embedding_client import generate_embedding, generate_embeddings
 
@@ -221,6 +222,10 @@ def retrieve_similar_chunks(
     if not (knowledge_base_id or session_id) or not query.strip():
         return []
 
+    eligible = get_active_document_ids(session_id, knowledge_base_id)
+    if not eligible:
+        return []
+
     # 为 query 生成 embedding
     query_embedding = generate_embedding(query)
 
@@ -244,6 +249,8 @@ def retrieve_similar_chunks(
                 {"knowledge_base_type": knowledge_base_type_filter},
             ]
         }
+
+    where_filter = {'$and': [where_filter, {'document_id': {'$in': eligible}}]}
 
     # 按 session_id 过滤，只检索当前会话的文档 chunk
     result = collection.query(
@@ -293,4 +300,4 @@ def retrieve_similar_chunks(
             }
         )
 
-    return matched_chunks
+    return filter_active_chunks(matched_chunks)

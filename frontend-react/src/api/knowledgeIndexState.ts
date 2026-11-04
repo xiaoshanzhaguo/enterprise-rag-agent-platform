@@ -128,6 +128,12 @@ export class KnowledgeIndexController {
     this.planPoll()
   }
 
+  refreshAfterDocumentChange = (): Promise<void> => {
+    // 删除由独立控制器执行；使此前的列表 GET 失效，再读取变更后的列表。
+    this.revision++
+    return this.refresh()
+  }
+
   refresh = (): Promise<void> => {
     if (!this.active) return Promise.resolve()
     if (this.read) return this.readRevision === this.revision ? this.read : this.read.then(() => this.refresh())
@@ -148,6 +154,7 @@ export class KnowledgeIndexController {
         // 查询列表不能凭旧快照解锁未确认 POST；已知任务须单独查询。
         const upload = this.state.upload
         const doc = status.documents.find(doc => doc.document_id === upload?.document_id)
+        if (upload && !doc) this.update({ upload: null })
         if (upload && doc?.vector_index && !this.state.uncertain.includes(upload.operation_id || '')) {
           this.update({ upload: { ...upload, vector_index: doc.vector_index } })
         }

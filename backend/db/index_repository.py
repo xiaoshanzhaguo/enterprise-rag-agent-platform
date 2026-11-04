@@ -135,7 +135,7 @@ def _read_chunks(connection: sqlite3.Connection, document_id: int) -> list[dict[
 
 def _get_operation(connection: sqlite3.Connection, operation_id: str) -> dict[str, Any] | None:
     row = connection.execute(
-        """SELECT t.*, d.file_name, d.knowledge_base_id, d.session_id AS storage_session_id
+        """SELECT t.*, d.file_name, d.knowledge_base_id, d.session_id AS storage_session_id, d.lifecycle_state
            FROM rag_index_tasks t JOIN documents d ON d.id = t.document_id
            WHERE t.operation_id = ?""", (operation_id,),
     ).fetchone()
@@ -162,6 +162,8 @@ def _require_operation(connection: sqlite3.Connection, operation_id: str) -> dic
 
 
 def _verify_input(connection: sqlite3.Connection, operation: dict[str, Any]) -> list[dict[str, Any]]:
+    if operation.get('lifecycle_state', 'active') != 'active':
+        raise IndexOperationConflict('文档正在删除，禁止执行索引。')
     chunks = _read_chunks(connection, operation["document_id"])
     actual = _manifest(operation["storage_session_id"], chunks)
     if (operation["file_name"] != chunks[0]["file_name"]
@@ -211,6 +213,9 @@ def prepare_document_index(
             "SELECT operation_id FROM rag_index_tasks WHERE document_id = ?", (existing["id"],),
         ).fetchone() if existing else None
         operation = _require_operation(connection, task_row["operation_id"]) if task_row else None
+        if existing and connection.execute('SELECT lifecycle_state FROM documents WHERE id = ?',
+                                            (existing['id'],)).fetchone()[0] != 'active':
+            raise IndexOperationConflict('文档正在删除，不能重复上传。')
         if operation:
             stored_chunks = _verify_input(connection, operation)
             requested_chunks = [dict(chunk, file_name=file_name, knowledge_base_id=document_kb_id,
@@ -282,7 +287,7 @@ def get_document_index_operations(document_ids: list[int]) -> dict[int, dict[str
         for start in range(0, len(document_ids), 500):
             batch = document_ids[start:start + 500]
             rows = connection.execute(
-                "SELECT t.*, d.file_name, d.knowledge_base_id, d.session_id AS storage_session_id "
+                "SELECT t.*, d.file_name, d.knowledge_base_id, d.session_id AS storage_session_id, d.lifecycle_state "
                 "FROM rag_index_tasks t JOIN documents d ON d.id = t.document_id "
                 "WHERE t.document_id IN (" + ",".join("?" for _ in batch) + ")", batch,
             ).fetchall()
@@ -307,7 +312,8 @@ def claim_index_operation(
         cursor = connection.execute(
             """UPDATE rag_index_tasks SET attempt_token = ?, owner_instance_id = ?, claimed_at = ?,
                attempt_count = attempt_count + 1, state_version = state_version + 1, updated_at = ?
-               WHERE operation_id = ? AND status = 'pending' AND attempt_token IS NULL AND state_version = ?""",
+               WHERE operation_id = ? AND status = 'pending' AND attempt_token IS NULL AND state_version = ?
+               AND EXISTS (SELECT 1 FROM documents d WHERE d.id = rag_index_tasks.document_id AND d.lifecycle_state = 'active')""",
             (str(uuid4()), owner_instance_id, now, now, operation_id, expected_state_version),
         )
         if cursor.rowcount != 1:
@@ -401,6 +407,8 @@ def prepare_index_retry(operation_id: str, expected_state_version: int) -> dict[
     with closing(get_connection()) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
         operation = _require_operation(connection, operation_id)
+        if operation['lifecycle_state'] != 'active':
+            raise IndexOperationConflict('文档正在删除，不能重试索引。')
         if operation["status"] == "ready" or operation["execution_claimed"]:
             return operation
         if operation["status"] != "failed" or operation["state_version"] != expected_state_version:

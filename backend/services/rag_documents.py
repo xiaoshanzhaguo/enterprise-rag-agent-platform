@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from backend.config import settings
 from backend.db import index_repository as repository
+from backend.db import deletion_repository
 from backend.db.repository import get_document_status
 from backend.rag.categories import normalize_knowledge_base_type, get_department_for_knowledge_base_type
 from backend.rag.chunker import split_text_into_chunks
@@ -61,7 +62,7 @@ class IndexManagementService:
     def vector_status(self, operation):
         if operation is None:
             return VectorIndexStatus(status="unknown").model_dump()
-        compatible = self._compatible(operation)
+        compatible = self._compatible(operation) and operation.get('lifecycle_state', 'active') == 'active'
         active = operation["execution_claimed"]
         url = f"/rag_index_operations/{operation['operation_id']}"
         query = "?" + urlencode(dict(session_id=operation["storage_session_id"], **(
@@ -106,6 +107,8 @@ class IndexManagementService:
         if operation is None:
             raise IndexManagementError("not_found")
         self._authorize(operation, session_id, knowledge_base_id, user_role, write=True)
+        if operation.get('lifecycle_state', 'active') != 'active':
+            raise repository.IndexOperationConflict('文档正在删除，禁止执行索引。')
         receipt = self._operation_receipt(operation)
         if self.mode != "vector":
             return IndexManagementResult(receipt, "vector_index_disabled")
@@ -169,6 +172,10 @@ class IndexManagementService:
         operations = repository.get_document_index_operations([doc["document_id"] for doc in result["documents"]])
         summary = dict.fromkeys(("ready", "pending", "failed", "not_requested", "unknown"), 0)
         for doc in result["documents"]:
+            deletion = deletion_repository.get_document_deletion(doc['document_id'], doc['knowledge_base_id'])
+            if deletion:
+                from backend.services.document_deletion import DocumentDeletionService
+                doc['deletion'] = DocumentDeletionService.receipt(deletion)
             vector = self.vector_status(operations.get(doc["document_id"]))
             doc.update(text_status="persisted", vector_index=vector,
                        tracking_source="managed" if vector["status"] != "unknown" else "legacy")

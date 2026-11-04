@@ -670,6 +670,9 @@ def _save_document_with_chunks_in_connection(
 
     # 如果已经存在同名同内容文档，则直接复用已有 chunk 元数据
     if existing_document:
+        if connection.execute('SELECT lifecycle_state FROM documents WHERE id = ?',
+                              (existing_document['id'],)).fetchone()[0] != 'active':
+            raise ValueError('文档正在删除，不能重新写入。')
         # 即使文档内容重复，也允许用户通过本轮上传修正文档分类。
         # 这样前端选择 HR / 财务 / IT / 产品 后，不会因为复用旧 chunk 而保留过期分类。
         connection.execute(
@@ -919,7 +922,7 @@ def get_document_chunks(session_id: str | None, knowledge_base_id: str | None = 
                 documents.process_status AS process_status
             FROM document_chunks
             INNER JOIN documents ON documents.id = document_chunks.document_id
-            WHERE {where_clause}
+            WHERE {where_clause} AND documents.lifecycle_state = 'active'
             ORDER BY documents.created_at DESC, documents.id DESC, document_chunks.chunk_index ASC
             """,
             (where_value,),
@@ -943,6 +946,35 @@ def get_document_chunks(session_id: str | None, knowledge_base_id: str | None = 
         }
         for row in rows
     ]
+
+
+def get_active_document_ids(session_id: str | None, knowledge_base_id: str | None = None) -> list[int]:
+    """检索白名单，在 Chroma 查询前排除 deleting 与不存在的文档。"""
+    if not (knowledge_base_id or session_id):
+        return []
+    column = 'knowledge_base_id' if knowledge_base_id else 'session_id'
+    with closing(get_connection()) as connection:
+        return [row[0] for row in connection.execute(
+            f"SELECT id FROM documents WHERE {column} = ? AND lifecycle_state = 'active'",
+            (knowledge_base_id or session_id,))]
+
+
+def filter_active_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """返回前再次核对 SQLite；孤立、删除中或元数据范围不匹配的向量不进入上下文。"""
+    ids = list({c.get('db_chunk_id') for c in chunks if type(c.get('db_chunk_id')) is int})
+    actual = {}
+    with closing(get_connection()) as connection:
+        connection.execute('BEGIN')
+        for start in range(0, len(ids), 500):
+            batch = ids[start:start + 500]
+            rows = connection.execute(
+                'SELECT c.id, c.document_id, c.chunk_index, c.chunk_text, d.knowledge_base_id '
+                'FROM document_chunks c JOIN documents d ON d.id = c.document_id '
+                "WHERE d.lifecycle_state = 'active' AND c.id IN (" + ','.join('?' for _ in batch) + ')', batch)
+            actual.update({r['id']: dict(r) for r in rows})
+    return [c for c in chunks if (r := actual.get(c.get('db_chunk_id'))) is not None
+            and r['document_id'] == c.get('document_id') and r['chunk_index'] == c.get('chunk_id')
+            and r['knowledge_base_id'] == c.get('knowledge_base_id') and r['chunk_text'] == c.get('text')]
 
 
 def get_document_status(session_id: str | None, knowledge_base_id: str | None = None) -> dict[str, Any]:
@@ -990,6 +1022,8 @@ def get_document_status(session_id: str | None, knowledge_base_id: str | None = 
                 documents.department AS department,
                 documents.process_type AS process_type,
                 documents.process_status AS process_status,
+                documents.lifecycle_state AS lifecycle_state,
+                documents.lifecycle_version AS lifecycle_version,
                 COUNT(document_chunks.id) AS chunk_count
             FROM documents
             LEFT JOIN document_chunks ON document_chunks.document_id = documents.id
@@ -1033,6 +1067,8 @@ def get_document_status(session_id: str | None, knowledge_base_id: str | None = 
             "department": row["department"],
             "process_type": row["process_type"],
             "process_status": row["process_status"],
+            "lifecycle_state": row["lifecycle_state"],
+            "lifecycle_version": row["lifecycle_version"],
         }
         for row in rows
     ]
@@ -1181,9 +1217,10 @@ def save_rag_query_with_hits(
             connection.execute(
                 """
                 INSERT INTO rag_hits (rag_query_id, document_chunk_id, hit_rank, score, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                SELECT ?, c.id, ?, ?, ? FROM document_chunks c JOIN documents d ON d.id = c.document_id
+                WHERE c.id = ? AND d.lifecycle_state = 'active'
                 """,
-                (rag_query_id, db_chunk_id, hit_rank, float(chunk.get("score", 0)), now),
+                (rag_query_id, hit_rank, float(chunk.get("score", 0)), now, db_chunk_id),
             )
 
         connection.execute(

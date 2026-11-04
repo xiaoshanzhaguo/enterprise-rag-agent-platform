@@ -85,6 +85,8 @@ class RagIndexingService:
             raise
         except Exception:
             return self._unconfirmed(operation_id, False)
+        if operation.get('lifecycle_state', 'active') != 'active':
+            return self._result(operation, 'document_deleting')
         if operation["status"] == "ready":
             return self._result(operation, "ready")
         if operation["execution_claimed"]:
@@ -166,6 +168,9 @@ class RagIndexingService:
             context = replace(context, state_version=operation["state_version"])
             context.check_budget()
             stage = "upsert"
+            latest = repository.load_index_input(context.operation_id)['operation']
+            if latest['attempt_token'] != context.attempt_token or latest['state_version'] != context.state_version:
+                raise repository.IndexOperationConflict('索引执行权已变化。')
             self.vector_store.upsert(chunks=tuple(deepcopy(chunks)), embeddings=embeddings,
                                      target_profile=deepcopy(operation["target_profile"]), context=context)
         except Exception as exc:

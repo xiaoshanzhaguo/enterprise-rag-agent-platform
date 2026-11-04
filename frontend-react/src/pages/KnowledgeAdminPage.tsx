@@ -23,6 +23,7 @@ import type { ChangeEvent } from 'react'
 import * as knowledgeBaseApi from '../api/knowledgeBaseApi'
 import { KnowledgeIndexController } from '../api/knowledgeIndexState'
 import { DocumentIndexStatus } from '../components/DocumentIndexStatus'
+import { DocumentDeletionControls } from '../components/DocumentDeletionControls'
 import type { KnowledgeBaseCategory, KnowledgeBaseItem } from '../types/knowledgeBase'
 
 
@@ -398,11 +399,12 @@ export const KnowledgeAdminPage = () => {
                   <strong title={document.file_name ?? '未命名文档'}>{document.file_name ?? '未命名文档'}</strong>
                   <small>{document.knowledge_base_type ?? 'general'} · {document.chunk_count ?? 0} 个片段</small>
                 </div>
-                <DocumentIndexStatus index={document.vector_index} operationId={operationId}
+                {document.lifecycle_state !== 'deleting' ? <DocumentIndexStatus index={document.vector_index} operationId={operationId}
                   uncertain={Boolean(operationId && indexState.uncertain.includes(operationId))}
                   busy={Boolean(operationId && indexState.busy.includes(operationId))}
                   onQuery={operationId ? () => { void indexController.query(operationId) } : undefined}
-                  onExecute={operationId ? action => { void indexController.execute(operationId, action) } : undefined} />
+                  onExecute={operationId ? action => { void indexController.execute(operationId, action) } : undefined} /> : null}
+                <DocumentDeletionControls document={document} knowledgeBaseId={selectedKnowledgeBaseId} onChanged={indexController.refreshAfterDocumentChange} />
               </div>
             })}
 
