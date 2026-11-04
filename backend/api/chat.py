@@ -309,5 +309,7 @@ def clear_document(session_id: str):
     1. 当前端新建会话或清空聊天时，主动删除 session 的持久化文档和文本块
     2. 避免当前会话继续检索旧文档
     """
+    if session_id.startswith('knowledge_base:'):
+        raise HTTPException(status_code=403, detail='不能通过会话清空接口删除公共知识库文档。')
     clear_document_chunks(session_id) # 从数据库 RAG store 中删除该会话对应的文档记录
     return {"message": f"session {session_id} 的文档索引已清理"}

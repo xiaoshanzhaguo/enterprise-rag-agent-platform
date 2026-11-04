@@ -130,6 +130,10 @@ def clear_document_chunks(session_id: str) -> None:
     :param session_id: 会话 ID
     :return: None
     """
+    # 共享清理入口也保护内部知识库范围，避免直接调用绕过 API 校验。
+    if session_id.startswith('knowledge_base:'):
+        raise ValueError('不能通过会话清空接口删除公共知识库文档。')
+
     # 如果启用了向量检索，则先删除当前 session 的向量记录
     if settings.rag_retrieval_mode == "vector":
         delete_session_vectors(session_id)
