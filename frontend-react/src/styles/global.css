@@ -934,3 +934,7 @@ a {
   font-weight: 700;
   outline: none;
 }
+
+.document-version-group { border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+.document-version-group > h3 { margin: 0 0 8px; font-size: var(--text-md); overflow-wrap: anywhere; }
+.document-version-group .knowledge-document:last-child { border-bottom: 0; padding-bottom: 0; }

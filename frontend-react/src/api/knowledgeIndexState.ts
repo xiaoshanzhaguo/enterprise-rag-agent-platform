@@ -191,7 +191,12 @@ export class KnowledgeIndexController {
       status: documents && this.state.status ? { ...this.state.status, documents } : this.state.status })
   }
 
-  query = async (id: string) => {
+  private hasVersionedDocument(id: string) {
+    return Boolean(this.state.status?.documents.some(doc => doc.vector_index?.operation_id === id && doc.logical_document_id)
+      || (this.state.upload?.operation_id === id && this.state.upload.logical_document_id))
+  }
+
+  query = async (id: string, refreshPublication = true) => {
     const generation = this.generation, revision = this.revision
     try {
       const receipt = await this.api.fetchIndexOperation(id, this.scope, this.signal())
@@ -203,6 +208,8 @@ export class KnowledgeIndexController {
           this.errorOperation = null
           this.update({ error: '' })
         }
+        if (refreshPublication && receipt.state_confirmed && receipt.vector_index?.status === 'ready'
+          && this.hasVersionedDocument(id)) await this.refreshAfterDocumentChange()
       }
     } catch (error) {
       if (this.valid(generation)) {
@@ -272,7 +279,8 @@ export class KnowledgeIndexController {
         this.locks.delete(id)
         this.update({ busy: [...this.locks] })
         // 409/网络异常只 GET 对账，禁止携新版本自动 POST。
-        await this.query(id)
+        await this.query(id, false)
+        if (this.valid(generation) && this.hasVersionedDocument(id)) await this.refreshAfterDocumentChange()
         this.planPoll()
       }
     }

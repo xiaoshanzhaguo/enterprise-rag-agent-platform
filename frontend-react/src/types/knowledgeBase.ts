@@ -38,6 +38,7 @@ export interface KnowledgeBaseCategoryListResponse {
 
 // /index_document 接口请求体。
 export interface IndexDocumentRequest {
+  logical_document_id?: string
   session_id: string // 当前上传动作使用的会话 ID；企业知识库上传时主要用于兼容后端接口。
   document_text: string // 前端从文件中读取出的完整文本内容。
   file_name?: string // 上传文件名，后端会保存到 documents.file_name。
@@ -51,6 +52,10 @@ export interface IndexDocumentRequest {
 
 // /index_document 接口响应体。
 export interface IndexDocumentResponse {
+  logical_document_id?: string | null
+  version_number?: number | null
+  is_current_version?: boolean
+  logical_state_version?: number | null
   session_id: string // 后端返回的会话 ID。
   knowledge_base_id: string // 本次文档写入的知识库范围。
   file_name?: string | null // 后端保存的文件名。
@@ -71,6 +76,13 @@ export interface IndexDocumentResponse {
 
 // RAG 状态里单个文档的摘要信息。
 export interface RagStatusDocument {
+  logical_document_id?: string
+  version_number?: number
+  logical_state_version?: number
+  logical_enabled?: number
+  is_current_version?: boolean
+  published_at?: string | null
+  display_name?: string
   lifecycle_state?: 'active' | 'deleting'
   lifecycle_version?: number
   deletion?: DocumentDeletionResponse | null

@@ -24,6 +24,8 @@
 import hashlib
 import json
 import sqlite3
+from copy import deepcopy
+from backend.db.version_repository import attach_document, visible_sql, find_duplicate
 from contextlib import closing
 from datetime import datetime
 from typing import Any
@@ -572,6 +574,7 @@ def save_chat_message(
     :param raw_content: 原始消息内容，可为空
     :param mode: 当前会话模式
     :param metadata: 当前消息的展示元数据，例如 RAG 引用来源，可为空
+        包含 SQLite 引用 ID 时会在写事务中复核；提交后原地更新为实际保存的元数据，供 SSE 使用。
     :return: 新插入消息的数据库主键ID；保存失败时返回None
     """
     if not session_id or not content:
@@ -579,10 +582,11 @@ def save_chat_message(
 
     ensure_chat_session(session_id=session_id, mode=mode)
     now = _current_timestamp()
-    # 将消息元数据转成 JSON 字符串保存；为空时写入 NULL
-    metadata_json = json.dumps(metadata, ensure_ascii=False) if metadata else None
-
-    with get_connection() as connection:
+    with closing(get_connection()) as connection, connection:
+        # Publication/deletion cannot interleave between citation validation and message INSERT.
+        connection.execute('BEGIN IMMEDIATE')
+        persisted_metadata = _validate_message_citations(connection, metadata, session_id)
+        metadata_json = json.dumps(persisted_metadata, ensure_ascii=False) if persisted_metadata else None
         # 获得下一条消息序号
         next_order = connection.execute(
             "SELECT COALESCE(MAX(message_order), 0) + 1 AS next_order FROM chat_messages WHERE session_id = ?",
@@ -604,8 +608,42 @@ def save_chat_message(
         )
         connection.commit()
 
+        # Agent emits this same metadata in its final SSE frame. Keep it aligned with the committed receipt.
+        if metadata is not None:
+            metadata.clear()
+            metadata.update(persisted_metadata or {})
+
         # 返回刚刚这次 INSERT 插入的新记录的自增主键 ID
         return int(cursor.lastrowid)
+
+
+def _validate_message_citations(connection, metadata, session_id):
+    result = deepcopy(metadata)
+    if not result:
+        return result
+    chunks = result.get('rag_preview_chunks', [])
+    if not any(chunk.get('document_id') is not None or chunk.get('db_chunk_id') is not None for chunk in chunks):
+        return result  # Preserve legacy message metadata without inventing an identity from filenames.
+    valid = _filter_active_chunks_in_connection(connection, chunks)
+    if len(valid) != len(chunks):
+        result['rag_citations_invalidated'] = True
+    if not valid:
+        result.pop('rag_preview_chunks', None)
+        result.pop('rag_status_info', None)
+        return result
+    result['rag_preview_chunks'] = valid
+    kb = result.get('agent_route', {}).get('knowledge_base_id')
+    status = _get_document_status_in_connection(connection, session_id, kb)
+    scope = 'documents.knowledge_base_id' if kb else 'documents.session_id'
+    visible_ids = {row[0] for row in connection.execute(
+        f"SELECT documents.id FROM documents WHERE {scope} = ? AND {visible_sql()}", (kb or session_id,))}
+    status['documents'] = [doc for doc in status['documents'] if doc['document_id'] in visible_ids]
+    status['document_count'] = len(status['documents'])
+    status['chunk_count'] = sum(doc['chunk_count'] for doc in status['documents'])
+    status['file_names'] = [doc['file_name'] for doc in status['documents'] if doc['file_name']]
+    status['has_document'] = bool(status['documents'])
+    result['rag_status_info'] = status
+    return result
 
 
 def _prepare_document_storage_scope(
@@ -640,6 +678,7 @@ def _save_document_with_chunks_in_connection(
     document_knowledge_base_id: str, source_type: str = "upload",
     knowledge_base_type: str = "general", department: str | None = None,
     process_type: str | None = None, process_status: str = "active",
+    logical_document_id: str | None = None, managed: bool = False,
 ) -> tuple[list[dict[str, Any]], bool]:
     """仅使用传入连接保存/复用文档；不打开连接、不提交，返回块和是否复用。"""
     # 生成当前本地时间，统一用于文档和 chunk 的 created_at
@@ -650,54 +689,20 @@ def _save_document_with_chunks_in_connection(
     # 在调用方连接上保存文档和文本块。
     # 查询是否已经保存过同名同内容文档，避免刷新后重复上传造成重复索引。
     # 公共知识库文档按 knowledge_base_id 去重；旧入口文档仍按 session_id 去重。
-    duplicate_where_clause = "knowledge_base_id = ?" if normalized_knowledge_base_id else "session_id = ?"
-    duplicate_where_value = normalized_knowledge_base_id or session_id
-    existing_document = connection.execute(
-        f"""
-        SELECT id
-        FROM documents
-        WHERE {duplicate_where_clause}
-          AND content_hash = ?
-          AND (
-              file_name = ?
-              OR (file_name IS NULL AND ? IS NULL)
-          )
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-        """,
-        (duplicate_where_value, content_hash, file_name, file_name),
-    ).fetchone()
+    existing_document = find_duplicate(connection, storage_session_id, document_knowledge_base_id,
+        file_name, content_hash, knowledge_base_type, department, process_type, process_status, logical_document_id)
+
+    if existing_document and not managed and any(existing_document[key] != value for key, value in (
+        ('knowledge_base_type', knowledge_base_type), ('department', department),
+        ('process_type', process_type), ('process_status', process_status))):
+        # Legacy callers have no explicit identity: preserve the old immutable snapshot as an independent document.
+        existing_document = None
 
     # 如果已经存在同名同内容文档，则直接复用已有 chunk 元数据
     if existing_document:
         if connection.execute('SELECT lifecycle_state FROM documents WHERE id = ?',
                               (existing_document['id'],)).fetchone()[0] != 'active':
             raise ValueError('文档正在删除，不能重新写入。')
-        # 即使文档内容重复，也允许用户通过本轮上传修正文档分类。
-        # 这样前端选择 HR / 财务 / IT / 产品 后，不会因为复用旧 chunk 而保留过期分类。
-        connection.execute(
-            """
-            UPDATE documents
-            SET
-                knowledge_base_id = ?,
-                knowledge_base_type = ?,
-                department = ?,
-                process_type = ?,
-                process_status = ?,
-                source_type = ?
-            WHERE id = ?
-            """,
-            (
-                document_knowledge_base_id,
-                knowledge_base_type or "general",
-                department,
-                process_type,
-                process_status or "active",
-                source_type,
-                existing_document["id"],
-            ),
-        )
-
         # 读取已有文本块，返回给向量库 upsert，确保 ChromaDB 缺失时也能补写
         existing_chunks = connection.execute(
             """
@@ -824,6 +829,7 @@ def _save_document_with_chunks_in_connection(
         "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
         (now, session_id),
     )
+    attach_document(connection, document_id, logical_document_id=logical_document_id, legacy=not managed)
     # 返回保存后的 chunk 元数据
     return saved_chunks, False
 
@@ -922,7 +928,7 @@ def get_document_chunks(session_id: str | None, knowledge_base_id: str | None = 
                 documents.process_status AS process_status
             FROM document_chunks
             INNER JOIN documents ON documents.id = document_chunks.document_id
-            WHERE {where_clause} AND documents.lifecycle_state = 'active'
+            WHERE {where_clause} AND {visible_sql()}
             ORDER BY documents.created_at DESC, documents.id DESC, document_chunks.chunk_index ASC
             """,
             (where_value,),
@@ -955,29 +961,40 @@ def get_active_document_ids(session_id: str | None, knowledge_base_id: str | Non
     column = 'knowledge_base_id' if knowledge_base_id else 'session_id'
     with closing(get_connection()) as connection:
         return [row[0] for row in connection.execute(
-            f"SELECT id FROM documents WHERE {column} = ? AND lifecycle_state = 'active'",
+            f"SELECT id FROM documents WHERE {column} = ? AND {visible_sql()}",
             (knowledge_base_id or session_id,))]
 
 
 def filter_active_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return only chunks valid in one authoritative SQLite snapshot."""
+    with closing(get_connection()) as connection:
+        connection.execute('BEGIN')
+        return _filter_active_chunks_in_connection(connection, chunks)
+
+
+def _filter_active_chunks_in_connection(connection, chunks):
     """返回前再次核对 SQLite；孤立、删除中或元数据范围不匹配的向量不进入上下文。"""
     ids = list({c.get('db_chunk_id') for c in chunks if type(c.get('db_chunk_id')) is int})
     actual = {}
-    with closing(get_connection()) as connection:
-        connection.execute('BEGIN')
-        for start in range(0, len(ids), 500):
-            batch = ids[start:start + 500]
-            rows = connection.execute(
-                'SELECT c.id, c.document_id, c.chunk_index, c.chunk_text, d.knowledge_base_id '
-                'FROM document_chunks c JOIN documents d ON d.id = c.document_id '
-                "WHERE d.lifecycle_state = 'active' AND c.id IN (" + ','.join('?' for _ in batch) + ')', batch)
-            actual.update({r['id']: dict(r) for r in rows})
+    for start in range(0, len(ids), 500):
+        batch = ids[start:start + 500]
+        rows = connection.execute(
+            'SELECT c.id, c.document_id, c.chunk_index, c.chunk_text, d.knowledge_base_id '
+            'FROM document_chunks c JOIN documents d ON d.id = c.document_id '
+            f"WHERE {visible_sql('d')} AND c.id IN (" + ','.join('?' for _ in batch) + ')', batch)
+        actual.update({r['id']: dict(r) for r in rows})
     return [c for c in chunks if (r := actual.get(c.get('db_chunk_id'))) is not None
             and r['document_id'] == c.get('document_id') and r['chunk_index'] == c.get('chunk_id')
             and r['knowledge_base_id'] == c.get('knowledge_base_id') and r['chunk_text'] == c.get('text')]
 
 
 def get_document_status(session_id: str | None, knowledge_base_id: str | None = None) -> dict[str, Any]:
+    """Read management documents on a single connection; preserve the public return contract."""
+    with closing(get_connection()) as connection:
+        return _get_document_status_in_connection(connection, session_id, knowledge_base_id)
+
+
+def _get_document_status_in_connection(connection, session_id, knowledge_base_id=None):
     """
     从数据库读取 RAG 文档状态。
 
@@ -1009,51 +1026,50 @@ def get_document_status(session_id: str | None, knowledge_base_id: str | None = 
     where_value = normalized_knowledge_base_id or session_id
 
     # 打开数据库连接，查询当前知识库或旧 session 的文档状态
-    with get_connection() as connection:
-        # 查询当前知识库下的全部文档，并按上传时间倒序展示
-        rows = connection.execute(
-            f"""
-            SELECT
-                documents.id AS document_id,
-                documents.knowledge_base_id AS knowledge_base_id,
-                documents.file_name AS file_name,
-                documents.created_at AS created_at,
-                documents.knowledge_base_type AS knowledge_base_type,
-                documents.department AS department,
-                documents.process_type AS process_type,
-                documents.process_status AS process_status,
-                documents.lifecycle_state AS lifecycle_state,
-                documents.lifecycle_version AS lifecycle_version,
-                COUNT(document_chunks.id) AS chunk_count
-            FROM documents
-            LEFT JOIN document_chunks ON document_chunks.document_id = documents.id
-            WHERE {where_clause}
-            GROUP BY
-                documents.id,
-                documents.knowledge_base_id,
-                documents.file_name,
-                documents.created_at,
-                documents.knowledge_base_type,
-                documents.department,
-                documents.process_type,
-                documents.process_status
-            ORDER BY documents.created_at DESC, documents.id DESC
-            """,
-            (where_value,),
-        ).fetchall()
+    # 查询当前知识库下的全部文档，并按上传时间倒序展示
+    rows = connection.execute(
+        f"""
+        SELECT
+            documents.id AS document_id,
+            documents.knowledge_base_id AS knowledge_base_id,
+            documents.file_name AS file_name,
+            documents.created_at AS created_at,
+            documents.knowledge_base_type AS knowledge_base_type,
+            documents.department AS department,
+            documents.process_type AS process_type,
+            documents.process_status AS process_status,
+            documents.lifecycle_state AS lifecycle_state,
+            documents.lifecycle_version AS lifecycle_version,
+            COUNT(document_chunks.id) AS chunk_count
+        FROM documents
+        LEFT JOIN document_chunks ON document_chunks.document_id = documents.id
+        WHERE {where_clause}
+        GROUP BY
+            documents.id,
+            documents.knowledge_base_id,
+            documents.file_name,
+            documents.created_at,
+            documents.knowledge_base_type,
+            documents.department,
+            documents.process_type,
+            documents.process_status
+        ORDER BY documents.created_at DESC, documents.id DESC
+        """,
+        (where_value,),
+    ).fetchall()
 
-        # 如果当前会话没有文档记录，就返回无文档状态
-        if not rows:
-            return {
-                "session_id": session_id,
-                "knowledge_base_id": normalized_knowledge_base_id,
-                "has_document": False,
-                "file_names": [],
-                "document_count": 0,
-                "chunk_count": 0,
-                "documents": [],
-                "expires_in_seconds": 0,
-            }
+    # 如果当前会话没有文档记录，就返回无文档状态
+    if not rows:
+        return {
+            "session_id": session_id,
+            "knowledge_base_id": normalized_knowledge_base_id,
+            "has_document": False,
+            "file_names": [],
+            "document_count": 0,
+            "chunk_count": 0,
+            "documents": [],
+            "expires_in_seconds": 0,
+        }
 
     # 整理每份文档的状态，前端可用于展示多文档列表
     documents = [
@@ -1094,6 +1110,27 @@ def get_document_status(session_id: str | None, knowledge_base_id: str | None = 
         "documents": documents,
         "expires_in_seconds": 0,
     }
+
+
+def get_document_management_snapshot(session_id, knowledge_base_id=None):
+    """Documents, publication pointers and task receipts share one SQLite read transaction."""
+    # Local imports avoid module initialization cycles between Repository modules.
+    from backend.db import index_repository, deletion_repository, version_repository
+    with closing(get_connection()) as connection:
+        connection.execute('BEGIN')
+        result = _get_document_status_in_connection(connection, session_id, knowledge_base_id)
+        operations, deletions = {}, {}
+        for doc in result['documents']:
+            document_id = doc['document_id']
+            doc.update(version_repository._document_version_in_connection(connection, document_id))
+            task = connection.execute('SELECT operation_id FROM rag_index_tasks WHERE document_id = ?', (document_id,)).fetchone()
+            if task:
+                operations[document_id] = index_repository._get_operation(connection, task['operation_id'])
+            row = connection.execute('SELECT * FROM document_deletion_tasks WHERE document_id = ? AND knowledge_base_id = ?',
+                                     (document_id, doc['knowledge_base_id'])).fetchone()
+            if row:
+                deletions[document_id] = deletion_repository._decode(row)
+        return result, operations, deletions
 
 
 def delete_session_documents(session_id: str | None) -> None:
@@ -1215,10 +1252,10 @@ def save_rag_query_with_hits(
                 continue
 
             connection.execute(
-                """
+                f"""
                 INSERT INTO rag_hits (rag_query_id, document_chunk_id, hit_rank, score, created_at)
                 SELECT ?, c.id, ?, ?, ? FROM document_chunks c JOIN documents d ON d.id = c.document_id
-                WHERE c.id = ? AND d.lifecycle_state = 'active'
+                WHERE c.id = ? AND {visible_sql('d')}
                 """,
                 (rag_query_id, hit_rank, float(chunk.get("score", 0)), now, db_chunk_id),
             )

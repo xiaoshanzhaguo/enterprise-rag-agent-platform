@@ -20,9 +20,11 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 // 只从 React 里导入 ChangeEvent 这个“类型”，用于 TypeScript 类型标注，不会作为运行时代码打包。
 // 只导入 React 事件类型，用于给文件选择 input 的 onChange 事件标注类型。
 import type { ChangeEvent } from 'react'
+import { groupDocumentVersions, versionUploadMetadata } from '../api/documentVersionState'
 import * as knowledgeBaseApi from '../api/knowledgeBaseApi'
 import { KnowledgeIndexController } from '../api/knowledgeIndexState'
 import { DocumentIndexStatus } from '../components/DocumentIndexStatus'
+import { DocumentVersionControls } from '../components/DocumentVersionControls'
 import { DocumentDeletionControls } from '../components/DocumentDeletionControls'
 import type { KnowledgeBaseCategory, KnowledgeBaseItem } from '../types/knowledgeBase'
 
@@ -49,6 +51,7 @@ export const KnowledgeAdminPage = () => {
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string>('')
 
   // 保存当前文件输入框里选择的文件对象。
+  const [versionTarget, setVersionTarget] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   // 标记页面是否正在加载配置。
@@ -147,7 +150,19 @@ export const KnowledgeAdminPage = () => {
 
   function handleKnowledgeBaseChange(event: ChangeEvent<HTMLSelectElement>) {
     setErrorMessage('')
+    setVersionTarget('')
     setSelectedKnowledgeBaseId(event.target.value)
+  }
+
+  function handleVersionTargetChange(event: ChangeEvent<HTMLSelectElement>) {
+    const identity = event.target.value
+    setVersionTarget(identity)
+    const versions = (ragStatus?.documents ?? []).filter(d => d.logical_document_id === identity)
+    const current = versions.find(d => d.is_current_version) || versions.sort((a, b) => (b.version_number || 1) - (a.version_number || 1))[0]
+    if (current?.knowledge_base_type) {
+      const category = categories.find(c => c.knowledge_base_type === current.knowledge_base_type)
+      if (category) setSelectedCategoryId(category.category_id)
+    }
   }
 
   function refreshSelectedKnowledgeBaseStatus() {
@@ -235,13 +250,12 @@ export const KnowledgeAdminPage = () => {
       // 调用后端 /index_document，把文件内容写入企业知识库。
       await indexController.upload({
         session_id: ADMIN_UPLOAD_SESSION_ID, // 兼容后端请求模型。
-        document_text: documentText, // 文件正文。
+        document_text: documentText,
+        logical_document_id: versionTarget || undefined, // 只有明确选择才上传新版本。
         file_name: selectedFile.name, // 文件名。
         knowledge_base_id: selectedKnowledgeBaseId, // 目标知识库。
         user_role: ADMIN_USER_ROLE, // 当前管理页固定模拟知识库管理员。
-        knowledge_base_type: selectedCategory.knowledge_base_type, // 文档分类。
-        department: selectedCategory.department, // 分类对应部门。
-        process_status: 'active', // 当前上传文档默认启用。
+        ...versionUploadMetadata(ragStatus?.documents ?? [], versionTarget, selectedCategory),
       })
 
     } catch (error) {
@@ -320,6 +334,14 @@ export const KnowledgeAdminPage = () => {
             <input type="file" accept=".md,.txt" disabled={isLoading || isUploading} onChange={handleFileChange} />
           </label>
 
+          <label className="field-label">上传目标
+            <select aria-label="上传目标" value={versionTarget} disabled={isUploading} onChange={handleVersionTargetChange}>
+              <option value="">新建独立文档</option>
+              {Array.from(new Map((ragStatus?.documents ?? []).filter(d => d.logical_document_id)
+                .map(d => [d.logical_document_id!, d])).values()).map(d =>
+                <option key={d.logical_document_id} value={d.logical_document_id}>新版本：{d.display_name || d.file_name}</option>)}
+            </select>
+          </label>
           {/* 上传按钮：点击后读取文件文本，并提交给 /index_document。 */}
           {/* type="button" 表示普通按钮，不触发表单默认提交。 */}
           <button className="primary-button" type="button" disabled={!selectedFile || !selectedKnowledgeBaseId || !selectedCategoryId || isUploading || indexState.uploadUncertain} onClick={handleUploadDocument}>
@@ -390,7 +412,10 @@ export const KnowledgeAdminPage = () => {
           {/* 当前知识库中的文档列表。 */}
           <div className="file-list">
             {/* 遍历后端返回的 documents。 */}
-            {(ragStatus?.documents ?? []).map(document => {
+            {groupDocumentVersions(ragStatus?.documents ?? []).map(group =>
+              <section className="document-version-group" key={group.id}>
+                <h3>{group.name}</h3>
+                {group.versions.map(document => {
               const operationId = document.vector_index?.operation_id
                 || indexState.uncertainDocuments[document.document_id ?? 0]
               return <div className="knowledge-document" key={document.document_id ?? document.file_name}>
@@ -404,9 +429,10 @@ export const KnowledgeAdminPage = () => {
                   busy={Boolean(operationId && indexState.busy.includes(operationId))}
                   onQuery={operationId ? () => { void indexController.query(operationId) } : undefined}
                   onExecute={operationId ? action => { void indexController.execute(operationId, action) } : undefined} /> : null}
+                <DocumentVersionControls document={document} knowledgeBaseId={selectedKnowledgeBaseId} onChanged={indexController.refreshAfterDocumentChange} />
                 <DocumentDeletionControls document={document} knowledgeBaseId={selectedKnowledgeBaseId} onChanged={indexController.refreshAfterDocumentChange} />
               </div>
-            })}
+            })}</section>)}
 
             {/* 没有文档时展示空状态。 */}
             {/* 如果当前知识库没有文档，就显示一句“当前知识库还没有文档。”；如果有文档，就什么都不显示。 */}

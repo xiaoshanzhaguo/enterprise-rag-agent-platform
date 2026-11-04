@@ -12,7 +12,7 @@
 - 数据表结构来自 schema.py
 - 数据库连接能力来自 connection.py
 - 当前项目按最新 schema 重新规划数据库结构
-- 测试阶段如果本地 app.db 结构已过期，可删除后重新启动项目生成新库
+- 使用可重复执行的轻量迁移升级已有数据库，保留历史数据和稳定 ID
 
 典型调用流程：启动项目 -> init_database() -> 创建表 -> 创建索引 -> 数据库初始化完成
 """
@@ -83,14 +83,17 @@ def init_database(database_url: str | None = None) -> None:
     """
     # 获取数据库连接
     with closing(get_connection(database_url)) as connection, connection:
+        connection.execute("BEGIN IMMEDIATE")
         # 按依赖顺序建表（含 documents 后的 rag_index_tasks）。
-        # 只创建任务结构，不回填历史文档或启动任何索引执行。
+        # 迁移只回填文档身份，不启动索引或触碰向量。
         for statement in CREATE_TABLE_SQL:
             connection.execute(statement)
 
         # 先给旧表补新增列，再创建依赖这些列的索引。
         # 否则旧库里没有 department/process_type 时，idx_documents_department 会启动失败。
         _apply_column_migrations(connection)
+        from backend.db.version_repository import migrate_documents
+        migrate_documents(connection)
 
         # 依次执行所有建索引 SQL
         for statement in CREATE_INDEX_SQL:

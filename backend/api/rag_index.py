@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from backend.db.index_repository import IndexOperationConflict
+from backend.db.version_repository import VersionConflict
 from backend.schema.rag_index_schema import IndexActionRequest, IndexErrorResponse, IndexOperationResponse
 from backend.services.rag_documents import IndexManagementError, IndexManagementService
 
@@ -47,7 +48,7 @@ def index_http_response(call, schema, *, query=False):
     except IndexManagementError as exc:
         code, detail = {"not_found": (404, "未找到当前范围内的索引任务。"),
                         "forbidden": (403, "当前角色没有知识库管理权限。")}[exc.reason]
-    except IndexOperationConflict:
+    except (IndexOperationConflict, VersionConflict):
         code, detail = 409, "文档输入或索引目标与已有任务冲突，请查询原任务。"
     except ValueError:
         code, detail = 400, "文档内容、分类或索引配置不合法。"

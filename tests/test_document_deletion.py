@@ -377,6 +377,9 @@ class DocumentDeletionTests(unittest.TestCase):
     def test_retrieval_excludes_deleting_and_orphans_without_losing_other_document(self):
         doc = self.document()
         other = self.document(file_name='other.md')
+        # R3 normal retrieval requires an explicitly published version.
+        from backend.db.version_repository import auto_publish
+        auto_publish(other.document_id)
         cached = deepcopy(doc.chunks)
         self.task(doc)
         with patch.object(vector_store, 'get_chroma_collection', return_value=self.collection), \

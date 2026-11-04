@@ -40,6 +40,7 @@ from backend.db.repository import (
     save_chat_message,
     save_rag_query_with_hits,
     update_rag_query_answer,
+    filter_active_chunks,
 )
 # 数据库文档状态查询函数，用于保存历史消息中的引用模块状态
 from backend.rag.store import get_document_status
@@ -398,6 +399,11 @@ def _normalize_agent_answer_text(answer_text: str) -> str:
     return normalized_answer
 
 
+def _current_evidence(chunks):
+    """Recheck persisted evidence at each use; legacy/fake chunks without IDs retain their contract."""
+    return filter_active_chunks(chunks) if any(c.get('document_id') is not None for c in chunks) else chunks
+
+
 def _build_agent_rag_metadata(
     request: ChatRequest,
     matched_chunks: list[dict[str, Any]],
@@ -429,6 +435,7 @@ def _build_agent_rag_metadata(
     :param knowledge_base_type_filter: 本轮前端选择的知识库分类过滤条件；None 表示全部分类
     :return: 可写入 chat_messages.metadata_json 的元数据；没有命中时返回 None
     """
+    matched_chunks = _current_evidence(matched_chunks)
     # 先保存 Agent 路由结果。即使本轮跳过检索，也能在消息元数据里留下判断依据。
     metadata: dict[str, Any] = {
         "agent_route": {
@@ -456,6 +463,8 @@ def _build_agent_rag_metadata(
         rag_preview_chunks.append(
             {
                 "rank": chunk.get("rank", index),
+                "document_id": chunk.get("document_id"),
+                "db_chunk_id": chunk.get("db_chunk_id"),
                 "file_name": chunk.get("file_name"),
                 "chunk_id": chunk.get("chunk_id"),
                 "score": chunk.get("score", 0),
@@ -823,6 +832,8 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             # 累计最终回答正文
             answer_text = ""
             process_result = None
+
+            matched_chunks = _current_evidence(matched_chunks)
 
             # 流程类输出经过校验的 JSON；只提取原文，不从知识库或历史猜测申请信息。
             if route_type == AgentRouteType.PROCESS_APPLY:

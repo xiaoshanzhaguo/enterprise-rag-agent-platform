@@ -88,6 +88,10 @@ def prepare_deletion(document_id, knowledge_base_id, expected_document_version, 
                                  (document_id, knowledge_base_id)).fetchone()
         if doc is None:
             raise LookupError('文档不存在。')
+        parent = connection.execute('SELECT * FROM logical_documents WHERE logical_document_id = ?',
+                                    (doc['logical_document_id'],)).fetchone()
+        if parent and parent['enabled'] and parent['current_document_id'] == document_id:
+            raise DeletionConflict('当前生效版本不能删除，请先发布其他版本或停用逻辑文档。')
         index = connection.execute('SELECT * FROM rag_index_tasks WHERE document_id = ?', (document_id,)).fetchone()
         if index and index['attempt_token'] is not None:
             raise DeletionConflict('文档正在索引，请待执行结束后再删除。')
@@ -107,6 +111,9 @@ def prepare_deletion(document_id, knowledge_base_id, expected_document_version, 
                                     (document_id, expected_document_version))
         if cursor.rowcount != 1:
             raise DeletionConflict('文档状态已变化。')
+        if parent:
+            connection.execute('UPDATE logical_documents SET state_version = state_version + 1, updated_at = ? WHERE logical_document_id = ?',
+                               (now, parent['logical_document_id']))
         if index:
             connection.execute('UPDATE rag_index_tasks SET state_version = state_version + 1, updated_at = ? WHERE document_id = ?',
                                (now, document_id))
@@ -116,6 +123,8 @@ def prepare_deletion(document_id, knowledge_base_id, expected_document_version, 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)''',
             (operation_id, document_id, knowledge_base_id, doc['session_id'], doc['file_name'], _json(ids), _json(target_store),
              _hash(target), now, now))
+        connection.execute('UPDATE document_deletion_tasks SET logical_document_id = ?, version_number = ? WHERE operation_id = ?',
+                           (doc['logical_document_id'], doc['version_number'], operation_id))
         return _require(connection, operation_id)
 
 

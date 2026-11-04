@@ -88,6 +88,7 @@ class RagIndexingService:
         if operation.get('lifecycle_state', 'active') != 'active':
             return self._result(operation, 'document_deleting')
         if operation["status"] == "ready":
+            self._publish_ready(operation['document_id'])
             return self._result(operation, "ready")
         if operation["execution_claimed"]:
             return self._result(operation, "already_claimed")
@@ -182,7 +183,18 @@ class RagIndexingService:
         except Exception:
             # 确认可能已提交但回执丢失；不盲目改 failed 或重新 upsert。
             return self._unconfirmed(context.operation_id, True)
+        self._publish_ready(ready['document_id'])
         return self._result(ready, "ready", True)
+
+    @staticmethod
+    def _publish_ready(document_id):
+        from backend.db.version_repository import auto_publish
+        try:
+            auto_publish(document_id, retrieval_mode='vector')
+        except Exception:
+            import logging
+            # Index readiness is already durable. Never turn a publication failure into a re-upsert.
+            logging.getLogger(__name__).warning('Document %s is ready; publication requires confirmation.', document_id)
 
     @staticmethod
     def _validate_component(actual: dict[str, Any], fields: set[str], target: dict[str, Any]) -> None:

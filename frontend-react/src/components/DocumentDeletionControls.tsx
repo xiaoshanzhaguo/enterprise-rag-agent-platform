@@ -20,7 +20,7 @@ export function DocumentDeletionControls({ document, knowledgeBaseId, onChanged 
   useEffect(() => { controller.receive(document.deletion) }, [controller, document.deletion])
   const task = state.receipt
   const deleting = document.lifecycle_state === 'deleting' || Boolean(task)
-  const blocked = document.vector_index?.execution_claimed || !document.document_id
+  const blocked = document.is_current_version || document.vector_index?.execution_claimed || !document.document_id
   return <div className="document-deletion-controls">
     {deleting || state.uncertain ? <>
       <span className={`status-badge ${task?.status === 'failed' ? 'status-failed' : 'status-running'}`}>
@@ -30,7 +30,7 @@ export function DocumentDeletionControls({ document, knowledgeBaseId, onChanged 
       {!state.uncertain && task?.retryable ? <button type="button" className="ghost-button" disabled={state.busy}
         onClick={() => { void controller.retry() }}>{task.status === 'pending' ? '继续删除' : '重试删除'}</button> : null}
     </> : <button ref={trigger} type="button" className="ghost-button" disabled={blocked || state.busy}
-      onClick={() => setConfirm(true)}>{blocked ? '索引中，暂不可删除' : '删除文档'}</button>}
+      onClick={() => setConfirm(true)}>{document.is_current_version ? '当前版本不可删除' : blocked ? '索引中，暂不可删除' : '删除版本'}</button>}
     {state.error ? <p className="index-status-detail" role="alert">{state.error}</p> : null}
     {deleting ? <p className="index-status-detail">文档已退出检索范围，完成后不可撤销。</p> : null}
     {confirm ? <SessionActionDialog title="确认删除文档" busy={state.busy} returnFocusTo={trigger} onClose={() => setConfirm(false)}>

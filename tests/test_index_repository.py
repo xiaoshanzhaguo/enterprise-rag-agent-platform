@@ -175,10 +175,10 @@ class IndexRepositoryTests(unittest.TestCase):
         self.assertEqual(save_document_with_chunks("upload", "x", []), [])
         first = save_document_with_chunks("upload", "x", ["a", "b"], "legacy", "upload", None,
                                           "hr", "HR", "leave", "active")
-        second = save_document_with_chunks("upload", "x", ["a", "b"], department="new")
+        second = save_document_with_chunks("upload", "x", ["a", "b"], knowledge_base_type="hr", department="HR", process_type="leave")
         self.assertIsInstance(first, list)
         self.assertEqual([c["db_chunk_id"] for c in first], [c["db_chunk_id"] for c in second])
-        self.assertEqual(second[0]["department"], "new")
+        self.assertEqual(second[0]["department"], "HR")
         self.assertEqual(set(second[0]), {"chunk_id", "db_chunk_id", "document_id", "file_name", "text",
                                          "text_length", "created_at", "knowledge_base_id", "knowledge_base_type",
                                          "department", "process_type", "process_status"})

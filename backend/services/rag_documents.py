@@ -6,8 +6,8 @@ from urllib.parse import urlencode
 
 from backend.config import settings
 from backend.db import index_repository as repository
-from backend.db import deletion_repository
-from backend.db.repository import get_document_status
+from backend.db import version_repository
+from backend.db.repository import get_document_management_snapshot
 from backend.rag.categories import normalize_knowledge_base_type, get_department_for_knowledge_base_type
 from backend.rag.chunker import split_text_into_chunks
 from backend.rag.index_adapters import build_index_target_profile
@@ -141,10 +141,27 @@ class IndexManagementService:
                         department=request.department or get_department_for_knowledge_base_type(category) or inferred["department"],
                         process_type=request.process_type or inferred["process_type"],
                         process_status=request.process_status or inferred["process_status"] or "active")
+        identity = getattr(request, 'logical_document_id', None)
+        if identity:
+            parent = version_repository.get_logical_document(identity)
+            scope = build_knowledge_base_storage_session_id(kb) if kb else request.session_id
+            if not parent or parent['storage_session_id'] != scope:
+                raise IndexManagementError('not_found')
+            if parent['versions']:
+                previous = next((v for v in parent['versions'] if v['document_id'] == parent['current_document_id']), parent['versions'][0])
+                fields = request.model_fields_set
+                changed_category = request.knowledge_base_type is not None and category != previous['knowledge_base_type']
+                metadata = dict(
+                    knowledge_base_type=category if request.knowledge_base_type is not None else previous['knowledge_base_type'],
+                    department=request.department if 'department' in fields else (
+                        get_department_for_knowledge_base_type(category) if changed_category else previous['department']),
+                    process_type=request.process_type if 'process_type' in fields else previous['process_type'],
+                    process_status=request.process_status or previous['process_status'],
+                )
         profile = self.profile_factory() if self.mode == "vector" else None
         prepared = repository.prepare_document_index(
             request.session_id, request.file_name, chunks, retrieval_mode=self.mode,
-            target_profile=profile, knowledge_base_id=kb, **metadata,
+            target_profile=profile, knowledge_base_id=kb, logical_document_id=identity, **metadata,
         )
         operation = prepared.operation
         vector = self.vector_status(operation)
@@ -155,6 +172,8 @@ class IndexManagementService:
                        effective_retrieval_mode=self.mode, state_confirmed=True,
                        vector_index=vector, status_url=vector["status_url"])
         if self.mode == "keyword":
+            version_repository.auto_publish(prepared.document_id)
+            receipt.update(version_repository.document_version(prepared.document_id))
             return IndexManagementResult(receipt, "not_requested" if not operation or operation["status"] == "not_requested"
                                          else "vector_index_disabled")
         # 重复上传 failed 不隐式 retry；只对未领取 pending 继续执行。
@@ -165,14 +184,14 @@ class IndexManagementService:
             return IndexManagementResult(receipt, "state_unconfirmed")
         receipt.update(state_confirmed=result.state_confirmed,
                        vector_index=self.vector_status(result.operation) if result.state_confirmed else None)
+        receipt.update(version_repository.document_version(prepared.document_id))
         return IndexManagementResult(receipt, result.reason)
 
     def document_status(self, session_id, knowledge_base_id=None):
-        result = get_document_status(session_id, knowledge_base_id=knowledge_base_id)
-        operations = repository.get_document_index_operations([doc["document_id"] for doc in result["documents"]])
+        result, operations, deletions = get_document_management_snapshot(session_id, knowledge_base_id)
         summary = dict.fromkeys(("ready", "pending", "failed", "not_requested", "unknown"), 0)
         for doc in result["documents"]:
-            deletion = deletion_repository.get_document_deletion(doc['document_id'], doc['knowledge_base_id'])
+            deletion = deletions.get(doc['document_id'])
             if deletion:
                 from backend.services.document_deletion import DocumentDeletionService
                 doc['deletion'] = DocumentDeletionService.receipt(deletion)
@@ -180,6 +199,7 @@ class IndexManagementService:
             doc.update(text_status="persisted", vector_index=vector,
                        tracking_source="managed" if vector["status"] != "unknown" else "legacy")
             summary[vector["status"]] += 1
+        result["has_document"] = any(d.get("is_current_version") for d in result["documents"])
         result["vector_index_summary"] = summary
         return result
 

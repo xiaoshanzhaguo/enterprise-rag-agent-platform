@@ -299,3 +299,29 @@ TABLE_COLUMN_MIGRATIONS = {
         ("answer_text", "TEXT"),
     ],
 }
+
+
+# R3 identity is separate from each immutable content/version row.
+CREATE_TABLE_SQL.append("""CREATE TABLE IF NOT EXISTS logical_documents (
+    logical_document_id TEXT PRIMARY KEY,
+    storage_session_id TEXT NOT NULL,
+    knowledge_base_id TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    current_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    version_counter INTEGER NOT NULL DEFAULT 0 CHECK(version_counter >= 0),
+    state_version INTEGER NOT NULL DEFAULT 1 CHECK(state_version > 0),
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+)""")
+TABLE_COLUMN_MIGRATIONS['documents'].extend([
+    ('logical_document_id', 'TEXT REFERENCES logical_documents(logical_document_id)'),
+    ('version_number', 'INTEGER'), ('content_sha256', 'TEXT'), ('metadata_sha256', 'TEXT'),
+    ('auto_publish_version', 'INTEGER'), ('published_at', 'TEXT'),
+])
+TABLE_COLUMN_MIGRATIONS['document_deletion_tasks'] = [
+    ('logical_document_id', 'TEXT'), ('version_number', 'INTEGER'),
+]
+CREATE_INDEX_SQL.extend([
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_document_version ON documents(logical_document_id, version_number)',
+    'CREATE INDEX IF NOT EXISTS idx_logical_scope ON logical_documents(knowledge_base_id, storage_session_id)',
+])

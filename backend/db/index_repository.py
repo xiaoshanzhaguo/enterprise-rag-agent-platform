@@ -11,6 +11,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from backend.db.connection import get_connection
+from backend.db.version_repository import find_duplicate
 from backend.db.repository import (
     _prepare_document_storage_scope,
     _save_document_with_chunks_in_connection,
@@ -185,6 +186,7 @@ def prepare_document_index(
     mode: str = "unknown", source_type: str = "upload", knowledge_base_id: str | None = None,
     knowledge_base_type: str = "general", department: str | None = None,
     process_type: str | None = None, process_status: str = "active",
+    logical_document_id: str | None = None,
 ) -> PreparedIndex:
     """原子保存/复用文档、块和任务；父级记录可独立提交，不执行向量化。"""
     if not isinstance(session_id, str) or not session_id.strip():
@@ -201,14 +203,9 @@ def prepare_document_index(
     )
     with closing(get_connection()) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
-        scope_column = "knowledge_base_id" if normalized_id else "session_id"
-        existing = connection.execute(
-            f"""SELECT id FROM documents WHERE {scope_column} = ? AND content_hash = ?
-                AND (file_name = ? OR (file_name IS NULL AND ? IS NULL))
-                ORDER BY created_at DESC, id DESC LIMIT 1""",
-            (normalized_id or session_id, hashlib.sha256("\n\n".join(chunks).encode("utf-8")).hexdigest(),
-             file_name, file_name),
-        ).fetchone()
+        existing = find_duplicate(connection, storage_id, document_kb_id, file_name,
+            hashlib.sha256("\n\n".join(chunks).encode()).hexdigest(), knowledge_base_type,
+            department, process_type, process_status, logical_document_id)
         task_row = connection.execute(
             "SELECT operation_id FROM rag_index_tasks WHERE document_id = ?", (existing["id"],),
         ).fetchone() if existing else None
@@ -218,7 +215,7 @@ def prepare_document_index(
             raise IndexOperationConflict('文档正在删除，不能重复上传。')
         if operation:
             stored_chunks = _verify_input(connection, operation)
-            requested_chunks = [dict(chunk, file_name=file_name, knowledge_base_id=document_kb_id,
+            requested_chunks = [dict(chunk, file_name=chunk["file_name"], knowledge_base_id=document_kb_id,
                                      knowledge_base_type=knowledge_base_type or "general", department=department,
                                      process_type=process_type, process_status=process_status or "active")
                                 for chunk in stored_chunks]
@@ -234,6 +231,7 @@ def prepare_document_index(
             document_knowledge_base_id=document_kb_id, source_type=source_type,
             knowledge_base_type=knowledge_base_type, department=department,
             process_type=process_type, process_status=process_status,
+            logical_document_id=logical_document_id, managed=True,
         )
         document_id = saved[0]["document_id"]
         # 历史 keyword 文档不凭空纳管成 not_requested；没有任务即 legacy/unknown。

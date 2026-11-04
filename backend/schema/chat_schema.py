@@ -82,6 +82,7 @@ class StreamEvent(BaseModel):
 
 
 class IndexDocumentRequest(BaseModel):
+    logical_document_id: str | None = None
     """
     文档索引请求模型。
 
@@ -99,6 +100,10 @@ class IndexDocumentRequest(BaseModel):
 
 
 class IndexDocumentResponse(BaseModel):
+    logical_document_id: str | None = None
+    version_number: int | None = None
+    is_current_version: bool = False
+    logical_state_version: int | None = None
     """
     文档索引响应模型。
     """
