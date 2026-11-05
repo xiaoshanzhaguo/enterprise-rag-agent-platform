@@ -1,6 +1,6 @@
 # 数据表与接口字段设计
 
-本文档记录企业内部知识与流程自动化助手当前的数据字段边界，重点覆盖知识库分类、流程信息、Agent 路由结果和 n8n 执行记录。
+本文档记录企业内部知识与流程自动化助手当前的数据字段边界，覆盖知识库分类、流程信息、Agent 路由、n8n 执行记录及 R1/R2/R3 文档生命周期。
 
 ## 1. 文档业务标签
 
@@ -128,7 +128,7 @@ Profile 保存 provider、model、存储/端点指纹、Collection 名称、维�
 
 | HTTP | 含义 |
 | --- | --- |
-| 200 | ready、not_requested，或正常查询；ready 的重复动作保持只读 |
+| 200 | ready、not_requested，或正常查询；ready 不重复写向量，R3 可尝试补确认尚未发布候选的发布 |
 | 202 | 已被领取或执行名额不足，查询 Location/status_url；不自动再发 POST |
 | 409 | 版本、动作、输入或配置冲突；先 GET 核对 |
 | 502 | Embedding/向量写入等执行失败；回执可能表明文本已保存、任务 failed |
@@ -160,6 +160,50 @@ Profile 保存 provider、model、存储/端点指纹、Collection 名称、维�
 
 删除 API 回执包括 operation/document/knowledge_base ID、文件名、status/state_version、attempt_count、execution_claimed、state_confirmed、retryable、受控 error_message、时间及 status_url；不暴露 token 或完整目标。回执与 Location 中的查询地址携带编码后的知识库及调用者角色，可直接跟随；列表投影不代填管理员身份，React 查询时使用当前页面的角色范围。
 
-200 表示查询或完成，202 表示 pending；403/404 分别为权限或范围失败，409 为索引正在执行、版本或状态冲突；502 为已确认执行失败，503 为存储不可用或结果未确认。执行已取得回执时，错误 HTTP 可直接返回删除回执对象；参数/范围等错误使用 `{ "detail": "说明" }`，不能套用 R1 的嵌套 receipt 格式。状态未确认时先查询，不能据超时推断没有删除。
+200 表示查询或完成，202 表示 pending；403/404 分别为权限或范围失败，409 为索引正在执行、版本或状态冲突，R3 中还包括试图删除启用逻辑文档的当前版本；502 为已确认执行失败，503 为存储不可用或结果未确认。执行已取得回执时，错误 HTTP 可直接返回删除回执对象；参数/范围等错误使用 `{ "detail": "说明" }`，不能套用 R1 的嵌套 receipt 格式。状态未确认时先查询，不能据超时推断没有删除。
 
 `GET /rag_status/{session_id}` 的每项 Document 还返回生命周期与可用的 deletion 回执；deleting 项仍保留在管理列表供查询/恢复，但不参与正常检索。完成后文档从列表移除。索引已领取时 DELETE 返回 409，未领取索引由生命周期及 CAS 阻断。人工恢复命令见 [部署说明](deployment.md#r2-删除任务与人工恢复)。
+
+## 8. R3 逻辑文档与版本管理
+
+实现与最终审查修复提交 `f450739`；文档按 2026-11-05 的该 HEAD 核对。保留 R1/R2 接口与稳定 ID，不把内容版本号、发布 CAS 和删除生命周期版本混用。
+
+| 位置 | 字段与含义 |
+| --- | --- |
+| `logical_documents` | UUID `logical_document_id`；`knowledge_base_id`、`storage_session_id`；`display_name`；可空 `current_document_id`（Document 外键，删除后 SET NULL）；`version_counter`（空身份为 0）；`state_version`（初始 1）；`enabled`（0/1，默认 1）；创建/更新时间 |
+| `documents` | 新增 `logical_document_id` 外键、`version_number`、`content_sha256`、`metadata_sha256`、`auto_publish_version`、`published_at`；原 `id` 仍标识一个具体版本，Chunk 继续关联此 ID |
+| 版本约束 | `(logical_document_id, version_number)` 唯一；事务内分配从 1 开始的递增号，删除后不回收。检索元数据快照包括分类、部门、流程类型/状态；文件名不参与显式版本去重 |
+| R2 删除任务 | 新增可空 `logical_document_id`、`version_number` 审计快照，无版本/Document 外键；既有删除目标与摘要格式保持兼容 |
+
+`init_database()` 在同一事务中建表、补列、回填身份和索引；每条旧 Document 独立成为 V1，保留原 Document、Chunk ID 和 R1/R2 任务，不合并同名文件。active 且无索引任务或任务 ready/not_requested 的记录设为当前；pending/failed/deleting 不推断发布成功。重复初始化只迁移尚未绑定身份的记录。没有重新生成 Embedding，也没有改写既有 Chroma Metadata；业务库迁移未在本次调研执行，临时旧库重复迁移及外键测试见交付记录。
+
+### 上传与发布规则
+
+`POST /index_document` 新增可选 `logical_document_id`。不传时使用独立文档入口及原同名同内容复用约定，不会隐式加入已有多版本链；传入时必须属于当前上传范围。相同正文哈希和相同检索元数据复用已有版本，文件改名也复用原文件名/Chunk 来源快照；内容或元数据变化创建候选。需要修改既有文档的分类/部门时应明确选择逻辑文档，不就地修改旧版本。
+
+vector 候选确认 ready 后才尝试自动发布；keyword 在文本和 not_requested 任务保存后可发布。`auto_publish_version` 保存创建时的逻辑 CAS，发布成功才递增逻辑 `state_version`；索引失败或发布冲突不改当前指针。ready 但发布冲突的候选可显式发布，不能通过刷新预期版本自动覆盖别人。历史已发布版本不因重复索引隐式回退。
+
+显式发布须满足版本 active、索引 ready/not_requested（vector 模式要求任务 ready；无任务的历史记录须有既有发布时间）。回退复用相同发布接口和 Document ID，不新建版本号；成功后 enabled=1。停用递增逻辑 CAS、设置 enabled=0，保留指针和历史；所有版本立即退出正常检索，随后可显式重新发布有效版本。R2 拒绝直接删除启用状态的当前版本；删除和发布通过同一 SQLite 写事务及状态条件互斥。
+
+### FastAPI 与 React
+
+| 接口 | 请求与返回 |
+| --- | --- |
+| `POST /logical_documents` | `{ "display_name": "差旅制度" }`，创建空逻辑身份，返回 current_document_id=null、version_counter=0；之后用上传接口写 V1 |
+| `GET /logical_documents` | 返回当前公共知识库的逻辑文档列表，不混入普通会话范围 |
+| `GET /logical_documents/{identity}` | 返回身份、当前指针、启停/CAS 状态及按版本号倒序的 `versions`，包含索引状态与发布时间 |
+| `POST /index_document` | 传 logical_document_id 上传候选；原响应追加逻辑身份、version_number、is_current_version、logical_state_version |
+| `POST /logical_documents/{identity}/publish` | `{ "document_id": 12, "expected_state_version": 3 }`，用于候选发布或历史回退，返回更新后的身份及版本列表 |
+| `POST /logical_documents/{identity}/disable` | `{ "expected_state_version": 4 }`，停用后返回更新后的身份及版本列表 |
+
+逻辑文档接口要求查询参数 `knowledge_base_id`；写操作还要求 `user_role=kb_admin/admin`。公共版本 Service 拒绝保留值 session_scoped，并校验 `storage_session_id` 为对应知识库内部会话；不提供普通会话跨范围版本操作。UUID 路径、严格正整数 CAS/Document ID 及禁止额外写入字段由 Schema 校验。成功为 200，发布状态/CAS 冲突为 409，角色/保留范围为 403，资源或范围不符为 404，存储状态未确认为 503；参数失败为 400/422。错误使用 `{ "detail": "说明" }`，不返回执行 token。角色仍是演示约定，未实现正式登录和多租户鉴权。
+
+`GET /rag_status/{session_id}` 的每个 Document 追加逻辑身份、版本号、逻辑 CAS、logical_enabled、current_document_id、display_name、published_at 和 is_current_version。列表保留候选/历史/deleting 供管理，`has_document` 表示存在当前生效版本。Repository 在单一读事务中取得文档、当前指针及索引/删除任务，避免同一响应混入两个发布时点。
+
+React 显式选择新建独立文档或已有逻辑身份；选择已有身份时继承分类及未修改的部门/流程字段。文档按身份分组展示当前、候选、历史或停用状态，复用 R1 的查询/继续/重试及 R2 删除确认。索引操作或轮询到 ready 后刷新完整版本状态；发布/停用弹窗固定打开时的 CAS，409 只查询对账，不自动换新 CAS 重发。
+
+### 正常检索与引用持久化
+
+SQLite `current_document_id` + enabled + Document active 是权威条件：关键词读取、向量查询前的 ID 白名单、查询后的 Chunk 回查、上下文及 rag_hits 写入都检查它。Agent 新引用携带 document_id/db_chunk_id，消息写入在短写事务中再次校验；失效引用移除，`rag_citations_invalidated=true` 标记变化，提交后的同一份元数据用于 SSE。已有历史消息不自动删除或重写。
+
+白名单能隔离版本，不能校验历史 Embedding 的语义来源。旧向量保留且不批量重建；历史模型未确认时，同为 1024 维也不代表可混用。R3 浏览器使用 Fake 向量适配器，不替代真实模型兼容性验收。结果见 [R3 交付记录](day27_delivery.md#r3-文档版本管理验收2026-11-04)。
