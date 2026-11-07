@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "gold_version": "v1",
+  "state": "frozen",
+  "frozen_on": "2026-11-07",
+  "gold_file": "eval/r4/gold_v1.json",
+  "files_sha256": {
+    "docs/sample_knowledge_base/finance/payment_approval_policy.md": "b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+    "docs/sample_knowledge_base/finance/reimbursement_policy.md": "cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+    "docs/sample_knowledge_base/finance/travel_expense_policy.md": "9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+    "docs/sample_knowledge_base/hr/attendance_policy.md": "19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+    "docs/sample_knowledge_base/hr/leave_policy.md": "095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+    "docs/sample_knowledge_base/hr/onboarding_checklist.md": "8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+    "docs/sample_knowledge_base/it/device_security_policy.md": "358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+    "docs/sample_knowledge_base/it/gitlab_access_request.md": "dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+    "docs/sample_knowledge_base/it/vpn_troubleshooting.md": "43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+    "docs/sample_knowledge_base/product/customer_feedback_process.md": "b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+    "docs/sample_knowledge_base/product/product_faq.md": "dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+    "docs/sample_knowledge_base/product/release_process.md": "dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+    "eval/r4/README.md": "1b0e384f2e6fd947f9d255ec163dbb115e0f4aaa570d4c54895ec0865da31c44",
+    "eval/r4/ai_review_candidates.json": "eaf1e5b1497f85d5395483724d5a47f9fbbc87cfaa912978cd808102f3c15e73",
+    "eval/r4/ai_review_report.md": "cff22e5a7732954eea3d3bb1062e0608d9cde5869a88b94883cc8c96f9326b14",
+    "eval/r4/baseline_7677788_keyword.json": "e1145cd50336bf7d58684d3852cdc18b5f7ca9441d9cd5c81380eeeb18238775",
+    "eval/r4/corpus.json": "4e136b4bf7163190b4f2337b7e646ebf97448dcbf8d9489faf546c69ffa8faee",
+    "eval/r4/dataset.py": "0219b492e10c51c66832096ce2b177b76877711424155d64d82721e27be6c50b",
+    "eval/r4/development.jsonl": "73953a60d40dc71e91e18eed0b1f8a2f99a34fd9be9d69350e5d52e7da89a39b",
+    "eval/r4/gold.py": "648efe0a59f1adbc41dbb59b61f4c4e7a1ee4f4eb25bd0a35ce93024ea018e10",
+    "eval/r4/gold_v1_candidate.json": "b7fc8be3b26fd0ddc7b0d438e5fb3da33bb86999cbbc9f8161f9ff26189bd1e5",
+    "eval/r4/holdout.jsonl": "bd8725d0caeee6fcbcdad82d3f681e6ae3eeb10c33e7a3ef06c9217ebf2fd57b",
+    "eval/r4/metrics.py": "42cb2bcdbec39d435ae0653d7b3bf1b832a7eca6acfa785eac54902729c3e0df",
+    "eval/r4/run_baseline.py": "97851fac50d0f71b3c24cb161e08f353a09de1fea747ed2d394e87e8c67eea44",
+    "eval/week4_questions.jsonl": "19ccb35ebb9bc196bb47c6e66a751c081efcd05bd88b73af55c0272d78314ca3",
+    "eval/r4/gold_v1_candidate_freeze_report.md": "3ea0d442629261d4dc711435921852b7a25a96981bd3a6ce24591b8959831669",
+    "eval/r4/gold_v1.json": "61865cc306cff7534abc0b7d96af7b633966e37d615c78c40312bd61500aadab"
+  },
+  "cases_canonical_sha256": "350f4c62c7ef9c2cd52f116245355ab7fe659b5ece8adcf8679c492fbf97120b",
+  "corpus_manifest_sha256": "4e136b4bf7163190b4f2337b7e646ebf97448dcbf8d9489faf546c69ffa8faee",
+  "counts": {
+    "case_recommendations": {
+      "PASS": 38,
+      "REVISE": 0,
+      "REJECT": 0,
+      "UNCERTAIN": 0
+    },
+    "development_cases": 30,
+    "holdout_cases": 8,
+    "original_evidence_count": 37,
+    "active_positive_evidence_count": 36,
+    "primary_evidence_count": 35,
+    "auxiliary_evidence_count": 1,
+    "unscored_background_count": 1,
+    "second_round_pass_cases_checked": 36,
+    "second_round_anomalies": [],
+    "unresolved_data_issues": [],
+    "pending_final_user_confirmation": false,
+    "optional_first_round_span_proposals_applied": false
+  },
+  "documents": [
+    {
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "filename": "payment_approval_policy.md",
+      "category": "finance",
+      "version_number": 1,
+      "source_sha256": "b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "text_sha256": "b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "document_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428"
+    },
+    {
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "filename": "reimbursement_policy.md",
+      "category": "finance",
+      "version_number": 1,
+      "source_sha256": "cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "text_sha256": "cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "document_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845"
+    },
+    {
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "filename": "travel_expense_policy.md",
+      "category": "finance",
+      "version_number": 1,
+      "source_sha256": "9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "text_sha256": "9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e"
+    },
+    {
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "filename": "attendance_policy.md",
+      "category": "hr",
+      "version_number": 1,
+      "source_sha256": "19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "text_sha256": "19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a"
+    },
+    {
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "filename": "leave_policy.md",
+      "category": "hr",
+      "version_number": 1,
+      "source_sha256": "095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "text_sha256": "095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2"
+    },
+    {
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "filename": "onboarding_checklist.md",
+      "category": "hr",
+      "version_number": 1,
+      "source_sha256": "8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "text_sha256": "8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "document_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "filename": "device_security_policy.md",
+      "category": "it",
+      "version_number": 1,
+      "source_sha256": "358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "text_sha256": "358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "document_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "filename": "gitlab_access_request.md",
+      "category": "it",
+      "version_number": 1,
+      "source_sha256": "dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "text_sha256": "dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "document_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca"
+    },
+    {
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "filename": "vpn_troubleshooting.md",
+      "category": "it",
+      "version_number": 1,
+      "source_sha256": "43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "text_sha256": "43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714"
+    },
+    {
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "filename": "customer_feedback_process.md",
+      "category": "product",
+      "version_number": 1,
+      "source_sha256": "b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "text_sha256": "b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "document_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261"
+    },
+    {
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "filename": "product_faq.md",
+      "category": "product",
+      "version_number": 1,
+      "source_sha256": "dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "text_sha256": "dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a"
+    },
+    {
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "filename": "release_process.md",
+      "category": "product",
+      "version_number": 1,
+      "source_sha256": "dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "text_sha256": "dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6"
+    }
+  ],
+  "splits": {
+    "development": {
+      "count": 30,
+      "origin": "all 30 unchanged historical cases"
+    },
+    "holdout": {
+      "count": 8,
+      "origin": "new questions, same frozen corpus; not unseen documents",
+      "policy": "freeze before first run; baseline exposure is not a blind human holdout; do not tune on this split"
+    }
+  },
+  "hash_policy": "Raw file bytes. Canonical text/case hashes use documented normalization. Manifest/report/output hashes are in gold_v1_checksums.json to avoid circular hashes.",
+  "original_candidate_report_archive": {
+    "path": "eval/r4/gold_v1_candidate_freeze_report.md",
+    "sha256": "3ea0d442629261d4dc711435921852b7a25a96981bd3a6ce24591b8959831669"
+  },
+  "approval": {
+    "authority": "explicit_user_approval",
+    "approved_on": "2026-11-07",
+    "scope": "all 38 cases and 36 scoring evidence spans; background excluded",
+    "immutable_policy": "No silent edits; corrections require a new version and manifest."
+  }
+}
