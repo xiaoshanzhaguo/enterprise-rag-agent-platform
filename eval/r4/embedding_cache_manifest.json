@@ -1,0 +1,1425 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "created_at_utc": "2026-11-07T13:26:23.354308+00:00",
+  "profile": {
+    "provider": "openai",
+    "model": "qwen3.7-text-embedding-flash",
+    "embedding_dimension": 1024,
+    "normalize_embeddings": false,
+    "endpoint_fingerprint": "sha256:5891aed827c4e67b2d7c0c73ea819327ce3f2b6ef72213cd79669486a26b1ead",
+    "distance_metric": "cosine"
+  },
+  "expected_dimension": 1024,
+  "dimension_confirmed_by_response": true,
+  "collection": {
+    "name": "rag_chunks",
+    "configuration": {
+      "hnsw": {
+        "space": "cosine"
+      }
+    },
+    "storage": "isolated temporary directory, no business access"
+  },
+  "chunk_bindings": [
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6::chunk-1::217ebb73ad1a55bfa84ad8caef73725b21ae5811058372f29fcc12842582e8ad",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "baseline_temp_document_id": 12,
+      "baseline_temp_db_chunk_id": 73,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "4307f6279eb29a6104910840bb22f7b10ca40f5646b0d0a9b4cc61a316a19475"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6::chunk-2::485efee771e8d3b3050bc80f7a4bc0030fb0f674ebcebccb067c86e7c73b88e0",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "baseline_temp_document_id": 12,
+      "baseline_temp_db_chunk_id": 74,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "976770f41c04e337ce4ac2c1142277c8c7b1fdb028630808df1434ef644d2f37"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6::chunk-3::b710ba9c5a88ac3d429bb73bdc109cf338e1f7bc54b28ab4fccb326ad122c16a",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "baseline_temp_document_id": 12,
+      "baseline_temp_db_chunk_id": 75,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "845604b49f7d1f023c35c8de5821789cf8e1c80a40a69e4ee9e074ef5a46954e"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6::chunk-4::32fa0464092b3d21f4590b11c22dbf5ec485ba66869d0648f8dc7bd1a6f43c97",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "baseline_temp_document_id": 12,
+      "baseline_temp_db_chunk_id": 76,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "9c0afdd82897fabb760f2be52dafe27541ae039da264d9330f075c39a6dce110"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6::chunk-5::b355e0793fe1dd9cf2c555b45dfb7cdb9491e7f9ff3406d349335af93e5fcdec",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "baseline_temp_document_id": 12,
+      "baseline_temp_db_chunk_id": 77,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "afb80fcf02051384c0a6b09188ef882e94a6acddf37af37b497a07330f0f4f3c"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6::chunk-6::3e8a621d2c50082d5c53ccaca9608a6b965719f2a2a40a51a8ac0a19a6815e3f",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "baseline_temp_document_id": 12,
+      "baseline_temp_db_chunk_id": 78,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "54d4226672a0ea02f4d64bd848944f8ee27a2c41f16da8ec0d685315c2b3cad1"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6::chunk-7::410913de7b61fec219e91ffa8efc5625968081e236d149cdd6fb14be0b72e222",
+      "document_key": "docs/sample_knowledge_base/product/release_process.md::v1::dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6",
+      "source": "docs/sample_knowledge_base/product/release_process.md",
+      "baseline_temp_document_id": 12,
+      "baseline_temp_db_chunk_id": 79,
+      "chunk_index": 7,
+      "version_number": 1,
+      "input_sha256": "c7b6ab64c80f8fb7662341527d86f7e00549977025f669b81186617d4686a787"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a::chunk-1::6da49e94eb1cb7ac4a1b23c14597f9e5c74ae32a19edddaeb979fe31895a38c0",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "baseline_temp_document_id": 11,
+      "baseline_temp_db_chunk_id": 66,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "43b056646387ac26a01e70516234abce98500768ce005a6467d9912129cfc55d"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a::chunk-2::4d1906bb3895047678d2d1c6ec41cce4e275aefdb9c0ac9f4690588e41ac9ea3",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "baseline_temp_document_id": 11,
+      "baseline_temp_db_chunk_id": 67,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "69b7491beb50ffe4bae180afe0274157c068f331a7909d1ebe4ee676fcd5d11b"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a::chunk-3::704c6c0b6a83bda6b915af6e041eac4f40699cca1fc23a75e762b51ab9aebd77",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "baseline_temp_document_id": 11,
+      "baseline_temp_db_chunk_id": 68,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "3a432dbc8c3e92abe9169b6bec08df28c4c3077ed121b91f7fa35f5562260ff3"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a::chunk-4::8ba07d269a40496b73822e922e49c4c213035dba215485ec1ec4d15f55fa30cf",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "baseline_temp_document_id": 11,
+      "baseline_temp_db_chunk_id": 69,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "691d2489741db3ebf0cee6003bd326000d4de91cc9e572d5c6d854b11251b86c"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a::chunk-5::359c33b109414a64ae6aeaef3848218a3005cfb56a9ca9abe5cccec3e1cd56fa",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "baseline_temp_document_id": 11,
+      "baseline_temp_db_chunk_id": 70,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "7532b1fddbb4d4b2c61d40715227984a644e5bed1d1541df20d70591e10e8b3d"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a::chunk-6::9f79ecd05d76dffb8142e604531976dbd2f3f86f7f46eb9849025b5be3b58fef",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "baseline_temp_document_id": 11,
+      "baseline_temp_db_chunk_id": 71,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "bcbbd4821701e90ba94644976b5132ff156204896a0cc47d202d83f49c876e4a"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a::chunk-7::d5a32da043dfd18fdb9d23dcbfbbc9928e4145d5779563dce76f67735da2cf84",
+      "document_key": "docs/sample_knowledge_base/product/product_faq.md::v1::dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a",
+      "source": "docs/sample_knowledge_base/product/product_faq.md",
+      "baseline_temp_document_id": 11,
+      "baseline_temp_db_chunk_id": 72,
+      "chunk_index": 7,
+      "version_number": 1,
+      "input_sha256": "57dd9fedca4da174a37e1a63df1d664cdbc3ee225c50e2c312df9694d7d4f50e"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261::chunk-1::d19ad0aa91e55586943d64f1e027c2bdacaefc7b1895bfa85bbc51d01ef12f18",
+      "document_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "baseline_temp_document_id": 10,
+      "baseline_temp_db_chunk_id": 60,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "affef9c7a04b13eb399d59b12abb85669f616157dcd12ccbb381586dbaf13326"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261::chunk-2::b76b0eb849544da2a1e4ae1ac560c8ac7e31ba69b7eb1db936549afd5856b488",
+      "document_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "baseline_temp_document_id": 10,
+      "baseline_temp_db_chunk_id": 61,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "ba12f0b2ed77e2a71b720d20802d07fb899295b773cb888283a5db7ef0c11669"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261::chunk-3::ddb3d42cffc1eb3746ce0836d6f661d4e7f1b2fe7d12877d57583ddda9ccdbb8",
+      "document_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "baseline_temp_document_id": 10,
+      "baseline_temp_db_chunk_id": 62,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "f947f1c273de299088064b1b62c8c953b35b7b215d3e90623c8e74971784fefe"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261::chunk-4::25b3a35a7a2a7f3009020b21c19d943e6fe40a13bb4878f1ab04b13a8114354c",
+      "document_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "baseline_temp_document_id": 10,
+      "baseline_temp_db_chunk_id": 63,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "58b671f555c3ab5e9712483e76ca2d0aa6abca7951dda5291720106016ca8dac"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261::chunk-5::074f6d32bb47628a9e6a5cb0e2487f009524379fef29e2d76112b24cd0b4797c",
+      "document_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "baseline_temp_document_id": 10,
+      "baseline_temp_db_chunk_id": 64,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "4755586bde257ed0cda7b88100e370452ab3ab590510bc6f2fbc357ce2ac9699"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261::chunk-6::13f26990ee0d1b6e87a49b668bbcff4059ab4a7b6ee236262b7c1a91c66faf71",
+      "document_key": "docs/sample_knowledge_base/product/customer_feedback_process.md::v1::b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261",
+      "source": "docs/sample_knowledge_base/product/customer_feedback_process.md",
+      "baseline_temp_document_id": 10,
+      "baseline_temp_db_chunk_id": 65,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "6a5ad5a34494caabf27befd8ec4ebf7219e8a1d72b8b7a8eac1664a3c4974dd0"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-1::8b99aedc6a2251808ac67781a2c2ee9929725cfbeaddd5b7a36f41e8d8ba9bc8",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 52,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "aa2eb74c62789c7ba8959fe65d9f3fe1f6d943d83c31e1a50aff79756b914019"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-2::21d61e2a56c5c65bc1f966fc29282a38b3f112606002ee1812536837d232f50d",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 53,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "293c8baf74cc56b9b6b2089bd9ae7a57f1f943e987626cf89a1d60327e92cc6b"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-3::050077874a092e38ec993b614d7abc015b7c6164bc63d8b89c96512e1f0529ee",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 54,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "8e77bd43b2997fcde82dc42df7370234c9cefc25e9dd63c95fa68ce905a29fbc"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-4::d90a01df8b282b1ff032ed1d22c3472b794977c30dd5e569b01df47d9fcbbaed",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 55,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "c210deba41be14859a8c17ae200dcec98a5276d2ba980a6c1e6a6ba16a9248d7"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-5::31855feaa2822f8b5f7c41992a3839e8d935c2ca5c77caeaccbcad90a38f6bd6",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 56,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "ecd7c7a8f3a6dce0c16c148897c07bc269c39e65e89ac4bc3416fb8613dbd9b5"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-6::d89117fdd5e565940e5e73c78dc9579c4c6e24beae2831faa37ada6448b0c63f",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 57,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "be421c947ce4c1154808b69b0e186008b10840f972145d947253c314b30c6139"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-7::4ffc1715a35eca1d0cbd9c10d082233e009dfad94470c96cc8cee0a0f794d964",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 58,
+      "chunk_index": 7,
+      "version_number": 1,
+      "input_sha256": "9a1dbcaf371813ccdff180625b13476f306d4548fdc0f1348ed7bfa32016f250"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714::chunk-8::37d720d4f5116d077d709072e0a74e02c30022a877a71f629dd12c52f2c5f1e6",
+      "document_key": "docs/sample_knowledge_base/it/vpn_troubleshooting.md::v1::43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714",
+      "source": "docs/sample_knowledge_base/it/vpn_troubleshooting.md",
+      "baseline_temp_document_id": 9,
+      "baseline_temp_db_chunk_id": 59,
+      "chunk_index": 8,
+      "version_number": 1,
+      "input_sha256": "254450d8b5f497b30274f54d39be2ef01b88a2fdfdff1446dc594207cbf48d18"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca::chunk-1::c403c8d67dc586c8ad469820dc51af136d607fd7674b868453388c7d74689638",
+      "document_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "baseline_temp_document_id": 8,
+      "baseline_temp_db_chunk_id": 46,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "18a4e2544b256fdf2de03ed647ba0fa49ca20046a54cfbc89965366d7d657175"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca::chunk-2::a7e33ae11ad73d7db0625b2e94af41c6bb8793864477c498a156832cdb88c582",
+      "document_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "baseline_temp_document_id": 8,
+      "baseline_temp_db_chunk_id": 47,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "fc93c3fff0a62732a5ff8f4006f14d80afa9c9729166641d5908e95efcd51b22"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca::chunk-3::73f59549370331ba304fcc3a734189ace0f3b8d9d3b2204a8fbd7d6adb9dc076",
+      "document_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "baseline_temp_document_id": 8,
+      "baseline_temp_db_chunk_id": 48,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "c3330e3101fd527acc4682a574fc51ae60b06b7d467727b8040725fa5569f9fe"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca::chunk-4::1bb4996ffe80d96647ace2e197646b4f82ebc856e1fae38ceaae82c8858eb4c1",
+      "document_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "baseline_temp_document_id": 8,
+      "baseline_temp_db_chunk_id": 49,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "3dafbff415a3e474b3763a668246875dcc8716ea8f32ede0e94a988653e972d2"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca::chunk-5::b1a1ffecf7847818b3bfdf1b117e26ccc14b426ed7e614cd17d310386dd58c19",
+      "document_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "baseline_temp_document_id": 8,
+      "baseline_temp_db_chunk_id": 50,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "d446addc7dd41edaeac43abb129989f647386c885b388d48ac3cbb7bf5800f0f"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca::chunk-6::286900554d8e3180a870d338b5aa80b2fc2d6cf87035734f315af5769c8a139c",
+      "document_key": "docs/sample_knowledge_base/it/gitlab_access_request.md::v1::dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca",
+      "source": "docs/sample_knowledge_base/it/gitlab_access_request.md",
+      "baseline_temp_document_id": 8,
+      "baseline_temp_db_chunk_id": 51,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "53dedb823a8e617c51bb4896361db09614108464a476a0ecb0493f26e2e24670"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42::chunk-1::9e4ceb9ea0a59127eced0963eaba13ee6305f4e0ed8be4919e518a2ec6e097be",
+      "document_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "baseline_temp_document_id": 7,
+      "baseline_temp_db_chunk_id": 40,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "11d701f32afb213018331d64e4980811d5908b510c708686b331acbc3790d9c6"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42::chunk-2::aaad4e33f1475318e29d9768b4f50612f08bc3c59864c404ba0834756322f654",
+      "document_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "baseline_temp_document_id": 7,
+      "baseline_temp_db_chunk_id": 41,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "eb8eb1a2e2cf48693f4f533a1c522f024db36d2f973d91ddd007159f1f2324f2"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42::chunk-3::a9c7b957a11655e2384b23bd36e154c8b6abd005ee57d03439f9b8786927c523",
+      "document_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "baseline_temp_document_id": 7,
+      "baseline_temp_db_chunk_id": 42,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "d6c94e8773b883b96b2949c27f8e32e92fd224a4bd5d5ad19820cf7b62e9683d"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42::chunk-4::5e3589dcb3df0fee6647b18b07145a6b0442340d123af9b5321ebbdd389baab4",
+      "document_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "baseline_temp_document_id": 7,
+      "baseline_temp_db_chunk_id": 43,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "508667b705222832c6776cb2c89ce7cbcc50d6991dff626551a1a1c72df28471"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42::chunk-5::1568b4f9582af670d9f3f1da3808fa4de496436ed6a505410f2e759d115d2b73",
+      "document_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "baseline_temp_document_id": 7,
+      "baseline_temp_db_chunk_id": 44,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "d95b918a45287e8323cbf0f92b08105a6dfe3e856136e6a9442651f2312dd16a"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42::chunk-6::55a946edc52b09c7c301dc5e94585797f38bea3cc4c8f03f18a9c4185034231f",
+      "document_key": "docs/sample_knowledge_base/it/device_security_policy.md::v1::358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42",
+      "source": "docs/sample_knowledge_base/it/device_security_policy.md",
+      "baseline_temp_document_id": 7,
+      "baseline_temp_db_chunk_id": 45,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "dada92c8aa83fcf94238e84e72612d5778172b42ea98b029cd6cd9df0e5425c5"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480::chunk-1::5fde4e2483ed15c6d73d0f4e7b07ae396079f3cc30cdae48856607885f5b515b",
+      "document_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "baseline_temp_document_id": 6,
+      "baseline_temp_db_chunk_id": 34,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "c09add55c54ef21ba487b1b96e275926d7550f572a2426927424722e523d7c42"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480::chunk-2::b2087f3cc12bf8d2db6310e838837603607decb88b8f95dc6567194a8c4a6c11",
+      "document_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "baseline_temp_document_id": 6,
+      "baseline_temp_db_chunk_id": 35,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "190d9ec1b650749cb9950cce1e0b980a3d246dc29ee3a09929adf8d3dd09e237"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480::chunk-3::bbf169453e39f9f43ef7b965eb1f7dd66f1e10813e720eaa81c9663d7c4c3f8e",
+      "document_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "baseline_temp_document_id": 6,
+      "baseline_temp_db_chunk_id": 36,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "cd5d8a2d8d962605c7a37b37b90adfc3415aa74e91ddd92e81fb8affc5310aca"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480::chunk-4::484a3945455e39594522980333879176bf7c3e7647b2bda61f5c09e4e7790b30",
+      "document_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "baseline_temp_document_id": 6,
+      "baseline_temp_db_chunk_id": 37,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "2acd5ce0630d5961a5efe5bc9030ef66fe4ea9858071b761b42fe87f1823e2c1"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480::chunk-5::96358ea47f9ef95006081f20d7bb6419b1c578b1df59898a4317bd94b327af1f",
+      "document_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "baseline_temp_document_id": 6,
+      "baseline_temp_db_chunk_id": 38,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "3e42c80a749f3b920b0a557f83393d57703177883eb824f2ba4178f36a97e30f"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480::chunk-6::6c305cedd0507a24d02c2530ee271bc8629c62ca223d3d8333207c23fdc1de6b",
+      "document_key": "docs/sample_knowledge_base/hr/onboarding_checklist.md::v1::8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480",
+      "source": "docs/sample_knowledge_base/hr/onboarding_checklist.md",
+      "baseline_temp_document_id": 6,
+      "baseline_temp_db_chunk_id": 39,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "0436287aeef269b7231330bc3533affbc3400ad9d4701f22ae8e4575919d612c"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2::chunk-1::9a41b510a940d335b221fc22730a8201175977729021abce763b420f21c9fb29",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "baseline_temp_document_id": 5,
+      "baseline_temp_db_chunk_id": 27,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "a5ec17c8ffb5cd421014f281c35d7881c7c2874293cb72702e1a04f434425d87"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2::chunk-2::f0550047bcfe17f5831087c886b3dea1087e52d231a5c5904256bf678da52e85",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "baseline_temp_document_id": 5,
+      "baseline_temp_db_chunk_id": 28,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "149cefe16d1b20cc79585645314caf82e05152feca32d34f6e4c256069e7a625"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2::chunk-3::9997b7bd880e76127866d24ee05015ceb8c55aab87e141a09926c96bf17b92c9",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "baseline_temp_document_id": 5,
+      "baseline_temp_db_chunk_id": 29,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "37e7a57feffb618d92e55dbb916dda3c66270b2d1e215751c7139b32498f441a"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2::chunk-4::837818d5f7a76cc9be4a591c28eff7c1061a407f19d044c9be6e9f5a853583e2",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "baseline_temp_document_id": 5,
+      "baseline_temp_db_chunk_id": 30,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "088c4ef1ce296292fa26b4cf3d9dcce1c52bfb1714c6536e2d48bbd3c2f5812f"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2::chunk-5::820318f45367eeff42d6f10206aaef6e77b2988b15c1d8009439b04a0671e5d4",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "baseline_temp_document_id": 5,
+      "baseline_temp_db_chunk_id": 31,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "10ab86c0b9e472b2bea1b37b22f576e978854a84cd9341b613c2275b7d044ca1"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2::chunk-6::5bf48937aeaedac3efd6e0adc5c22fc7cdfdc4f9d9781e6e5d256eef24f6a9ad",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "baseline_temp_document_id": 5,
+      "baseline_temp_db_chunk_id": 32,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "cfc4dc6fcd82fa64bf51affbbd873debd2331cf6a313bf7b1f4566aa5766f1bb"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2::chunk-7::f6ad663ddace3debcb8cec148cc8b93ca1225a43562e74f49311eb5f5008e73a",
+      "document_key": "docs/sample_knowledge_base/hr/leave_policy.md::v1::095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2",
+      "source": "docs/sample_knowledge_base/hr/leave_policy.md",
+      "baseline_temp_document_id": 5,
+      "baseline_temp_db_chunk_id": 33,
+      "chunk_index": 7,
+      "version_number": 1,
+      "input_sha256": "e3beb6c5be0b4644208702bc710558903aa4b2302e12a8854baaf079997ab28a"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a::chunk-1::77e57631099520de9dbe6846ab6793135ed5fe04915083a1707a5f13dabd177e",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "baseline_temp_document_id": 4,
+      "baseline_temp_db_chunk_id": 20,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "23f2c7f5041a3f015b690efb5203c213f66dfe34bd8c0b577dd0b4dd792799e4"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a::chunk-2::427a40e8ca915e3e905be7df06f1680bfb00fffa2e6d3154183e960cc45cc5af",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "baseline_temp_document_id": 4,
+      "baseline_temp_db_chunk_id": 21,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "7a87cfc8f5f259557ffcce663bb24ac4c87e0ef11e08737d6a7aecad8e7c0f73"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a::chunk-3::2d7dcb9c30c244b8ee44e196a76b9378d0558567856b38103f77a7eb611552eb",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "baseline_temp_document_id": 4,
+      "baseline_temp_db_chunk_id": 22,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "61544de0ee6be66f74b287dd466145af1b55130dee35031b7bd26962d067763c"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a::chunk-4::2bea5face2498db2b3b17322f61725151c46c5ca7d98e50f1839970c4e572789",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "baseline_temp_document_id": 4,
+      "baseline_temp_db_chunk_id": 23,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "73fac1a45d8aa9372a2ae1607aecafb921e604c7276fef5dac16be58e401ae35"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a::chunk-5::7edd87926d53d79e6593fd9992c64d3f71e6bf8368412ed273a0ef5f787ba958",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "baseline_temp_document_id": 4,
+      "baseline_temp_db_chunk_id": 24,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "50672a1c169d874293c49ab4280c357eeedb3b277f0548abf5ebb70af00444c2"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a::chunk-6::a6c3274c3512401ae2093a73f4c759e1b27f090374793193708847bfc454568d",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "baseline_temp_document_id": 4,
+      "baseline_temp_db_chunk_id": 25,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "8cbbbfb1fbfcf2ec394741f29085616c233db74567a2ca231f3a9918899347fe"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a::chunk-7::aaed0706cba60d33f5104de8e077edb94ac23c25574b0097aa5ea4101fa2364d",
+      "document_key": "docs/sample_knowledge_base/hr/attendance_policy.md::v1::19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a",
+      "source": "docs/sample_knowledge_base/hr/attendance_policy.md",
+      "baseline_temp_document_id": 4,
+      "baseline_temp_db_chunk_id": 26,
+      "chunk_index": 7,
+      "version_number": 1,
+      "input_sha256": "d8d80dc8033b69b0da6675f4368cf31057ac6f4f13eb278ad7da03e70f22bb70"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e::chunk-1::3b28991fbfb0ef58ce5b1aae767f3fb92f3a6fd6d7fc8886c5175dcc33b023a5",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "baseline_temp_document_id": 3,
+      "baseline_temp_db_chunk_id": 13,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "d69a4dd0bf1eecaa1f0b25012eb584c3942c66e2d27ef7683718a7f117eb6ae9"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e::chunk-2::33f179b1d54a82be8d1f0da367707060a5954ba9b75c81380a2bb89c962dc260",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "baseline_temp_document_id": 3,
+      "baseline_temp_db_chunk_id": 14,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "25f58e682c3ae7a0eba8e7060decb5bbbe3e5e7f92b97f5bd07dd21b9a46d04e"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e::chunk-3::a151f4df8ca2535528b8fb1b6154de5aae22ded312c79dc30c09b7f4e2ffa78f",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "baseline_temp_document_id": 3,
+      "baseline_temp_db_chunk_id": 15,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "f287b83c83643bb25e4358d430eb785f73dc90f56c10256b18fde6676fa62593"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e::chunk-4::497bb47645681a8c4f26484b9aee5a1573454070d19021bf8792bbbbb0c466ca",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "baseline_temp_document_id": 3,
+      "baseline_temp_db_chunk_id": 16,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "5c608b4298c6088b0ae93c7e4ec4e86357b958b794a35c5e16a7bc756b02d46f"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e::chunk-5::49eee07d5d7aa9673359476f41bad2313824483b95724ac6d2668899d74b66a4",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "baseline_temp_document_id": 3,
+      "baseline_temp_db_chunk_id": 17,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "18f2ba619973d5a225f7efc21fd250d6fbf838dafb958eaf283c37cb777801b9"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e::chunk-6::8abfa90c4d9b1a936389298ef312e1e621f8c66495be8f9a2f87e233ff99f75f",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "baseline_temp_document_id": 3,
+      "baseline_temp_db_chunk_id": 18,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "cbc293693b30127830a225fe6abf1c6c73c5a9b7940eb271649138754345a38f"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e::chunk-7::efddf16370b3f44bbd16c8e7959370f1871b8997b23e3ae7a4b839f75a123789",
+      "document_key": "docs/sample_knowledge_base/finance/travel_expense_policy.md::v1::9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e",
+      "source": "docs/sample_knowledge_base/finance/travel_expense_policy.md",
+      "baseline_temp_document_id": 3,
+      "baseline_temp_db_chunk_id": 19,
+      "chunk_index": 7,
+      "version_number": 1,
+      "input_sha256": "206262263d3b4d710e3983e33b250ec6285ab6390de9a4bd2c010e1deeec1d91"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845::chunk-1::033c1eacb354990d8169320db70356259650a684a91fdff8704f22aeaa3557a7",
+      "document_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "baseline_temp_document_id": 2,
+      "baseline_temp_db_chunk_id": 7,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "5c934c379316765d476b8609f0f8f9efb78bee3e389bf5db0037d4883c05664a"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845::chunk-2::a5141a50294b3cddf7d381e345cabc522f65375a899a74cd46ced89226b70aba",
+      "document_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "baseline_temp_document_id": 2,
+      "baseline_temp_db_chunk_id": 8,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "6f5126eb434958c20c0395a6fa2446c155ba7910eb17662ef607db16b3d60c7b"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845::chunk-3::993456813de2ada08be6da32a11cc9875cfb06432106ddf06a69ba1d5f55ad9a",
+      "document_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "baseline_temp_document_id": 2,
+      "baseline_temp_db_chunk_id": 9,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "19be9b3b4774155e542691d095a87c9893ce0becf22157281a03f430ee1b5b6b"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845::chunk-4::9e5abd7fb133d911a33962b74c5244af22514c61b85961ef75a41500c231d1bb",
+      "document_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "baseline_temp_document_id": 2,
+      "baseline_temp_db_chunk_id": 10,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "c26e15bd862ea52b4fdd870a12a96b81c5622da83f9763675543faf399f4375a"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845::chunk-5::099b5db2052dbc882bd29d5a6b9f92b730e80afad78fa6b3b0a1ce08df14ca41",
+      "document_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "baseline_temp_document_id": 2,
+      "baseline_temp_db_chunk_id": 11,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "76c25d9c6b03c8cba0a51672d28360e8790182a9b09d54b97c20580add0365e6"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845::chunk-6::e044533baec152a018dbb2168217ce64ad7f27be376ecc12fddf777e1999e575",
+      "document_key": "docs/sample_knowledge_base/finance/reimbursement_policy.md::v1::cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845",
+      "source": "docs/sample_knowledge_base/finance/reimbursement_policy.md",
+      "baseline_temp_document_id": 2,
+      "baseline_temp_db_chunk_id": 12,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "300d1cd0e161bc83b9a0c79b597a0f8d39cb4233c4232c0469317764f848ae83"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428::chunk-1::326f3e96ce63791e2681d961d22b302cbf44cd92dbef3ebac87ca16a7979aa2c",
+      "document_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "baseline_temp_document_id": 1,
+      "baseline_temp_db_chunk_id": 1,
+      "chunk_index": 1,
+      "version_number": 1,
+      "input_sha256": "58e9671a828a8e679d02b8a7b9848ae1977c2637c5276c5ab4c1024b17176e2d"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428::chunk-2::77a24763fb506cefa369172c51823860fa473f47d0ae0764ee25a09628e60c21",
+      "document_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "baseline_temp_document_id": 1,
+      "baseline_temp_db_chunk_id": 2,
+      "chunk_index": 2,
+      "version_number": 1,
+      "input_sha256": "8ab49b8f7545b90fab61082232e4730ee30643000d619744f9750c25f4f3fed3"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428::chunk-3::d6b1d472cb3f25045f96c797320c0660f7ec39f5c1f1d420c3834b658dbffa16",
+      "document_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "baseline_temp_document_id": 1,
+      "baseline_temp_db_chunk_id": 3,
+      "chunk_index": 3,
+      "version_number": 1,
+      "input_sha256": "9931a3cbbbceeb1bee5404ed11f9653b326f65cf192484fcfbf16baa0ed4e064"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428::chunk-4::d18e977ca125d41d043a6b40609bd0afbe70b46f66778387e5dceb1968c82446",
+      "document_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "baseline_temp_document_id": 1,
+      "baseline_temp_db_chunk_id": 4,
+      "chunk_index": 4,
+      "version_number": 1,
+      "input_sha256": "bff1482be7f6cfe80f69bb4685623ef64be16556c0e7831c207193122552dca9"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428::chunk-5::598907c810db6b979a72b728a3ef4ce12acd4304327a1337a39fd2dee89bdd03",
+      "document_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "baseline_temp_document_id": 1,
+      "baseline_temp_db_chunk_id": 5,
+      "chunk_index": 5,
+      "version_number": 1,
+      "input_sha256": "2c0741d558197adebfdbb2a4976f7ea78e9a64c21751dd9596137535b9d38413"
+    },
+    {
+      "chunk_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428::chunk-6::5a0a7689dac84b0a8876d18e739a0a2a6d4c6d5c54f9dc7e9284ab73144c237d",
+      "document_key": "docs/sample_knowledge_base/finance/payment_approval_policy.md::v1::b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428",
+      "source": "docs/sample_knowledge_base/finance/payment_approval_policy.md",
+      "baseline_temp_document_id": 1,
+      "baseline_temp_db_chunk_id": 6,
+      "chunk_index": 6,
+      "version_number": 1,
+      "input_sha256": "1deb65307e59831724b8e0f3c3bdb8e69a2c2a1b2f1ea9e31b4df0cd7c0c7139"
+    }
+  ],
+  "query_bindings": [
+    {
+      "id": "hr_01",
+      "question": "员工年假至少要提前几个工作日提交？",
+      "split": "development",
+      "input_sha256": "f0fafa94e16fab351855bc473cec15a93978c893eb4d76cb3764982f06d8ced7"
+    },
+    {
+      "id": "hr_02",
+      "question": "试用期员工每月最多有几天带薪病假，超过的部分怎么办？",
+      "split": "development",
+      "input_sha256": "2d129852ee590f10f12be55a77a297ba972d9912a5cd51fc4b9089dbade0f6ec"
+    },
+    {
+      "id": "hr_03",
+      "question": "远程办公每月默认最多几天，超过后由谁审批？",
+      "split": "development",
+      "input_sha256": "1a2d7d6037ec9eb1c25495a930c2bf6561f6ac933973d0b7b805a079a4b35189"
+    },
+    {
+      "id": "hr_04",
+      "question": "新员工缺少离职证明或学历证明时，需要在到岗后多久补交？",
+      "split": "development",
+      "input_sha256": "87fddfef4166b0726da8cb341dbc68a596a7275e3afd432d4fb78d6d8a5514fc"
+    },
+    {
+      "id": "hr_05",
+      "question": "普通岗位和管理岗位的试用期分别多久？",
+      "split": "development",
+      "input_sha256": "a62c3210e71a599332d291c0cfbca4fed8a0f33ea08554b7a783be5ee7e534b1"
+    },
+    {
+      "id": "finance_01",
+      "question": "日常费用发生后，报销申请需要在多久内提交？",
+      "split": "development",
+      "input_sha256": "e48a277e763d211c404ae7ab500953b8657d8637b28f05f3ff1aa3e700d12c38"
+    },
+    {
+      "id": "finance_02",
+      "question": "打车报销需要哪些材料？缺少行程单会怎样？",
+      "split": "development",
+      "input_sha256": "14f4e5b0d2808bbea10858bb4aef3853e347642ccd622637c9f865334a112899"
+    },
+    {
+      "id": "finance_03",
+      "question": "单张发票金额超过5000元，需要谁复核？",
+      "split": "development",
+      "input_sha256": "a19ed048ac384d9cb0d2d626763b6ff374858d16ce76a5d1fdb95e0e0b508121"
+    },
+    {
+      "id": "finance_04",
+      "question": "差旅的一线城市和其他城市住宿标准各是多少？超标需要谁审批？",
+      "split": "development",
+      "input_sha256": "fca1f958c6d72488a58682a7e22dc914b7de217de834b7e0f5b6d83e26d51ed4"
+    },
+    {
+      "id": "finance_05",
+      "question": "供应商单笔付款超过10万元，需要谁审批？",
+      "split": "development",
+      "input_sha256": "1a96eb66e31ced029976d325725f7cf621cc2391cd2ce1d40aac37c677782994"
+    },
+    {
+      "id": "it_01",
+      "question": "VPN提示720错误应该如何处理？",
+      "split": "development",
+      "input_sha256": "dd28020a510e5cca8f486990a6bf85084acefa5a36e266d69023ab662a3317a7"
+    },
+    {
+      "id": "it_02",
+      "question": "VPN连续输错密码几次会锁定，锁定多久？",
+      "split": "development",
+      "input_sha256": "ff23109b877c60980cf9493533779c72d373c10119bb3f8cd1f2d620d56c17b1"
+    },
+    {
+      "id": "it_03",
+      "question": "GitLab Maintainer权限的审批角色有哪些？我只咨询规则，不发起申请。",
+      "split": "development",
+      "input_sha256": "62734021b8313ae898460c3ae7fbeff00385d33508495a36a2c3b36b402539c7"
+    },
+    {
+      "id": "it_04",
+      "question": "GitLab临时项目权限默认有效期多久，到期后怎么办？",
+      "split": "development",
+      "input_sha256": "f9973852ee954603bdf0d2484970201e846f557ca0f94994d0809cc6e574e9d7"
+    },
+    {
+      "id": "it_05",
+      "question": "办公设备安全规范允许把公司源代码同步到个人GitHub吗？",
+      "split": "development",
+      "input_sha256": "a5a91d0d09d58f1cb0689784655ca2feb7246d243e29a939557e2f8320b191e7"
+    },
+    {
+      "id": "product_01",
+      "question": "企业知识助手产品FAQ中支持上传哪些文档格式？",
+      "split": "development",
+      "input_sha256": "9f6d74a2bf897a5c11e8020d89ba4d3c4708cf17e3a7d3a647f8d05f58cf0f42"
+    },
+    {
+      "id": "product_02",
+      "question": "企业知识助手产品FAQ里，扫描件图片能直接提取文字吗？",
+      "split": "development",
+      "input_sha256": "718fe06db2a5ff18230ea885da0d697d4cf8b992f5ec56fa51b4b55b6548d5a7"
+    },
+    {
+      "id": "product_03",
+      "question": "版本发布前至少提前多久冻结需求？冻结后允许哪些变更？",
+      "split": "development",
+      "input_sha256": "8956321e5518f70a840c7f01bec25006acfd8193e0f2970c068febc7b7909edc"
+    },
+    {
+      "id": "product_04",
+      "question": "涉及登录的版本发布，灰度比例从多少开始，需要观察多久才能扩大到50%？",
+      "split": "development",
+      "input_sha256": "5c5a091f1d01587728886063105a22208faa548c300b6cc7f3118a999527f971"
+    },
+    {
+      "id": "product_05",
+      "question": "客户反馈被分为P1时，多久给出处理计划，多久同步一次进展？",
+      "split": "development",
+      "input_sha256": "324dad540b16ce8273b9f0f385f81f18f9b9e41345daa8db90b5c02afd64d5d0"
+    },
+    {
+      "id": "process_01",
+      "question": "我是研发部张三，申请VPN权限，权限级别为只读，审批人为李经理，补充信息是远程办公。",
+      "split": "development",
+      "input_sha256": "601c888e54336edf5cccb7650cf7265234b9807db0cef50c64f60d8dd507747d"
+    },
+    {
+      "id": "process_02",
+      "question": "我是测试部王芳，申请GitLab权限，权限级别为Reporter，审批人为赵主管，补充信息是查看项目A代码。",
+      "split": "development",
+      "input_sha256": "9d7524f7abcf610c59283858dfe5bda32658da5afd48cae1fec0405ad552a151"
+    },
+    {
+      "id": "process_03",
+      "question": "我是张三，申请VPN权限，权限级别为只读，审批人为李经理，补充信息是居家办公。",
+      "split": "development",
+      "input_sha256": "80342cf236ee9ce69eb057d34318cd530c13ea8fb078f65da253236b0ec148a2"
+    },
+    {
+      "id": "process_04",
+      "question": "我是产品部陈晨，申请GitLab权限。",
+      "split": "development",
+      "input_sha256": "c76c9337fa0b09ede80ae25cdf351c7696be043e393166b5e78c20b5051082a4"
+    },
+    {
+      "id": "process_05",
+      "question": "请帮我开通VPN账号，我要提交申请。",
+      "split": "development",
+      "input_sha256": "6d37462467dbf7632ae2d0804bc3b9f4b67a462f0fd4d19c6c85ea9c89b9e4db"
+    },
+    {
+      "id": "refusal_01",
+      "question": "星辰科技2027年度董事长奖金的准确金额是多少？",
+      "split": "development",
+      "input_sha256": "5dba1cecbc17ea0e0940c64bb79bd0aabcd7c4ea378c7ec3dd980acec8899d33"
+    },
+    {
+      "id": "refusal_02",
+      "question": "财务报销制度规定的公司开票税号具体是哪一串数字？",
+      "split": "development",
+      "input_sha256": "99e5e1510c27e9099a4840a65061bc3d20124394187a4565c2cb30110a722d24"
+    },
+    {
+      "id": "refusal_03",
+      "question": "公司VPN服务器的公网IP地址具体是多少？",
+      "split": "development",
+      "input_sha256": "ff7474423f51ceb927966a0b2e95bd19b60587ced01c7fc6df4cf50545c2664f"
+    },
+    {
+      "id": "refusal_04",
+      "question": "员工年假未休完时，每天折算现金的具体金额是多少？",
+      "split": "development",
+      "input_sha256": "3599b1221de644f2218c442d5239b936fedb0f7fa048f64a0b30a8a94e7d9290"
+    },
+    {
+      "id": "refusal_05",
+      "question": "财务报销系统的管理员账号和初始密码分别是什么？",
+      "split": "development",
+      "input_sha256": "77f113b2b4c23b5ca6b0c4f8ea0877d3f3add2a222d6e83aa3a223e0fb670288"
+    }
+  ],
+  "id_scope": "Baseline IDs came from disposable evaluation SQLite; stable versioned chunk_key is authoritative, never business IDs.",
+  "source_sha256": {
+    "eval/r4/gold_v1.json": "61865cc306cff7534abc0b7d96af7b633966e37d615c78c40312bd61500aadab",
+    "eval/r4/gold_v1_manifest.json": "0d96da3dd772bc25f33356fb3d412347b43ce0afc8f201be5038565f14b74719",
+    "eval/r4/baseline_gold_v1_keyword.json": "4023379f2ae692a084544f6ae4679bf89d08c9594faa28e35204cf27d87154e6",
+    "backend/rag/embedding_client.py": "70085d3ac09057a7ea449df51ffc1b95ac578d7eddbb0f79bbd79e73faaee7ae",
+    "backend/rag/index_adapters.py": "8e9b4158163b1b5b675434c12eaa39e0ab8963c60c7c212dc74280284e6c2cfd",
+    "backend/rag/chunker.py": "163133165886fd4e845b0d9b6ac276a0923d0318452c528c33654fd4f6de74d5",
+    "backend/rag/vector_store.py": "75fd450d155d17e2bfee0255328ef83c3a5c7b04af0331c60dbd88a174acd157"
+  },
+  "preparation_script_sha256": "e05f0df3cdea9f304665f92b0c8496b72d15bc5524fd262e0306c072596b3a0a",
+  "requests": [
+    {
+      "number": 1,
+      "input_count": 10,
+      "input_sha256": [
+        "4307f6279eb29a6104910840bb22f7b10ca40f5646b0d0a9b4cc61a316a19475",
+        "976770f41c04e337ce4ac2c1142277c8c7b1fdb028630808df1434ef644d2f37",
+        "845604b49f7d1f023c35c8de5821789cf8e1c80a40a69e4ee9e074ef5a46954e",
+        "9c0afdd82897fabb760f2be52dafe27541ae039da264d9330f075c39a6dce110",
+        "afb80fcf02051384c0a6b09188ef882e94a6acddf37af37b497a07330f0f4f3c",
+        "54d4226672a0ea02f4d64bd848944f8ee27a2c41f16da8ec0d685315c2b3cad1",
+        "c7b6ab64c80f8fb7662341527d86f7e00549977025f669b81186617d4686a787",
+        "43b056646387ac26a01e70516234abce98500768ce005a6467d9912129cfc55d",
+        "69b7491beb50ffe4bae180afe0274157c068f331a7909d1ebe4ee676fcd5d11b",
+        "3a432dbc8c3e92abe9169b6bec08df28c4c3077ed121b91f7fa35f5562260ff3"
+      ],
+      "status": "response_received",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 669,
+        "total_tokens": 669
+      },
+      "response_dimensions": [
+        5464
+      ]
+    },
+    {
+      "number": 2,
+      "input_count": 10,
+      "input_sha256": [
+        "4307f6279eb29a6104910840bb22f7b10ca40f5646b0d0a9b4cc61a316a19475",
+        "976770f41c04e337ce4ac2c1142277c8c7b1fdb028630808df1434ef644d2f37",
+        "845604b49f7d1f023c35c8de5821789cf8e1c80a40a69e4ee9e074ef5a46954e",
+        "9c0afdd82897fabb760f2be52dafe27541ae039da264d9330f075c39a6dce110",
+        "afb80fcf02051384c0a6b09188ef882e94a6acddf37af37b497a07330f0f4f3c",
+        "54d4226672a0ea02f4d64bd848944f8ee27a2c41f16da8ec0d685315c2b3cad1",
+        "c7b6ab64c80f8fb7662341527d86f7e00549977025f669b81186617d4686a787",
+        "43b056646387ac26a01e70516234abce98500768ce005a6467d9912129cfc55d",
+        "69b7491beb50ffe4bae180afe0274157c068f331a7909d1ebe4ee676fcd5d11b",
+        "3a432dbc8c3e92abe9169b6bec08df28c4c3077ed121b91f7fa35f5562260ff3"
+      ],
+      "status": "validated",
+      "group": "documents_first_batch_recovery",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 669,
+        "total_tokens": 669
+      },
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "OpenAI SDK response parser; no manual re-decoding"
+    },
+    {
+      "number": 3,
+      "input_count": 10,
+      "input_sha256": [
+        "691d2489741db3ebf0cee6003bd326000d4de91cc9e572d5c6d854b11251b86c",
+        "7532b1fddbb4d4b2c61d40715227984a644e5bed1d1541df20d70591e10e8b3d",
+        "bcbbd4821701e90ba94644976b5132ff156204896a0cc47d202d83f49c876e4a",
+        "57dd9fedca4da174a37e1a63df1d664cdbc3ee225c50e2c312df9694d7d4f50e",
+        "affef9c7a04b13eb399d59b12abb85669f616157dcd12ccbb381586dbaf13326",
+        "ba12f0b2ed77e2a71b720d20802d07fb899295b773cb888283a5db7ef0c11669",
+        "f947f1c273de299088064b1b62c8c953b35b7b215d3e90623c8e74971784fefe",
+        "58b671f555c3ab5e9712483e76ca2d0aa6abca7951dda5291720106016ca8dac",
+        "4755586bde257ed0cda7b88100e370452ab3ab590510bc6f2fbc357ce2ac9699",
+        "6a5ad5a34494caabf27befd8ec4ebf7219e8a1d72b8b7a8eac1664a3c4974dd0"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 740,
+        "total_tokens": 740
+      },
+      "group": "documents",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 4,
+      "input_count": 10,
+      "input_sha256": [
+        "aa2eb74c62789c7ba8959fe65d9f3fe1f6d943d83c31e1a50aff79756b914019",
+        "293c8baf74cc56b9b6b2089bd9ae7a57f1f943e987626cf89a1d60327e92cc6b",
+        "8e77bd43b2997fcde82dc42df7370234c9cefc25e9dd63c95fa68ce905a29fbc",
+        "c210deba41be14859a8c17ae200dcec98a5276d2ba980a6c1e6a6ba16a9248d7",
+        "ecd7c7a8f3a6dce0c16c148897c07bc269c39e65e89ac4bc3416fb8613dbd9b5",
+        "be421c947ce4c1154808b69b0e186008b10840f972145d947253c314b30c6139",
+        "9a1dbcaf371813ccdff180625b13476f306d4548fdc0f1348ed7bfa32016f250",
+        "254450d8b5f497b30274f54d39be2ef01b88a2fdfdff1446dc594207cbf48d18",
+        "18a4e2544b256fdf2de03ed647ba0fa49ca20046a54cfbc89965366d7d657175",
+        "fc93c3fff0a62732a5ff8f4006f14d80afa9c9729166641d5908e95efcd51b22"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 624,
+        "total_tokens": 624
+      },
+      "group": "documents",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 5,
+      "input_count": 10,
+      "input_sha256": [
+        "c3330e3101fd527acc4682a574fc51ae60b06b7d467727b8040725fa5569f9fe",
+        "3dafbff415a3e474b3763a668246875dcc8716ea8f32ede0e94a988653e972d2",
+        "d446addc7dd41edaeac43abb129989f647386c885b388d48ac3cbb7bf5800f0f",
+        "53dedb823a8e617c51bb4896361db09614108464a476a0ecb0493f26e2e24670",
+        "11d701f32afb213018331d64e4980811d5908b510c708686b331acbc3790d9c6",
+        "eb8eb1a2e2cf48693f4f533a1c522f024db36d2f973d91ddd007159f1f2324f2",
+        "d6c94e8773b883b96b2949c27f8e32e92fd224a4bd5d5ad19820cf7b62e9683d",
+        "508667b705222832c6776cb2c89ce7cbcc50d6991dff626551a1a1c72df28471",
+        "d95b918a45287e8323cbf0f92b08105a6dfe3e856136e6a9442651f2312dd16a",
+        "dada92c8aa83fcf94238e84e72612d5778172b42ea98b029cd6cd9df0e5425c5"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 729,
+        "total_tokens": 729
+      },
+      "group": "documents",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 6,
+      "input_count": 10,
+      "input_sha256": [
+        "c09add55c54ef21ba487b1b96e275926d7550f572a2426927424722e523d7c42",
+        "190d9ec1b650749cb9950cce1e0b980a3d246dc29ee3a09929adf8d3dd09e237",
+        "cd5d8a2d8d962605c7a37b37b90adfc3415aa74e91ddd92e81fb8affc5310aca",
+        "2acd5ce0630d5961a5efe5bc9030ef66fe4ea9858071b761b42fe87f1823e2c1",
+        "3e42c80a749f3b920b0a557f83393d57703177883eb824f2ba4178f36a97e30f",
+        "0436287aeef269b7231330bc3533affbc3400ad9d4701f22ae8e4575919d612c",
+        "a5ec17c8ffb5cd421014f281c35d7881c7c2874293cb72702e1a04f434425d87",
+        "149cefe16d1b20cc79585645314caf82e05152feca32d34f6e4c256069e7a625",
+        "37e7a57feffb618d92e55dbb916dda3c66270b2d1e215751c7139b32498f441a",
+        "088c4ef1ce296292fa26b4cf3d9dcce1c52bfb1714c6536e2d48bbd3c2f5812f"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 826,
+        "total_tokens": 826
+      },
+      "group": "documents",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 7,
+      "input_count": 10,
+      "input_sha256": [
+        "10ab86c0b9e472b2bea1b37b22f576e978854a84cd9341b613c2275b7d044ca1",
+        "cfc4dc6fcd82fa64bf51affbbd873debd2331cf6a313bf7b1f4566aa5766f1bb",
+        "e3beb6c5be0b4644208702bc710558903aa4b2302e12a8854baaf079997ab28a",
+        "23f2c7f5041a3f015b690efb5203c213f66dfe34bd8c0b577dd0b4dd792799e4",
+        "7a87cfc8f5f259557ffcce663bb24ac4c87e0ef11e08737d6a7aecad8e7c0f73",
+        "61544de0ee6be66f74b287dd466145af1b55130dee35031b7bd26962d067763c",
+        "73fac1a45d8aa9372a2ae1607aecafb921e604c7276fef5dac16be58e401ae35",
+        "50672a1c169d874293c49ab4280c357eeedb3b277f0548abf5ebb70af00444c2",
+        "8cbbbfb1fbfcf2ec394741f29085616c233db74567a2ca231f3a9918899347fe",
+        "d8d80dc8033b69b0da6675f4368cf31057ac6f4f13eb278ad7da03e70f22bb70"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 719,
+        "total_tokens": 719
+      },
+      "group": "documents",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 8,
+      "input_count": 10,
+      "input_sha256": [
+        "d69a4dd0bf1eecaa1f0b25012eb584c3942c66e2d27ef7683718a7f117eb6ae9",
+        "25f58e682c3ae7a0eba8e7060decb5bbbe3e5e7f92b97f5bd07dd21b9a46d04e",
+        "f287b83c83643bb25e4358d430eb785f73dc90f56c10256b18fde6676fa62593",
+        "5c608b4298c6088b0ae93c7e4ec4e86357b958b794a35c5e16a7bc756b02d46f",
+        "18f2ba619973d5a225f7efc21fd250d6fbf838dafb958eaf283c37cb777801b9",
+        "cbc293693b30127830a225fe6abf1c6c73c5a9b7940eb271649138754345a38f",
+        "206262263d3b4d710e3983e33b250ec6285ab6390de9a4bd2c010e1deeec1d91",
+        "5c934c379316765d476b8609f0f8f9efb78bee3e389bf5db0037d4883c05664a",
+        "6f5126eb434958c20c0395a6fa2446c155ba7910eb17662ef607db16b3d60c7b",
+        "19be9b3b4774155e542691d095a87c9893ce0becf22157281a03f430ee1b5b6b"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 667,
+        "total_tokens": 667
+      },
+      "group": "documents",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 9,
+      "input_count": 9,
+      "input_sha256": [
+        "c26e15bd862ea52b4fdd870a12a96b81c5622da83f9763675543faf399f4375a",
+        "76c25d9c6b03c8cba0a51672d28360e8790182a9b09d54b97c20580add0365e6",
+        "300d1cd0e161bc83b9a0c79b597a0f8d39cb4233c4232c0469317764f848ae83",
+        "58e9671a828a8e679d02b8a7b9848ae1977c2637c5276c5ab4c1024b17176e2d",
+        "8ab49b8f7545b90fab61082232e4730ee30643000d619744f9750c25f4f3fed3",
+        "9931a3cbbbceeb1bee5404ed11f9653b326f65cf192484fcfbf16baa0ed4e064",
+        "bff1482be7f6cfe80f69bb4685623ef64be16556c0e7831c207193122552dca9",
+        "2c0741d558197adebfdbb2a4976f7ea78e9a64c21751dd9596137535b9d38413",
+        "1deb65307e59831724b8e0f3c3bdb8e69a2c2a1b2f1ea9e31b4df0cd7c0c7139"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 665,
+        "total_tokens": 665
+      },
+      "group": "documents",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 9,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 10,
+      "input_count": 10,
+      "input_sha256": [
+        "f0fafa94e16fab351855bc473cec15a93978c893eb4d76cb3764982f06d8ced7",
+        "2d129852ee590f10f12be55a77a297ba972d9912a5cd51fc4b9089dbade0f6ec",
+        "1a2d7d6037ec9eb1c25495a930c2bf6561f6ac933973d0b7b805a079a4b35189",
+        "87fddfef4166b0726da8cb341dbc68a596a7275e3afd432d4fb78d6d8a5514fc",
+        "a62c3210e71a599332d291c0cfbca4fed8a0f33ea08554b7a783be5ee7e534b1",
+        "e48a277e763d211c404ae7ab500953b8657d8637b28f05f3ff1aa3e700d12c38",
+        "14f4e5b0d2808bbea10858bb4aef3853e347642ccd622637c9f865334a112899",
+        "a19ed048ac384d9cb0d2d626763b6ff374858d16ce76a5d1fdb95e0e0b508121",
+        "fca1f958c6d72488a58682a7e22dc914b7de217de834b7e0f5b6d83e26d51ed4",
+        "1a96eb66e31ced029976d325725f7cf621cc2391cd2ce1d40aac37c677782994"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 283,
+        "total_tokens": 283
+      },
+      "group": "queries",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 11,
+      "input_count": 10,
+      "input_sha256": [
+        "dd28020a510e5cca8f486990a6bf85084acefa5a36e266d69023ab662a3317a7",
+        "ff23109b877c60980cf9493533779c72d373c10119bb3f8cd1f2d620d56c17b1",
+        "62734021b8313ae898460c3ae7fbeff00385d33508495a36a2c3b36b402539c7",
+        "f9973852ee954603bdf0d2484970201e846f557ca0f94994d0809cc6e574e9d7",
+        "a5a91d0d09d58f1cb0689784655ca2feb7246d243e29a939557e2f8320b191e7",
+        "9f6d74a2bf897a5c11e8020d89ba4d3c4708cf17e3a7d3a647f8d05f58cf0f42",
+        "718fe06db2a5ff18230ea885da0d697d4cf8b992f5ec56fa51b4b55b6548d5a7",
+        "8956321e5518f70a840c7f01bec25006acfd8193e0f2970c068febc7b7909edc",
+        "5c5a091f1d01587728886063105a22208faa548c300b6cc7f3118a999527f971",
+        "324dad540b16ce8273b9f0f385f81f18f9b9e41345daa8db90b5c02afd64d5d0"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 306,
+        "total_tokens": 306
+      },
+      "group": "queries",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    },
+    {
+      "number": 12,
+      "input_count": 10,
+      "input_sha256": [
+        "601c888e54336edf5cccb7650cf7265234b9807db0cef50c64f60d8dd507747d",
+        "9d7524f7abcf610c59283858dfe5bda32658da5afd48cae1fec0405ad552a151",
+        "80342cf236ee9ce69eb057d34318cd530c13ea8fb078f65da253236b0ec148a2",
+        "c76c9337fa0b09ede80ae25cdf351c7696be043e393166b5e78c20b5051082a4",
+        "6d37462467dbf7632ae2d0804bc3b9f4b67a462f0fd4d19c6c85ea9c89b9e4db",
+        "5dba1cecbc17ea0e0940c64bb79bd0aabcd7c4ea378c7ec3dd980acec8899d33",
+        "99e5e1510c27e9099a4840a65061bc3d20124394187a4565c2cb30110a722d24",
+        "ff7474423f51ceb927966a0b2e95bd19b60587ced01c7fc6df4cf50545c2664f",
+        "3599b1221de644f2218c442d5239b936fedb0f7fa048f64a0b30a8a94e7d9290",
+        "77f113b2b4c23b5ca6b0c4f8ea0877d3f3add2a222d6e83aa3a223e0fb670288"
+      ],
+      "status": "validated",
+      "wire_encoding_format_requested": "base64",
+      "http_status": 200,
+      "response_model": "qwen3.7-text-embedding-flash",
+      "usage": {
+        "prompt_tokens": 321,
+        "total_tokens": 321
+      },
+      "group": "queries",
+      "actual_dimension": 1024,
+      "decoded_vector_count": 10,
+      "decoding": "SDK decoded vector objects"
+    }
+  ],
+  "sdk_max_retries": 0,
+  "application_retries": 0,
+  "batch_size": 10,
+  "holdout_embedded": false,
+  "cache_sha256": "f74c7717b052d2e19f3f121bf94fc5a124614657acc71f4e4fffe8f93bf42cb7",
+  "actual_http_request_attempts": 12,
+  "failure": {
+    "type": "APIConnectionError",
+    "http_status": null,
+    "code": null
+  },
+  "failure_diagnosis": {
+    "category": "local_pre_sdk_wire_format_validation_error",
+    "provider_returned_http_200": true,
+    "model_name_matched": true,
+    "wire_format": "OpenAI SDK requests base64 float32 by default; original hook ran before SDK decoding",
+    "original_response_dimensions_field_is_wire_length_not_verified_dimension": true,
+    "actual_dimension_verified": false,
+    "valid_vectors_saved": 0,
+    "no_further_api_calls": true,
+    "offline_validator_fixed": true,
+    "offline_unit_tests": "8 passed",
+    "requires_explicit_next_instruction_before_new_live_attempt": true,
+    "original_requests_and_failure_records_preserved": true
+  },
+  "recovery_runs": [
+    {
+      "started_at_utc": "2026-11-08T04:06:29.438422+00:00",
+      "client_date": "2026-11-08",
+      "method": "reissue_original_first_batch_only",
+      "authorized_max_http_requests": 1,
+      "new_http_attempts": 1,
+      "status": "validated_and_stopped",
+      "original_raw_response_available": false,
+      "sdk_max_retries": 0,
+      "automatic_application_retries": 0,
+      "actual_dimension": 1024,
+      "validated_input_count": 10,
+      "raw_response_file": "embedding_first_batch_raw_response.json",
+      "raw_response_sha256": "0a52eab4d6f60059382993eb08641f6355217b57ff24dd65f9f374961c4e5480",
+      "profile": {
+        "provider": "openai",
+        "model": "qwen3.7-text-embedding-flash",
+        "endpoint_fingerprint": "sha256:5891aed827c4e67b2d7c0c73ea819327ce3f2b6ef72213cd79669486a26b1ead",
+        "normalize_embeddings": false,
+        "embedding_dimension": 1024
+      },
+      "checks": {
+        "count_10": true,
+        "finite_nonzero": true,
+        "original_first_batch_hashes": true,
+        "chunk_document_version_mapping": true,
+        "profile_consistent": true
+      },
+      "remaining_batches_executed": 0
+    }
+  ],
+  "validated_input_count": 109,
+  "unique_input_count": 109,
+  "failure_is_historical": true,
+  "continuation_runs": [
+    {
+      "started_at_utc": "2026-11-08T04:22:04.450217+00:00",
+      "preserved_input_count": 10,
+      "preserved_records_sha256": {
+        "4307f6279eb29a6104910840bb22f7b10ca40f5646b0d0a9b4cc61a316a19475": "6d922351b85610f80a60ab364709562eb22957cc8658b8611eafa83d56ce397f",
+        "976770f41c04e337ce4ac2c1142277c8c7b1fdb028630808df1434ef644d2f37": "41aad906d5c8f10df0d9a8ad71bdacd572d2bc721f8c9847d7ff9d7d7e864bd5",
+        "845604b49f7d1f023c35c8de5821789cf8e1c80a40a69e4ee9e074ef5a46954e": "7c4e757f3eba237a34eb1019534ded886e3aa35e66a0903e677c9617bdfb98ea",
+        "9c0afdd82897fabb760f2be52dafe27541ae039da264d9330f075c39a6dce110": "0beec23103a282e52215d957169734c92e4c75f341f785fc1c720960dcd47d63",
+        "afb80fcf02051384c0a6b09188ef882e94a6acddf37af37b497a07330f0f4f3c": "6ba091b915f23d39435b420a1da5024762b56282205c0d89f59a6c83cfbb3c04",
+        "54d4226672a0ea02f4d64bd848944f8ee27a2c41f16da8ec0d685315c2b3cad1": "04a735cc64a119f333ba42d2a015e17025c4fba0662c729de270599a6b0f5b26",
+        "c7b6ab64c80f8fb7662341527d86f7e00549977025f669b81186617d4686a787": "2facbfab9b55fcafb100c70b5c55184672421cb807e0bb2b4902f22faaf29d32",
+        "43b056646387ac26a01e70516234abce98500768ce005a6467d9912129cfc55d": "42522e7ae433dac46c9cb6f7db83382117323cd0e1e7634cb1ef78abff5eb4aa",
+        "69b7491beb50ffe4bae180afe0274157c068f331a7909d1ebe4ee676fcd5d11b": "05c54689bec89e79b4656efefce4891f08f553f021201e655c1b94b19b1cbaef",
+        "3a432dbc8c3e92abe9169b6bec08df28c4c3077ed121b91f7fa35f5562260ff3": "da4edc26d3a54e526ac94ea503099e327d11dd8e7215556699f4e09465ca3316"
+      },
+      "max_new_http_requests": 10,
+      "new_http_attempts": 10,
+      "status": "complete"
+    }
+  ]
+}
