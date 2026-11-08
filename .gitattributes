@@ -1,0 +1,4 @@
+# Evaluation artifacts use LF even when a Windows checkout enables core.autocrlf.
+/eval/r4/** text eol=lf
+/tests/test_r4*.py text eol=lf
+/docs/sample_knowledge_base/** text eol=lf

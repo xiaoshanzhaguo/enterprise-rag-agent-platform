@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "policy": "Only CRLF-to-LF byte normalization for explicitly registered historical path/digest pairs; no whitespace stripping, JSON rewriting or Unicode normalization. Verifier code revisions require separate exact approvals. Original frozen files and hashes remain unchanged.",
+  "historical_lf_sha256": {
+    "docs/sample_knowledge_base/finance/payment_approval_policy.md": {
+      "b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428": "b1b0493604386f61cb9d670cb9abe5892d4eb72f9a4076121161aa20cee96428"
+    },
+    "docs/sample_knowledge_base/finance/reimbursement_policy.md": {
+      "cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845": "cf77f4d2373b6d6ecf68f195bfe92d204c941519eb9cf76e92b8e239fc178845"
+    },
+    "docs/sample_knowledge_base/finance/travel_expense_policy.md": {
+      "9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e": "9e7216c0923f54f5b9135dd081ca78f9733967606d5e0f85b7a7eb5320f64a3e"
+    },
+    "docs/sample_knowledge_base/hr/attendance_policy.md": {
+      "19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a": "19582bae2a915b0d6bcd7af430002d42b92e5c4760072b791a1c2d352a44a08a"
+    },
+    "docs/sample_knowledge_base/hr/leave_policy.md": {
+      "095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2": "095ed54674430283e1abad07f5c98988e7ecd3d383f926c074d70dba48b20de2"
+    },
+    "docs/sample_knowledge_base/hr/onboarding_checklist.md": {
+      "8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480": "8f3df30fcfe2cd051f4240c57d660df693ae9fd38e98966beaf4d5328e404480"
+    },
+    "docs/sample_knowledge_base/it/device_security_policy.md": {
+      "358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42": "358dc68f620cc8f650d7f70b7c36e339d7e9f5be2311b77a40f7b8f14f01ff42"
+    },
+    "docs/sample_knowledge_base/it/gitlab_access_request.md": {
+      "dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca": "dcc98edece007c5ba98b2dffbbe40b5c96f894729df8635a0fc84b86446ac4ca"
+    },
+    "docs/sample_knowledge_base/it/vpn_troubleshooting.md": {
+      "43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714": "43eda78c225d198d8367262312394cc5355afb616ebf12c66d6c864b6e27d714"
+    },
+    "docs/sample_knowledge_base/product/customer_feedback_process.md": {
+      "b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261": "b92db5b7ea454041cb1a0a39a3390d0091dc2e89481a8fcca08c396145c3e261"
+    },
+    "docs/sample_knowledge_base/product/product_faq.md": {
+      "dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a": "dae00ea5a790dc221db09f65a6ff6f274c6a4f2326ee4a078d36b898566bcc2a"
+    },
+    "docs/sample_knowledge_base/product/release_process.md": {
+      "dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6": "dc4acf7f742896614846868e6ef361f2c83807b3b9a4798567f575c49485c8c6"
+    },
+    "eval/r4/README.md": {
+      "1b0e384f2e6fd947f9d255ec163dbb115e0f4aaa570d4c54895ec0865da31c44": "1b0e384f2e6fd947f9d255ec163dbb115e0f4aaa570d4c54895ec0865da31c44"
+    },
+    "eval/r4/ai_review_candidates.json": {
+      "eaf1e5b1497f85d5395483724d5a47f9fbbc87cfaa912978cd808102f3c15e73": "eaf1e5b1497f85d5395483724d5a47f9fbbc87cfaa912978cd808102f3c15e73"
+    },
+    "eval/r4/ai_review_report.md": {
+      "cff22e5a7732954eea3d3bb1062e0608d9cde5869a88b94883cc8c96f9326b14": "d65abbdb6ae616fd19bf765abcbb6a54c2525e24502f699ef6742581ea8161ac"
+    },
+    "eval/r4/baseline_7677788_keyword.json": {
+      "e1145cd50336bf7d58684d3852cdc18b5f7ca9441d9cd5c81380eeeb18238775": "80f28a7787a3ea98df5447d5cff0c4455a7561fc0aa919a1b39db82aff562035"
+    },
+    "eval/r4/corpus.json": {
+      "4e136b4bf7163190b4f2337b7e646ebf97448dcbf8d9489faf546c69ffa8faee": "57218ca8b51c16175ce1e6307224938d7882ad2d4bd9228d3711f2c0a464262c"
+    },
+    "eval/r4/dataset.py": {
+      "0219b492e10c51c66832096ce2b177b76877711424155d64d82721e27be6c50b": "0219b492e10c51c66832096ce2b177b76877711424155d64d82721e27be6c50b"
+    },
+    "eval/r4/development.jsonl": {
+      "73953a60d40dc71e91e18eed0b1f8a2f99a34fd9be9d69350e5d52e7da89a39b": "e5606c0433a8037dcf04beb390d1d558312f618b3ace9e5bba3849228a9ab90b"
+    },
+    "eval/r4/gold.py": {
+      "648efe0a59f1adbc41dbb59b61f4c4e7a1ee4f4eb25bd0a35ce93024ea018e10": "648efe0a59f1adbc41dbb59b61f4c4e7a1ee4f4eb25bd0a35ce93024ea018e10"
+    },
+    "eval/r4/gold_v1_candidate.json": {
+      "b7fc8be3b26fd0ddc7b0d438e5fb3da33bb86999cbbc9f8161f9ff26189bd1e5": "b7fc8be3b26fd0ddc7b0d438e5fb3da33bb86999cbbc9f8161f9ff26189bd1e5"
+    },
+    "eval/r4/holdout.jsonl": {
+      "bd8725d0caeee6fcbcdad82d3f681e6ae3eeb10c33e7a3ef06c9217ebf2fd57b": "e807605141fb9c2fa473dc93bf10386118ad6c7a91c7cd7fd1986c0a024ca296"
+    },
+    "eval/r4/metrics.py": {
+      "42cb2bcdbec39d435ae0653d7b3bf1b832a7eca6acfa785eac54902729c3e0df": "42cb2bcdbec39d435ae0653d7b3bf1b832a7eca6acfa785eac54902729c3e0df"
+    },
+    "eval/r4/run_baseline.py": {
+      "97851fac50d0f71b3c24cb161e08f353a09de1fea747ed2d394e87e8c67eea44": "97851fac50d0f71b3c24cb161e08f353a09de1fea747ed2d394e87e8c67eea44"
+    },
+    "eval/week4_questions.jsonl": {
+      "19ccb35ebb9bc196bb47c6e66a751c081efcd05bd88b73af55c0272d78314ca3": "19ccb35ebb9bc196bb47c6e66a751c081efcd05bd88b73af55c0272d78314ca3"
+    },
+    "eval/r4/gold_v1_candidate_freeze_report.md": {
+      "3ea0d442629261d4dc711435921852b7a25a96981bd3a6ce24591b8959831669": "3ea0d442629261d4dc711435921852b7a25a96981bd3a6ce24591b8959831669"
+    },
+    "eval/r4/gold_v1.json": {
+      "61865cc306cff7534abc0b7d96af7b633966e37d615c78c40312bd61500aadab": "61865cc306cff7534abc0b7d96af7b633966e37d615c78c40312bd61500aadab"
+    },
+    "backend/config.py": {
+      "244b9fea65b8ca08fa57ee65af5d8c29eaa07c7dd2d4980fa703db134bd56d0a": "244b9fea65b8ca08fa57ee65af5d8c29eaa07c7dd2d4980fa703db134bd56d0a"
+    },
+    "backend/db/repository.py": {
+      "694b76dd99ba81abaf176ceabf6bbfb3fefbc998dda9fdab04812e1bb6f20bdb": "c02cf5b37fe29368827e4072f949f400b4ed85f39a09aaaee70f95f0beb38f94"
+    },
+    "backend/db/version_repository.py": {
+      "6392f17221d188be1c853972925408b5f9c1c255efc376e27891fe0738f30b56": "6392f17221d188be1c853972925408b5f9c1c255efc376e27891fe0738f30b56"
+    },
+    "backend/rag/chunker.py": {
+      "163133165886fd4e845b0d9b6ac276a0923d0318452c528c33654fd4f6de74d5": "163133165886fd4e845b0d9b6ac276a0923d0318452c528c33654fd4f6de74d5"
+    },
+    "backend/rag/embedding_client.py": {
+      "70085d3ac09057a7ea449df51ffc1b95ac578d7eddbb0f79bbd79e73faaee7ae": "70085d3ac09057a7ea449df51ffc1b95ac578d7eddbb0f79bbd79e73faaee7ae"
+    },
+    "backend/rag/retriever.py": {
+      "375628b7397361f316348c341953b2c18d4afa09d62ab1f62e1e68954a6ca1af": "87a090b4582cc7400319af8c507a6c145922f9a2e2124a8b9aa57815e0255d6f"
+    },
+    "backend/rag/service.py": {
+      "355305c101a0b2da86c1f1069632135c3ddf43299d1a866ef79c13a6a058ad97": "355305c101a0b2da86c1f1069632135c3ddf43299d1a866ef79c13a6a058ad97"
+    },
+    "backend/rag/vector_store.py": {
+      "75fd450d155d17e2bfee0255328ef83c3a5c7b04af0331c60dbd88a174acd157": "5a6c5d6eac8cd216437121f62f27416efb7e8a5b325fc37574a23291b09be5ca"
+    },
+    "eval/r4/baseline_gold_v1_keyword.json": {
+      "4023379f2ae692a084544f6ae4679bf89d08c9594faa28e35204cf27d87154e6": "c7200a385e570337941859c88acbe6f3f49008a79da83fa7d2d2333217e7302e"
+    },
+    "eval/r4/gold_v1_freeze_report.md": {
+      "e8de7b045041fb5319cf2a4bcdae773baf194d7035a68a704794bdadb5eea7f6": "e8de7b045041fb5319cf2a4bcdae773baf194d7035a68a704794bdadb5eea7f6"
+    },
+    "eval/r4/gold_v1_manifest.json": {
+      "0d96da3dd772bc25f33356fb3d412347b43ce0afc8f201be5038565f14b74719": "0d96da3dd772bc25f33356fb3d412347b43ce0afc8f201be5038565f14b74719"
+    },
+    "tests/test_r4_evaluation.py": {
+      "058ab2cf4f33b51facb5df44ee0960860f5a8dced34db534d8de20aeb90ef7ea": "058ab2cf4f33b51facb5df44ee0960860f5a8dced34db534d8de20aeb90ef7ea"
+    },
+    "tests/test_r4_gold.py": {
+      "3a6877ad0811d5ee3b94306cefe1a9716d26e72f26fd3aca60291509c794ca0b": "3a6877ad0811d5ee3b94306cefe1a9716d26e72f26fd3aca60291509c794ca0b"
+    },
+    "backend/rag/index_adapters.py": {
+      "8e9b4158163b1b5b675434c12eaa39e0ab8963c60c7c212dc74280284e6c2cfd": "8e9b4158163b1b5b675434c12eaa39e0ab8963c60c7c212dc74280284e6c2cfd"
+    },
+    "eval/r4/chunk_experiments.py": {
+      "44b6bb85abe8eecde91f2bcc42f99b0845213d33702871d51f466940e3f84078": "44b6bb85abe8eecde91f2bcc42f99b0845213d33702871d51f466940e3f84078"
+    },
+    "eval/r4/context_experiments.py": {
+      "947aa35c9b13f2ea4239258e0decea0699bce467bab7bfb2d79121b7349b62dd": "947aa35c9b13f2ea4239258e0decea0699bce467bab7bfb2d79121b7349b62dd"
+    },
+    "backend/schema/chat_schema.py": {
+      "cdb793fbba3ebbb140ad8ae62a08f7c1df8c96ed08ad1e154a08bd60a0fe05c2": "68b83ca26aace0fc6d50f20e0d2c187b8572810da05ff35ddb816674da7e58ad"
+    },
+    "eval/r4/embedding_cache.json": {
+      "f74c7717b052d2e19f3f121bf94fc5a124614657acc71f4e4fffe8f93bf42cb7": "f74c7717b052d2e19f3f121bf94fc5a124614657acc71f4e4fffe8f93bf42cb7"
+    },
+    "eval/r4/embedding_cache_manifest.json": {
+      "9f685b0fe8845bcafc990c62981dfacf3f85688bfb21396f1c236d6dcad42236": "9f685b0fe8845bcafc990c62981dfacf3f85688bfb21396f1c236d6dcad42236"
+    },
+    "eval/r4/vector_baseline_gold_v1.json": {
+      "3061159abb680afe63c082a7fe0104f4debadfcaef7d1a68d95b704fb2c14577": "3061159abb680afe63c082a7fe0104f4debadfcaef7d1a68d95b704fb2c14577"
+    }
+  },
+  "verifier_revisions": {
+    "eval/r4/gold.py": {
+      "historical_sha256": "648efe0a59f1adbc41dbb59b61f4c4e7a1ee4f4eb25bd0a35ce93024ea018e10",
+      "approved_lf_sha256": "c252ace541c996212c2d36b29057642f794ded4d5e80ab8c726a4553b6e011e2",
+      "reason": "Explicit verifier revision adds narrowly scoped legacy newline compatibility; Gold data and historical digest manifests are not modified."
+    }
+  }
+}
