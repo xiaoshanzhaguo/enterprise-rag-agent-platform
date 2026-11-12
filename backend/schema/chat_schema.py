@@ -225,6 +225,7 @@ class RagStatusResponse(BaseModel):
     documents: List[Dict[str, Any]] = Field(default_factory=list)  # 当前会话每份文档的状态明细
     expires_in_seconds: int = 0  # 数据库持久化后默认不过期，保留该字段兼容前端展示
     vector_index_summary: Dict[str, int] = Field(default_factory=dict)
+    effective_retrieval_mode: Literal["keyword", "vector"] | None = None
 
 
 class ChatHistoryRequest(BaseModel):

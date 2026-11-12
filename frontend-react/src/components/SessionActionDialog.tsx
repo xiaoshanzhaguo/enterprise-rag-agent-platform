@@ -27,7 +27,7 @@ export function SessionActionDialog({ title, busy, onClose, returnFocusTo, child
   }, [returnFocusTo])
 
   return <dialog ref={dialog} className="session-action-dialog" aria-labelledby={titleId} aria-modal="true"
-    onCancel={event => { event.preventDefault(); if (!busy) onClose() }}
+    onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); if (!busy) onClose() }}
     onClick={event => {
       if (event.target !== event.currentTarget || busy) return
       const rect = event.currentTarget.getBoundingClientRect()

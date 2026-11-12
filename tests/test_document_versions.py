@@ -56,6 +56,20 @@ class DocumentVersionTests(unittest.TestCase):
         self.assertEqual(first.document_id, duplicate.document_id)
         self.assertEqual(first.chunks, duplicate.chunks)
 
+    def test_rename_rejects_a_stale_editor_and_preserves_the_current_version(self):
+        first = self.prepare()
+        self.publish(first)
+        identity = self.identity(first)
+        state_version = versions.get_logical_document(identity)['state_version']
+        versions.rename_logical_document(identity, '新名称', state_version)
+        with self.assertRaises(versions.VersionConflict):
+            versions.rename_logical_document(identity, '过期编辑', state_version)
+        parent = versions.get_logical_document(identity)
+        self.assertEqual(parent['display_name'], '新名称')
+        self.assertEqual(parent['state_version'], state_version + 1)
+        self.assertEqual(parent['current_document_id'], first.document_id)
+        self.assertEqual(parent['version_counter'], 1)
+
     def test_category_and_department_create_immutable_versions(self):
         first = self.prepare()
         second = self.prepare(logical_document_id=self.identity(first), knowledge_base_type='hr', department='HR')

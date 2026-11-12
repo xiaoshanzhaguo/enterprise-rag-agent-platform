@@ -111,6 +111,7 @@ export interface RagStatusResponse {
   documents: RagStatusDocument[] // 文档状态明细，右侧“当前检索上下文”会读取它。
   expires_in_seconds: number // 兼容旧前端字段；SQLite 持久化后一般不会真正过期。
   vector_index_summary?: Partial<Record<VectorIndexStatus['status'], number>>
+  effective_retrieval_mode?: 'keyword' | 'vector' | null
 }
 
 export interface VectorIndexStatus {

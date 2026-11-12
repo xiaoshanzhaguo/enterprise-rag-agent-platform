@@ -31,11 +31,12 @@ export function DocumentVersionControls({ document, knowledgeBaseId, onChanged }
       V{document.version_number} · {presentation.label}
     </span>
     {document.is_current_version ? <button ref={trigger} type="button" className="ghost-button" disabled={busy}
-      onClick={() => setConfirmation(versionConfirmation(document, 'disable'))}>停用逻辑文档</button> : <button ref={trigger} type="button" className="ghost-button"
+      onClick={() => setConfirmation(versionConfirmation(document, 'disable'))}>停用文档</button> : <button ref={trigger} type="button" className="ghost-button"
       disabled={!presentation.publishable || busy} onClick={() => setConfirmation(versionConfirmation(document, 'publish'))}>{document.published_at ? '回退至此版本' : '发布此版本'}</button>}
     {error ? <p role="alert" className="index-status-detail">{error}</p> : null}
-    {action ? <SessionActionDialog title={action === 'publish' ? '确认切换生效版本' : '确认停用逻辑文档'}
+    {action ? <SessionActionDialog title={action === 'publish' ? '确认切换生效版本' : '确认停用文档'}
       busy={busy} returnFocusTo={trigger} onClose={() => setConfirmation(null)}>
+      <p>文档：{document.display_name || document.file_name || '未命名文档'}</p>
       <p>{action === 'publish' ? `将 V${document.version_number} 设为当前版本，其他版本退出检索。` : '停用后，所有版本立即退出正常检索，历史记录保留。'}</p>
       <div className="session-dialog-actions"><button className="ghost-button" disabled={busy} onClick={() => setConfirmation(null)}>取消</button>
         <button className="primary-button" disabled={busy} onClick={() => { void confirm() }}>{busy ? '提交中…' : '确认'}</button></div>

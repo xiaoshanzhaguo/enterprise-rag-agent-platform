@@ -47,7 +47,8 @@ def index_http_response(call, schema, *, query=False):
         return JSONResponse(status_code=code, content=receipt, headers=headers)
     except IndexManagementError as exc:
         code, detail = {"not_found": (404, "未找到当前范围内的索引任务。"),
-                        "forbidden": (403, "当前角色没有知识库管理权限。")}[exc.reason]
+                        "forbidden": (403, "当前角色没有知识库管理权限。"),
+                        "vector_disabled": (409, "请先启用向量检索模式，再为已有文档建立索引。")}[exc.reason]
     except (IndexOperationConflict, VersionConflict):
         code, detail = 409, "文档输入或索引目标与已有任务冲突，请查询原任务。"
     except ValueError:
@@ -57,6 +58,14 @@ def index_http_response(call, schema, *, query=False):
     except Exception:
         code, detail = 503, "索引管理暂不可用，请查询已知任务后再操作。"
     return JSONResponse(status_code=code, content={"detail": detail, "receipt": None})
+
+
+@router.post("/documents/{document_id}/index", response_model=IndexOperationResponse, responses=ERROR_RESPONSES)
+def index_existing(document_id: int, session_id: str = Query(min_length=1, pattern=r"\S"),
+                   knowledge_base_id: str = Query(min_length=1, pattern=r"\S"), user_role: str | None = None,
+                   service: IndexManagementService = Depends(get_index_management_service)):
+    return index_http_response(lambda: service.index_existing(document_id, session_id=session_id,
+        knowledge_base_id=knowledge_base_id, user_role=user_role), IndexOperationResponse)
 
 
 @router.get("/rag_index_operations/{operation_id}", response_model=IndexOperationResponse, responses=ERROR_RESPONSES)

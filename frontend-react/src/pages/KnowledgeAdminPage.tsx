@@ -1,67 +1,51 @@
-/*
-* 知识库管理页面
-*
-* 功能描述：
-* 1. 管理员在这里查看当前企业知识库和分类配置。
-* 2. 页面已经接入“上传企业文档”入口，上传时复用后端 /index_document。
-* 3. 这个页面是把知识库从聊天 session 中独立出来的前端入口。
-*
-* 作用：
-* 1. 页面加载时，从后端获取企业知识库列表和分类列表。
-* 2. 左侧可以选择目标知识库、文档分类和文本型文件，并提交索引。
-* 3. 右侧展示当前后端返回的知识库配置、分类配置和文档状态。
-* 4. 上传成功后会刷新当前知识库的文档数、chunk 数和文件列表。
-* */
-
-import { FileText, RefreshCw, UploadCloud } from 'lucide-react'
-import { formatApiError } from '../api/httpClient'
-// 在这个页面里：useState 保存知识库列表、分类列表、loading、错误信息；useEffect 页面首次加载后请求后端数据。
+import { AlertCircle, FileText, FolderOpen, Layers3, Plus, RefreshCw, Search, UploadCloud, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-// 只从 React 里导入 ChangeEvent 这个“类型”，用于 TypeScript 类型标注，不会作为运行时代码打包。
-// 只导入 React 事件类型，用于给文件选择 input 的 onChange 事件标注类型。
 import type { ChangeEvent } from 'react'
-import { groupDocumentVersions, versionUploadMetadata } from '../api/documentVersionState'
+import { formatApiError } from '../api/httpClient'
+import { versionPresentation, versionUploadMetadata } from '../api/documentVersionState'
+import { renameDocument } from '../api/documentVersions'
+import { documentFileError, knowledgeAdminView } from '../api/knowledgeAdminView'
 import * as knowledgeBaseApi from '../api/knowledgeBaseApi'
-import { KnowledgeIndexController } from '../api/knowledgeIndexState'
+import { indexPresentation, KnowledgeIndexController } from '../api/knowledgeIndexState'
 import { DocumentIndexStatus } from '../components/DocumentIndexStatus'
 import { DocumentVersionControls } from '../components/DocumentVersionControls'
 import { DocumentDeletionControls } from '../components/DocumentDeletionControls'
-import type { KnowledgeBaseCategory, KnowledgeBaseItem } from '../types/knowledgeBase'
+import { SessionActionDialog } from '../components/SessionActionDialog'
+import { ScopeSelect } from '../components/ScopeSelect'
+import type { KnowledgeBaseCategory, KnowledgeBaseItem, RagStatusDocument } from '../types/knowledgeBase'
+import '../styles/knowledge-admin.css'
 
-
-// 管理员上传文档时使用的固定 session_id。
-// 说明：真正的知识库范围由 knowledge_base_id 决定，这里保留 session_id 是为了兼容后端 /index_document 的请求模型。
 const ADMIN_UPLOAD_SESSION_ID = 'react-admin-knowledge-upload'
-
-// 当前项目还没有正式登录系统，所以管理页先固定使用 kb_admin 角色调用上传接口。
 const ADMIN_USER_ROLE = 'kb_admin'
 
-// KnowledgeAdminPage 是管理员知识库管理页面组件。
 export const KnowledgeAdminPage = () => {
-  // 保存后端返回的企业知识库列表。
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseItem[]>([])
-
-  // 保存后端返回的分类列表。
   const [categories, setCategories] = useState<KnowledgeBaseCategory[]>([])
-
-  // 保存选择的分类ID。
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('')
-
-  // 保存当前选择的目标知识库 ID。
-  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string>('')
-
-  // 保存当前文件输入框里选择的文件对象。
-  const [versionTarget, setVersionTarget] = useState('')
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
+  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState('')
+  const [versionTarget, setVersionTarget] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-
-  // 标记页面是否正在加载配置。
-  // 初始值是：true，因为页面刚打开时就要请求知识库和分类配置。当请求完成后，会执行 setIsLoading(false)。页面里的 <select disabled={isLoading}> 会根据它禁用或启用。
+  const [search, setSearch] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-
-  // 保存接口失败时的错误提示。
+  const [configError, setConfigError] = useState('')
+  const [configAttempt, setConfigAttempt] = useState(0)
   const [errorMessage, setErrorMessage] = useState('')
   const [isReadingFile, setIsReadingFile] = useState(false)
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const [nameMode, setNameMode] = useState<'create' | 'rename' | null>(null)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [indexingDocument, setIndexingDocument] = useState<number | null>(null)
+  const [detailError, setDetailError] = useState('')
+  const nameLock = useRef(false)
+  const indexLock = useRef(false)
+  const detailTrigger = useRef<HTMLButtonElement>(null)
+  const nameTrigger = useRef<HTMLButtonElement>(null)
   const readingFile = useRef(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const uploadTrigger = useRef<HTMLButtonElement>(null)
   const indexController = useMemo(() => new KnowledgeIndexController({
     session_id: ADMIN_UPLOAD_SESSION_ID, knowledge_base_id: selectedKnowledgeBaseId, user_role: ADMIN_USER_ROLE,
   }, knowledgeBaseApi), [selectedKnowledgeBaseId])
@@ -69,404 +53,333 @@ export const KnowledgeAdminPage = () => {
   const ragStatus = indexState.status
   const uploadResult = indexState.upload
   const isUploading = indexState.uploading || isReadingFile
-  const isStatusLoading = indexState.loading
   const visibleError = errorMessage || indexState.error || indexState.queryError
+  const selectedCategory = categories.find(item => item.category_id === selectedCategoryId)
+  const view = knowledgeAdminView(ragStatus?.documents ?? [], search)
+  const hasStatus = ragStatus !== null
+  const targetGroup = view.groups.find(group => group.id === versionTarget)
+  const detailGroup = view.groups.find(group => group.id === detailId)
+  const canUpload = !isLoading && hasStatus && Boolean(selectedKnowledgeBaseId) && !isUploading
 
-
-  // 页面首次渲染后加载知识库和分类配置。
-  // 因为这个 useEffect 最后依赖数组是 []，所以它只会在组件首次挂载后执行一次。
   useEffect(() => {
-    // ignore 防止组件卸载后继续 setState。
-    // 说明下面的 ignore 变量用于避免异步请求回来后组件已经卸载，但代码还继续 setState。
-    // 比如用户很快切换页面，请求还没回来。
-    // 如果组件已经卸载了，请求回来后再执行：
-    // setKnowledgeBases(...) 就没有意义，还可能引发 React 警告。
-    // ignore 初始值为 false，表示组件当前还没有卸载。组件卸载时，清理函数会把它改成 true。
     let ignore = false
-
-    // 异步读取知识库管理页需要的基础配置。
-    async function loadKnowledgeBaseConfig() {
+    async function loadConfig() {
+      setIsLoading(true)
+      setConfigError('')
       try {
-        // 进入加载状态。
-        setIsLoading(true)
-
-        // 清空旧错误。
-        setErrorMessage('')
-
-        // 知识库列表和分类列表互不依赖，可以并行请求。
         const [knowledgeBaseResponse, categoryResponse] = await Promise.all([
-          knowledgeBaseApi.fetchKnowledgeBases(),
-          knowledgeBaseApi.fetchKnowledgeBaseCategories(),
+          knowledgeBaseApi.fetchKnowledgeBases(), knowledgeBaseApi.fetchKnowledgeBaseCategories(),
         ])
-
-        // 如果组件已经卸载，就不再更新状态。
-        if (ignore) {
-          return
-        }
-
-        // 写入知识库列表。
+        if (ignore) return
         setKnowledgeBases(knowledgeBaseResponse.knowledge_bases)
-
-        // 写入分类列表。
         setCategories(categoryResponse.categories)
-
-        // 写入默认知识库 ID，接口返回后默认选中第一个知识库。
-        setSelectedKnowledgeBaseId(knowledgeBaseResponse.knowledge_bases[0]?.knowledge_base_id ?? '')
-
-        // 写入选中分类ID，接口返回后默认选中分类
-        setSelectedCategoryId(categoryResponse.categories[0]?.category_id ?? '')
+        setSelectedKnowledgeBaseId(previous => knowledgeBaseResponse.knowledge_bases.some(kb => kb.knowledge_base_id === previous)
+          ? previous : knowledgeBaseResponse.knowledge_bases[0]?.knowledge_base_id ?? '')
+        setSelectedCategoryId(previous => categoryResponse.categories.some(category => category.category_id === previous)
+          ? previous : categoryResponse.categories[0]?.category_id ?? '')
       } catch (error) {
-        // 如果 try 里的请求失败，就进入 catch。error是捕获到的错误对象。
-        // 展示接口错误，方便开发阶段定位后端是否启动。
-        setErrorMessage(formatApiError(error, '加载知识库管理数据失败，请检查服务连接后刷新页面。'))
+        if (!ignore) setConfigError(formatApiError(error, '知识库配置加载失败，请重试。'))
       } finally {
-        // 组件还存在时才结束 loading。
-        if (!ignore) {
-          setIsLoading(false)
-        }
+        if (!ignore) setIsLoading(false)
       }
     }
+    void loadConfig()
+    return () => { ignore = true }
+  }, [configAttempt])
 
-    // 进入页面后立即加载配置。
-    loadKnowledgeBaseConfig()
-
-    // 组件卸载时设置 ignore，避免异步请求回来后更新状态。
-    return () => {
-      ignore = true
-    }
-  }, [])
-
-  // 切换知识库或离开页面时取消 GET 和轮询；不重新提交索引任务。
   useEffect(() => {
     indexController.start()
     return () => indexController.dispose()
   }, [indexController])
 
-  // 根据 selectedCategoryId 找到当前选中的分类对象。
-  const selectedCategory = categories.find((item) => item.category_id === selectedCategoryId)
-
-  // 根据 selectedKnowledgeBaseId 找到当前选中的知识库对象。
-  const selectedKnowledgeBase = knowledgeBases.find((item) => item.knowledge_base_id === selectedKnowledgeBaseId)
-
-  function handleKnowledgeBaseChange(event: ChangeEvent<HTMLSelectElement>) {
+  function handleKnowledgeBaseChange(value: string) {
+    if (value === selectedKnowledgeBaseId) return
     setErrorMessage('')
-    setVersionTarget('')
-    setSelectedKnowledgeBaseId(event.target.value)
+    setVersionTarget(null)
+    setDetailId(null)
+    setSearch('')
+    setSelectedKnowledgeBaseId(value)
   }
 
-  function handleVersionTargetChange(event: ChangeEvent<HTMLSelectElement>) {
-    const identity = event.target.value
-    setVersionTarget(identity)
-    const versions = (ragStatus?.documents ?? []).filter(d => d.logical_document_id === identity)
-    const current = versions.find(d => d.is_current_version) || versions.sort((a, b) => (b.version_number || 1) - (a.version_number || 1))[0]
-    if (current?.knowledge_base_type) {
-      const category = categories.find(c => c.knowledge_base_type === current.knowledge_base_type)
-      if (category) setSelectedCategoryId(category.category_id)
-    }
+  function openName(trigger: HTMLButtonElement, mode: 'create' | 'rename') {
+    nameTrigger.current = trigger
+    setName(mode === 'rename' ? detailGroup?.name ?? '' : '')
+    setDescription('')
+    setNameError('')
+    setNameMode(mode)
   }
 
-  function refreshSelectedKnowledgeBaseStatus() {
-    setErrorMessage('')
-    void indexController.refresh()
-  }
-
-  // 文件选择变化时，把浏览器 File 对象保存到状态里。
-  // ChangeEvent<HTMLInputElement>：这是一个 React 的 change 事件，并且这个事件来自一个 HTML input 元素。
-  // ChangeEvent 是 React 提供的一个事件类型，它表示：表单元素发生变化时触发的事件类型。
-  // event 是 input 文件选择框触发的 change 事件，因此可以读取 event.target.files。
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    // 读取用户选择的第一个文件。
-    const file = event.target.files?.[0] ?? null
-
-    if (!file) {
-      setSelectedFile(null)
-      return
-    }
-
-    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
-    const allowedExtensions = [".md", ".txt"]
-
-    // allowedExtensions.includes(extension): 判断“允许列表里是否包含当前文件扩展名”。
-    if (!allowedExtensions.includes(extension)) {
-      setSelectedFile(null)
-      setErrorMessage('只允许选择 .md 和 .txt 文件，类型不合适，请重新选择。')
-      event.target.value = ''
-      return
-    }
-
-    setErrorMessage('')
-    // 保存文件对象，后续点击上传时读取文本内容。
-    setSelectedFile(file)
-    // 重新选择文件后，清空上一轮上传结果。
-    indexController.clearUpload()
-  }
-
-  // 点击“上传并索引”后，读取文件文本并调用后端 /index_document。
-  async function handleUploadDocument() {
-    if (readingFile.current || isUploading || indexState.uploadUncertain) return
-    // 没有选中文件时，不允许上传。
-    if (!selectedFile) {
-      // 给出明确提示。
-      setErrorMessage('请先选择要上传的文档。')
-      // 直接结束函数。
-      return
-    }
-
-    // 没有选中知识库时，不允许上传。
-    if (!selectedKnowledgeBaseId) {
-      // 给出明确提示。
-      setErrorMessage('请先选择目标知识库。')
-      // 直接结束函数。
-      return
-    }
-
-    // 没有选中文档分类时，不允许上传。
-    if (!selectedCategory) {
-      // 给出明确提示。
-      setErrorMessage('请先选择文档分类。')
-      // 直接结束函数。
-      return
-    }
-
-    // 限制上传文件大小，避免一次性读取过大的文本文件。
-    const MAX_FILE_SIZE = 2 * 1024 * 1024
-
-    if (selectedFile.size > MAX_FILE_SIZE) {
-      setErrorMessage('文件过大，请上传 2MB 以内的文本文件。')
-      return
-    }
-
+  async function saveName() {
+    if (nameLock.current || !name.trim() || !nameMode) return
+    nameLock.current = true
+    setSavingName(true)
+    setNameError('')
     try {
-      // 进入上传中状态。
+      if (nameMode === 'create') {
+        const created = await knowledgeBaseApi.createKnowledgeBase(name.trim(), description.trim())
+        setKnowledgeBases(items => items.some(item => item.knowledge_base_id === created.knowledge_base_id) ? items : [...items, created])
+        handleKnowledgeBaseChange(created.knowledge_base_id)
+      } else {
+        const version = detailGroup?.versions[0]
+        if (!version?.logical_document_id || !version.logical_state_version) return
+        await renameDocument(version.logical_document_id, selectedKnowledgeBaseId, version.logical_state_version, name.trim())
+        await indexController.refreshAfterDocumentChange()
+      }
+      setNameMode(null)
+    } catch (error) {
+      setNameError(formatApiError(error, '保存失败，请核对后重试。'))
+    } finally {
+      nameLock.current = false
+      setSavingName(false)
+    }
+  }
+
+  async function buildIndex(documentId: number) {
+    if (indexLock.current) return
+    indexLock.current = true
+    setIndexingDocument(documentId)
+    setDetailError('')
+    try {
+      await knowledgeBaseApi.indexExistingDocument(documentId, {
+        session_id: ADMIN_UPLOAD_SESSION_ID, knowledge_base_id: selectedKnowledgeBaseId, user_role: ADMIN_USER_ROLE,
+      })
+    } catch (error) {
+      setDetailError(formatApiError(error, '索引结果尚未确认，请核对文档状态。'))
+    } finally {
+      await indexController.refreshAfterDocumentChange()
+      indexLock.current = false
+      setIndexingDocument(null)
+    }
+  }
+
+  function openUpload(trigger: HTMLButtonElement, identity = '') {
+    uploadTrigger.current = trigger
+    setSelectedFile(null)
+    setErrorMessage('')
+    if (!indexState.uploadUncertain) indexController.clearUpload()
+    setVersionTarget(identity)
+    if (!identity) return
+    const versions = (ragStatus?.documents ?? []).filter(document => document.logical_document_id === identity)
+    const current = versions.find(document => document.is_current_version)
+      || versions.sort((a, b) => (b.version_number || 1) - (a.version_number || 1))[0]
+    const category = categories.find(item => item.knowledge_base_type === current?.knowledge_base_type)
+    if (category) setSelectedCategoryId(category.category_id)
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null
+    if (!file) return
+    const error = documentFileError(file)
+    setErrorMessage(error)
+    setSelectedFile(error ? null : file)
+    if (error) event.target.value = ''
+    else indexController.clearUpload()
+  }
+
+  async function handleUploadDocument() {
+    if (readingFile.current || !canUpload || indexState.uploadUncertain || uploadResult || versionTarget === null) return
+    if (!selectedFile || !selectedKnowledgeBaseId || !selectedCategory) {
+      setErrorMessage('请选择知识库、文档分类和文件后再上传。')
+      return
+    }
+    if (versionTarget && !targetGroup) {
+      setErrorMessage('找不到要更新的文档，请关闭窗口后重新选择。')
+      return
+    }
+    const error = documentFileError(selectedFile)
+    if (error) { setErrorMessage(error); return }
+    try {
       readingFile.current = true
       setIsReadingFile(true)
-      // 清空旧错误。
       setErrorMessage('')
-      // 读取文件文本内容。当前后端接收 document_text，因此这里先支持 md、txt 等文本型文件。
-      // selectedFile 是浏览器里的 File 对象。selectedFile.text() 的作用是：把用户选择的文件内容读取成字符串。
-      // 为什么它是异步的？因为读取文件属于浏览器的 I/O 操作。浏览器不会为了读一个文件，把整个页面卡住，所以设计成异步操作，返回一个 Promise。
       const documentText = await selectedFile.text()
-
-      // 调用后端 /index_document，把文件内容写入企业知识库。
+      if (!documentText.trim()) { setErrorMessage('文档正文为空，请重新选择文件。'); return }
       await indexController.upload({
-        session_id: ADMIN_UPLOAD_SESSION_ID, // 兼容后端请求模型。
-        document_text: documentText,
-        logical_document_id: versionTarget || undefined, // 只有明确选择才上传新版本。
-        file_name: selectedFile.name, // 文件名。
-        knowledge_base_id: selectedKnowledgeBaseId, // 目标知识库。
-        user_role: ADMIN_USER_ROLE, // 当前管理页固定模拟知识库管理员。
+        session_id: ADMIN_UPLOAD_SESSION_ID, document_text: documentText,
+        logical_document_id: versionTarget || undefined, file_name: selectedFile.name,
+        knowledge_base_id: selectedKnowledgeBaseId, user_role: ADMIN_USER_ROLE,
         ...versionUploadMetadata(ragStatus?.documents ?? [], versionTarget, selectedCategory),
       })
-
     } catch (error) {
-      // 展示上传失败原因。
       setErrorMessage(formatApiError(error, '读取文档失败，请重新选择文件。'))
     } finally {
-      // 结束上传中状态。
       readingFile.current = false
       setIsReadingFile(false)
     }
   }
 
-  // 返回管理员知识库管理页面结构。
-  return (
-    // page-stack 控制页面内模块垂直间距。
-    // 定义页面最外层区域。
-    <section className="page-stack">
-      {/* 页面标题区，说明当前入口属于管理员侧。 */}
-      {/* 定义页面头部区域。 */}
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">管理员侧</p>
-          <h2>知识库管理</h2>
-          <p>集中维护企业资料，按业务分类整理，为员工提供可信的知识来源。</p>
-        </div>
-      </header>
-
-      {/* 加载失败时展示错误信息。 */}
-      {visibleError ? <div className="alert error" role="alert">{visibleError}</div> : null}
-
-      {/* 两列布局：左侧上传入口，右侧当前配置。 */}
-      <div className="workspace-grid">
-        {/* 左侧：上传企业文档的表单骨架。 */}
-        {/* 定义左侧卡片区域。panel 是通用面板样式。 */}
-        <section className="panel">
-          {/* 定义面板标题区域。 */}
-          <div className="panel-heading">
-            <UploadCloud aria-hidden="true" size={20} />
-            <div>
-              <h3>上传企业文档</h3>
-              <p>选择分类并上传文本资料，处理完成后即可用于问答检索。</p>
-            </div>
-          </div>
-
-          {/* 目标知识库：决定文档上传后属于哪个企业知识库。 */}
-          <label className="field">
-            <span>目标知识库</span>
-            {/* disabled={isLoading} 表示：isLoading 为 true 时，下拉框禁用；isLoading 为 false 时，下拉框可用。*/}
-            <select disabled={isLoading || isUploading} value={selectedKnowledgeBaseId} onChange={handleKnowledgeBaseChange}>
-              {knowledgeBases.map((item) => (
-                <option key={item.knowledge_base_id} value={item.knowledge_base_id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* 文档分类：决定上传文档写入 hr、finance、it 还是 product。 */}
-          <label className="field">
-            <span>文档分类</span>
-            <select disabled={isLoading || isUploading} value={selectedCategoryId} onChange={(event) => setSelectedCategoryId(event.target.value)}>
-              {categories.map((item) => (
-                <option key={item.category_id} value={item.category_id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* 文件选择：后续接入上传接口时再启用。 */}
-          <label className="field">
-            <span>选择文件</span>
-            {/* 定义文件选择输入框。type="file" 表示这是上传文件用的输入框。 */}
-            {/* 当前已经接入 /index_document，但后端接收 document_text，所以这里先支持文本型文件。 */}
-            {/* 当前后端接收 document_text，所以前端先读取文本型文件内容，例如 .md、.txt、.csv、.json。 */}
-            <input type="file" accept=".md,.txt" disabled={isLoading || isUploading} onChange={handleFileChange} />
-          </label>
-
-          <label className="field-label">上传目标
-            <select aria-label="上传目标" value={versionTarget} disabled={isUploading} onChange={handleVersionTargetChange}>
-              <option value="">新建独立文档</option>
-              {Array.from(new Map((ragStatus?.documents ?? []).filter(d => d.logical_document_id)
-                .map(d => [d.logical_document_id!, d])).values()).map(d =>
-                <option key={d.logical_document_id} value={d.logical_document_id}>新版本：{d.display_name || d.file_name}</option>)}
-            </select>
-          </label>
-          {/* 上传按钮：点击后读取文件文本，并提交给 /index_document。 */}
-          {/* type="button" 表示普通按钮，不触发表单默认提交。 */}
-          <button className="primary-button" type="button" disabled={!selectedFile || !selectedKnowledgeBaseId || !selectedCategoryId || isUploading || indexState.uploadUncertain} onClick={handleUploadDocument}>
-            {isUploading ? '正在保存并处理…' : indexState.uploadUncertain ? '请先刷新核对上传结果' : '上传并索引'}
-          </button>
-
-          {/* 上传成功后展示后端返回的索引结果。 */}
-          {uploadResult ? (
-            <div className="upload-result-card">
-              {/* 上传结果标题。 */}
-              <strong>文本已保存</strong>
-              <DocumentIndexStatus index={uploadResult.vector_index} operationId={uploadResult.operation_id}
-                uncertain={!uploadResult.state_confirmed || indexState.uncertain.includes(uploadResult.operation_id || '')}
-                busy={indexState.busy.includes(uploadResult.operation_id || '')}
-                onQuery={() => { if (uploadResult.operation_id) void indexController.query(uploadResult.operation_id) }}
-                onExecute={action => { if (uploadResult.operation_id) void indexController.execute(uploadResult.operation_id, action) }} />
-              {/* 文件名。 */}
-              <span>文件：{uploadResult.file_name ?? selectedFile?.name ?? '未命名文档'}</span>
-              {/* chunk 数。 */}
-              <span>Chunk 数：{uploadResult.chunk_count}</span>
-              {/* 文档分类。 */}
-              <span>分类：{uploadResult.knowledge_base_type}</span>
-            </div>
-          ) : null}
-        </section>
-
-        {/* 右侧：展示当前后端提供的知识库和分类配置。 */}
-        <aside className="panel">
-          {/* 定义右侧面板标题区域。 */}
-          <div className="panel-heading">
-            {/* small-icon 是 CSS 类名，用于把这个文字显示成小图标样式。 */}
-            <div className="small-icon">KB</div>
-            <div>
-              <h3>知识库概览</h3>
-              <p>查看已收录文档及其分类与处理情况。</p>
-            </div>
-          </div>
-
-          {/* 当前选中知识库的文档状态。 */}
-          <div className="admin-status-header">
-            {/* 左侧展示当前知识库名称。 */}
-            <div>
-              <strong>{selectedKnowledgeBase?.name ?? '未选择知识库'}</strong>
-              <span>{isStatusLoading ? '正在刷新文档状态...' : '文档状态'}</span>
-            </div>
-
-            {/* 手动刷新文档状态按钮。 */}
-            <button className="ghost-button" type="button" disabled={!selectedKnowledgeBaseId || isStatusLoading} onClick={refreshSelectedKnowledgeBaseStatus}>
-              <RefreshCw aria-hidden="true" size={16} />
-              刷新
-            </button>
-          </div>
-
-          {/* 文档状态数字摘要。 */}
-          <dl className="meta-list">
-            {/* 文档总数。 */}
-            <div>
-              <dt>文档数</dt>
-              <dd>{ragStatus?.document_count ?? 0}</dd>
-            </div>
-            {/* Chunk 总数。 */}
-            <div>
-              <dt>Chunk 数</dt>
-              <dd>{ragStatus?.chunk_count ?? 0}</dd>
-            </div>
-          </dl>
-
-          {/* 当前知识库中的文档列表。 */}
-          <div className="file-list">
-            {/* 遍历后端返回的 documents。 */}
-            {groupDocumentVersions(ragStatus?.documents ?? []).map(group =>
-              <section className="document-version-group" key={group.id}>
-                <h3>{group.name}</h3>
-                {group.versions.map(document => {
-              const operationId = document.vector_index?.operation_id
-                || indexState.uncertainDocuments[document.document_id ?? 0]
-              return <div className="knowledge-document" key={document.document_id ?? document.file_name}>
-                <div className="knowledge-document-title">
-                  <FileText aria-hidden="true" size={17} />
-                  <strong title={document.file_name ?? '未命名文档'}>{document.file_name ?? '未命名文档'}</strong>
-                  <small>{document.knowledge_base_type ?? 'general'} · {document.chunk_count ?? 0} 个片段</small>
-                </div>
-                {document.lifecycle_state !== 'deleting' ? <DocumentIndexStatus index={document.vector_index} operationId={operationId}
-                  uncertain={Boolean(operationId && indexState.uncertain.includes(operationId))}
-                  busy={Boolean(operationId && indexState.busy.includes(operationId))}
-                  onQuery={operationId ? () => { void indexController.query(operationId) } : undefined}
-                  onExecute={operationId ? action => { void indexController.execute(operationId, action) } : undefined} /> : null}
-                <DocumentVersionControls document={document} knowledgeBaseId={selectedKnowledgeBaseId} onChanged={indexController.refreshAfterDocumentChange} />
-                <DocumentDeletionControls document={document} knowledgeBaseId={selectedKnowledgeBaseId} onChanged={indexController.refreshAfterDocumentChange} />
-              </div>
-            })}</section>)}
-
-            {/* 没有文档时展示空状态。 */}
-            {/* 如果当前知识库没有文档，就显示一句“当前知识库还没有文档。”；如果有文档，就什么都不显示。 */}
-            {/* ragStatus?.documents?.length: 安全地读取 ragStatus 里面 documents 数组的长度。
-            !ragStatus?.documents?.length: 如果文档数量不存在，或者文档数量是 0，就认为没有文档。*/}
-            {!ragStatus?.documents?.length ? <p className="muted-text">当前知识库还没有文档。</p> : null}
-          </div>
-
-          {/* 知识库配置列表。 */}
-          {/* 定义配置列表容器。 */}
-          <div className="config-list">
-            {/* 遍历 knowledgeBases，每一个知识库渲染一行配置。 */}
-            {knowledgeBases.map((item) => (
-              <div className="config-row" key={item.knowledge_base_id}>
-                {/* {item.name} 表示把变量插入 JSX。 */}
-                <strong>{item.name}</strong>
-                {/* 显示知识库描述。优先显示知识库描述，没有描述时显示知识库 ID。 */}
-                <span>{item.description ?? item.knowledge_base_id}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* 分类标签列表，用于快速确认后端分类接口是否正常。 */}
-          {/* 定义分类标签列表容器。 */}
-          <div className="tag-list">
-            {/* 遍历分类数组。每一个分类渲染一个标签。 */}
-            {categories.map((item) => (
-              <span className="tag" key={item.category_id}>
-                {item.label}
-              </span>
-            ))}
-          </div>
-        </aside>
+  function renderDocument(document: RagStatusDocument) {
+    const operationId = document.vector_index?.operation_id || indexState.uncertainDocuments[document.document_id ?? 0]
+    const category = categories.find(item => item.knowledge_base_type === document.knowledge_base_type)
+    const canBuildIndex = ragStatus?.effective_retrieval_mode === 'vector' && document.document_id
+      && ['unknown', 'not_requested'].includes(document.vector_index?.status ?? 'unknown')
+    return <article className="knowledge-document kb-version-card" key={document.document_id ?? document.file_name}>
+      <div className="knowledge-document-title">
+        <FileText aria-hidden="true" size={17} />
+        <strong title={document.file_name ?? '未命名文档'}>{document.file_name ?? '未命名文档'}</strong>
       </div>
+      <p className="kb-document-meta">{category?.label || document.knowledge_base_type || '未分类'}
+        <span aria-hidden="true"> · </span>{document.chunk_count ?? 0} 个文本片段
+        {document.department && document.department !== category?.label ? <> · {document.department}</> : null}</p>
+      {document.lifecycle_state !== 'deleting' ? <DocumentIndexStatus index={document.vector_index} operationId={operationId}
+        uncertain={Boolean(operationId && indexState.uncertain.includes(operationId))}
+        busy={Boolean(operationId && indexState.busy.includes(operationId))}
+        onQuery={operationId ? () => { void indexController.query(operationId) } : undefined}
+        onExecute={operationId ? action => { void indexController.execute(operationId, action) } : undefined} /> : null}
+      <div className="kb-document-actions">
+        {document.lifecycle_state !== 'deleting' && canBuildIndex ? <button type="button" className="ghost-button"
+          disabled={indexingDocument !== null} onClick={() => void buildIndex(document.document_id!)}
+          >{indexingDocument === document.document_id ? '正在建立索引…' : '建立向量索引'}</button> : null}
+        <DocumentVersionControls document={document} knowledgeBaseId={selectedKnowledgeBaseId} onChanged={indexController.refreshAfterDocumentChange} />
+        <DocumentDeletionControls document={document} knowledgeBaseId={selectedKnowledgeBaseId} onChanged={indexController.refreshAfterDocumentChange} />
+      </div>
+    </article>
+  }
+
+  return <section className="page-stack knowledge-admin-page">
+    <header className="page-header kb-page-header">
+      <div><h2>知识库管理</h2><p>搜索资料，维护文档和生效版本。</p></div>
+      <div className="kb-header-actions">
+        <button type="button" className="ghost-button" disabled={isLoading || isUploading}
+          onClick={event => openName(event.currentTarget, 'create')}><Plus size={17} aria-hidden="true" />新建知识库</button>
+        <button type="button" className="primary-button" disabled={!canUpload} onClick={event => openUpload(event.currentTarget)}>
+          <UploadCloud size={17} aria-hidden="true" />上传文档
+        </button>
+      </div>
+    </header>
+
+    {configError ? <div className="alert error kb-alert" role="alert"><span>{configError}</span>
+      <button className="ghost-button" disabled={isLoading} onClick={() => setConfigAttempt(value => value + 1)}>重新加载</button></div> : null}
+    {versionTarget === null && visibleError ? <div className="alert error" role="alert">{visibleError}</div> : null}
+
+    <section className="panel kb-library" aria-label="知识库文档">
+      <div className="kb-toolbar">
+        <ScopeSelect label="当前知识库" hideLabel icon={<FolderOpen size={17} aria-hidden="true" />}
+          value={selectedKnowledgeBaseId} disabled={isLoading || isUploading} onChange={handleKnowledgeBaseChange}
+          placeholder={isLoading ? '正在加载…' : '暂无可用知识库'}
+          options={knowledgeBases.map(item => ({ value: item.knowledge_base_id, label: item.name, description: item.description }))} />
+        <label className="kb-search"><Search size={17} aria-hidden="true" />
+          <input aria-label="搜索文档" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索文档或版本文件名" disabled={!hasStatus} />
+        </label>
+        <button type="button" className="ghost-button kb-refresh" disabled={!selectedKnowledgeBaseId || indexState.loading || isUploading}
+          onClick={() => { setErrorMessage(''); void indexController.refresh() }}>
+          <RefreshCw size={15} aria-hidden="true" className={indexState.loading ? 'kb-spinning' : ''} />
+          {indexState.loading ? '刷新中…' : '刷新'}
+        </button>
+      </div>
+      {hasStatus ? <p className="kb-count" aria-live="polite">
+        {search.trim() ? '找到 ' + view.filteredGroups.length + ' / ' + view.groups.length + ' 份文档' : view.groups.length + ' 份文档'}
+        <span aria-hidden="true"> · </span>{view.currentCount} 份生效
+      </p> : null}
+
+      {!hasStatus ? <div className="kb-empty" role="status">
+        {isLoading || indexState.loading ? <><RefreshCw className="kb-spinning" size={25} aria-hidden="true" /><h3>正在加载文档</h3></>
+          : <><AlertCircle size={26} aria-hidden="true" /><h3>{selectedKnowledgeBaseId ? '文档列表暂不可用' : '尚未选择知识库'}</h3>
+            <p>{selectedKnowledgeBaseId ? '请点击刷新重试。' : '请先选择可用知识库。'}</p></>}
+      </div> : view.groups.length === 0 ? <div className="kb-empty">
+        <span className="kb-empty-icon"><FolderOpen size={27} aria-hidden="true" /></span><h3>这个知识库还没有文档</h3>
+        <p>点击「上传文档」添加 Markdown 或纯文本资料。</p>
+      </div> : !view.filteredGroups.length ? <div className="kb-empty" role="status"><Search size={26} aria-hidden="true" /><h3>没有找到匹配文档</h3>
+        <button type="button" className="text-button" onClick={() => setSearch('')}>清除搜索</button>
+      </div> : <div className="kb-table-scroll"><table className="kb-table">
+        <caption className="sr-only">当前知识库的文档</caption>
+        <thead><tr><th scope="col">文档</th><th scope="col">分类</th><th scope="col">版本</th><th scope="col">索引状态</th><th scope="col">操作</th></tr></thead>
+        <tbody>{view.filteredGroups.map(group => {
+          const primary = group.versions.find(document => document.is_current_version) || group.versions[0]
+          const operationId = primary.vector_index?.operation_id || indexState.uncertainDocuments[primary.document_id ?? 0]
+          const status = indexPresentation(primary.vector_index, Boolean(operationId && indexState.uncertain.includes(operationId)))
+          const category = categories.find(item => item.knowledge_base_type === primary.knowledge_base_type)
+          return <tr key={group.id}>
+            <th scope="row"><span className="kb-table-name"><FileText size={17} aria-hidden="true" />{group.name}</span></th>
+            <td>{category?.label || primary.knowledge_base_type || '未分类'}</td>
+            <td><span>V{primary.version_number || 1} · {versionPresentation(primary).label}</span>
+              <small>{group.versions.length} 个版本</small></td>
+            <td>{primary.lifecycle_state === 'deleting'
+              ? <span className="status-badge status-running">删除中</span>
+              : <span className={'status-badge ' + status.tone}>{status.label}</span>}</td>
+            <td><button type="button" className="text-button" aria-label={'管理 ' + group.name} onClick={event => {
+              detailTrigger.current = event.currentTarget
+              setDetailError('')
+              setDetailId(group.id)
+            }}>查看与管理</button></td>
+          </tr>
+        })}</tbody>
+      </table></div>}
     </section>
-  )
+
+    {detailGroup ? <SessionActionDialog title="文档详情" busy={indexingDocument !== null}
+      returnFocusTo={detailTrigger} onClose={() => setDetailId(null)}>
+      <div className="kb-detail-heading">
+        <h4>{detailGroup.name}</h4>
+        {detailGroup.versions[0].logical_document_id ? <div className="kb-header-actions">
+          <button type="button" className="ghost-button" disabled={indexingDocument !== null}
+            onClick={event => openName(event.currentTarget, 'rename')}>编辑名称</button>
+          <button type="button" className="primary-button kb-version-upload" disabled={!canUpload || indexingDocument !== null}
+            onClick={event => openUpload(event.currentTarget, detailGroup.id)}>
+            <UploadCloud size={16} aria-hidden="true" />上传新版本
+          </button>
+        </div> : null}
+      </div>
+      {detailError ? <p className="alert error" role="alert">{detailError}</p> : null}
+      <div className="kb-version-list" aria-label="文档版本">{[...detailGroup.versions]
+        .sort((a, b) => Number(Boolean(b.is_current_version)) - Number(Boolean(a.is_current_version)))
+        .map(renderDocument)}</div>
+    </SessionActionDialog> : null}
+
+    {nameMode ? <SessionActionDialog title={nameMode === 'create' ? '新建知识库' : '编辑文档名称'} busy={savingName}
+      returnFocusTo={nameTrigger} onClose={() => setNameMode(null)}>
+      <form onSubmit={event => { event.preventDefault(); void saveName() }}>
+        {nameError ? <p className="alert error" role="alert">{nameError}</p> : null}
+        <label className="field"><span>{nameMode === 'create' ? '知识库名称' : '文档名称'}</span>
+          <input required maxLength={nameMode === 'create' ? 80 : 255} value={name} disabled={savingName}
+            onChange={event => setName(event.target.value)} /></label>
+        {nameMode === 'create' ? <label className="field"><span>简介（选填）</span>
+          <textarea rows={3} maxLength={300} value={description} disabled={savingName}
+            onChange={event => setDescription(event.target.value)} /></label> : null}
+        <div className="session-dialog-actions">
+          <button type="button" className="ghost-button" disabled={savingName} onClick={() => setNameMode(null)}>取消</button>
+          <button type="submit" className="primary-button" disabled={savingName || !name.trim()}>
+            {savingName ? '正在保存…' : nameMode === 'create' ? '创建' : '保存'}
+          </button>
+        </div>
+      </form>
+    </SessionActionDialog> : null}
+
+    {versionTarget !== null ? <SessionActionDialog title={versionTarget ? '上传新版本' : '上传文档'} busy={isUploading}
+      returnFocusTo={uploadTrigger} onClose={() => { setVersionTarget(null); setErrorMessage('') }}>
+      <div className="kb-upload">
+        {visibleError ? <div className="alert error" role="alert">{visibleError}</div> : null}
+        {uploadResult ? <div className="upload-result-card" role="status"><strong>{uploadResult.document_reused ? '已复用已有文档' : '文本已保存'}</strong>
+          <span>{uploadResult.file_name || selectedFile?.name || '未命名文档'} · {uploadResult.chunk_count} 个片段</span>
+          <DocumentIndexStatus index={uploadResult.vector_index} operationId={uploadResult.operation_id}
+            uncertain={!uploadResult.state_confirmed || indexState.uncertain.includes(uploadResult.operation_id || '')}
+            busy={indexState.busy.includes(uploadResult.operation_id || '')}
+            onQuery={() => { if (uploadResult.operation_id) void indexController.query(uploadResult.operation_id) }}
+            onExecute={action => { if (uploadResult.operation_id) void indexController.execute(uploadResult.operation_id, action) }} />
+        </div> : <>
+          <p className="kb-upload-target">{versionTarget ? targetGroup?.name || '文档已不可用'
+            : knowledgeBases.find(item => item.knowledge_base_id === selectedKnowledgeBaseId)?.name}</p>
+          <ScopeSelect label="文档分类" icon={<Layers3 size={17} aria-hidden="true" />} value={selectedCategoryId}
+            placeholder="暂无可用分类" disabled={isUploading} onChange={setSelectedCategoryId}
+            options={categories.map(category => ({ value: category.category_id, label: category.label, description: category.description }))} />
+          <label className={'kb-file-picker' + (isUploading ? ' is-disabled' : '')}>
+            <input ref={fileInput} className="kb-file-input" aria-label="选择文档文件" type="file" accept=".md,.txt" disabled={isUploading} onChange={handleFileChange} />
+            <UploadCloud size={23} aria-hidden="true" /><strong>{selectedFile ? '更换文件' : '选择本地文件'}</strong><span>Markdown / TXT · 最大 2 MB</span>
+          </label>
+          {selectedFile ? <div className="kb-selected-file"><FileText size={17} aria-hidden="true" /><strong>{selectedFile.name}</strong>
+            <button type="button" className="text-button" aria-label="移除已选文件" disabled={isUploading}
+              onClick={() => { setSelectedFile(null); if (fileInput.current) fileInput.current.value = '' }}><X size={16} aria-hidden="true" /></button>
+          </div> : null}
+          {versionTarget ? <p className="kb-upload-note">新版本处理成功后自动生效，失败时保留原生效版本。</p> : null}
+        </>}
+        <div className="session-dialog-actions">
+          <button type="button" className={uploadResult ? 'primary-button' : 'ghost-button'} disabled={isUploading}
+            onClick={() => { setVersionTarget(null); setErrorMessage('') }}>{uploadResult ? '完成' : '取消'}</button>
+          {!uploadResult ? <button type="button" className="primary-button"
+            disabled={!canUpload || !selectedFile || !selectedCategory || Boolean(versionTarget && !targetGroup) || indexState.uploadUncertain}
+            onClick={() => { void handleUploadDocument() }}>{isUploading ? '正在上传…' : '开始上传'}</button> : null}
+        </div>
+      </div>
+    </SessionActionDialog> : null}
+  </section>
 }

@@ -65,6 +65,10 @@ from backend.db.repository import rename_chat_session
 from backend.db.repository import ensure_chat_session
 from backend.db.repository import get_chat_session_detail
 from backend.db.repository import list_knowledge_bases
+from backend.db.repository import ensure_knowledge_base
+from backend.rag.knowledge_bases import can_manage_knowledge_base
+from pydantic import BaseModel, Field, ConfigDict
+from uuid import uuid4
 from backend.db.repository import list_recent_chat_sessions
 from backend.db.repository import load_latest_mode_sessions
 from backend.schema.chat_schema import (
@@ -248,6 +252,22 @@ def knowledge_bases():
     return {
         "knowledge_bases": list_knowledge_bases()
     }
+
+
+class CreateKnowledgeBase(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    name: str = Field(min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=300)
+    user_role: str | None = None
+
+
+@router.post("/knowledge_bases", status_code=201)
+def create_knowledge_base(request: CreateKnowledgeBase):
+    if not can_manage_knowledge_base(request.user_role):
+        raise HTTPException(403, "当前角色没有知识库管理权限。")
+    identity = ensure_knowledge_base(f"kb_{uuid4().hex}", name=request.name, description=request.description)
+    return {"knowledge_base_id": identity, "name": request.name, "description": request.description or None,
+            "owner_role": "kb_admin"}
 
 
 @router.post("/index_document", response_model=IndexDocumentResponse, responses={**ERROR_RESPONSES, 202: {"model": IndexDocumentResponse}})

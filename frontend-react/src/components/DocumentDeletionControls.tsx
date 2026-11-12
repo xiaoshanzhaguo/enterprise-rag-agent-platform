@@ -31,6 +31,8 @@ export function DocumentDeletionControls({ document, knowledgeBaseId, onChanged 
         onClick={() => { void controller.retry() }}>{task.status === 'pending' ? '继续删除' : '重试删除'}</button> : null}
     </> : <button ref={trigger} type="button" className="ghost-button" disabled={blocked || state.busy}
       onClick={() => setConfirm(true)}>{document.is_current_version ? '当前版本不可删除' : blocked ? '索引中，暂不可删除' : '删除版本'}</button>}
+    {document.is_current_version && !deleting && !state.uncertain
+      ? <span className="kb-delete-hint">停用文档后可以进行删除。</span> : null}
     {state.error ? <p className="index-status-detail" role="alert">{state.error}</p> : null}
     {deleting ? <p className="index-status-detail">文档已退出检索范围，完成后不可撤销。</p> : null}
     {confirm ? <SessionActionDialog title="确认删除文档" busy={state.busy} returnFocusTo={trigger} onClose={() => setConfirm(false)}>

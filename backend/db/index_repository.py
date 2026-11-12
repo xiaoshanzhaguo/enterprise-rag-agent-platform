@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from backend.db.connection import get_connection
-from backend.db.version_repository import find_duplicate
+from backend.db.version_repository import find_duplicate, public_storage_sql
 from backend.db.repository import (
     _prepare_document_storage_scope,
     _save_document_with_chunks_in_connection,
@@ -203,6 +203,13 @@ def prepare_document_index(
     )
     with closing(get_connection()) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
+        if logical_document_id and normalized_id:
+            parent = connection.execute(
+                "SELECT storage_session_id FROM logical_documents WHERE logical_document_id = ? AND knowledge_base_id = ? AND "
+                + public_storage_sql(), (logical_document_id, document_kb_id, storage_id),
+            ).fetchone()
+            if parent:
+                storage_id = parent["storage_session_id"]
         existing = find_duplicate(connection, storage_id, document_kb_id, file_name,
             hashlib.sha256("\n\n".join(chunks).encode()).hexdigest(), knowledge_base_type,
             department, process_type, process_status, logical_document_id)
@@ -265,6 +272,48 @@ def prepare_document_index(
                 if cursor.rowcount != 1:
                     raise IndexOperationConflict("索引请求状态转换未生效。")
         return PreparedIndex(document_id, saved, _require_operation(connection, operation_id), reused)
+
+
+def prepare_existing_document_index(document_id: int, knowledge_base_id: str, target_profile: dict) -> dict:
+    """Attach an index task to the persisted version and its existing chunk IDs."""
+    profile = _validate_profile(target_profile)
+    with closing(get_connection()) as connection, connection:
+        connection.execute("BEGIN IMMEDIATE")
+        doc = connection.execute("SELECT session_id, lifecycle_state FROM documents WHERE id = ? AND knowledge_base_id = ?",
+                                 (document_id, knowledge_base_id)).fetchone()
+        if doc is None:
+            raise LookupError("当前知识库未找到文档。")
+        if doc["lifecycle_state"] != "active":
+            raise IndexOperationConflict("文档正在删除。")
+        task = connection.execute("SELECT operation_id FROM rag_index_tasks WHERE document_id = ?", (document_id,)).fetchone()
+        if task:
+            operation = _require_operation(connection, task["operation_id"])
+            _verify_input(connection, operation)
+            if operation["status"] != "not_requested":
+                if not _compatible_profile(operation["target_profile"], profile):
+                    raise IndexOperationConflict("现有索引任务使用不同配置。")
+                return operation
+            connection.execute(
+                """UPDATE rag_index_tasks SET status = 'pending', target_profile_json = ?, target_sha256 = ?,
+                   updated_at = ?, state_version = state_version + 1 WHERE operation_id = ?""",
+                (_json(profile), _digest({"input_sha256": operation["input_sha256"], "profile": profile}),
+                 _now(), operation["operation_id"]),
+            )
+            return _require_operation(connection, operation["operation_id"])
+        chunks = _read_chunks(connection, document_id)
+        manifest = _manifest(doc["session_id"], chunks)
+        input_hash = _digest(manifest)
+        operation_id = str(uuid4())
+        now = _now()
+        connection.execute(
+            """INSERT INTO rag_index_tasks
+               (operation_id, document_id, status, input_manifest_json, input_sha256,
+                target_profile_json, target_sha256, expected_chunk_count, created_at, updated_at)
+               VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)""",
+            (operation_id, document_id, _json(manifest), input_hash, _json(profile),
+             _digest({"input_sha256": input_hash, "profile": profile}), len(chunks), now, now),
+        )
+        return _require_operation(connection, operation_id)
 
 
 def get_index_operation(operation_id: str) -> dict[str, Any] | None:

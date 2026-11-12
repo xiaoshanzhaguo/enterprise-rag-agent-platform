@@ -85,6 +85,39 @@ class RagIndexApiTests(unittest.TestCase):
         self.assertEqual(len(self.store.writes), 1)
         self.assertEqual(self.counts(), (1, data["chunk_count"], 1))
 
+    def test_new_knowledge_base_keeps_its_name_and_description_after_upload(self):
+        request = {"name": "项目资料", "description": "交付文档", "user_role": "kb_admin"}
+        self.assertEqual(self.client.post("/knowledge_bases", json={**request, "user_role": "employee"}).status_code, 403)
+        created = self.client.post("/knowledge_bases", json=request)
+        self.assertEqual(created.status_code, 201, created.text)
+        identity = created.json()["knowledge_base_id"]
+        upload = self.upload(knowledge_base_id=identity, user_role="kb_admin")
+        self.assertEqual(upload.status_code, 200, upload.text)
+        bases = self.client.get("/knowledge_bases").json()["knowledge_bases"]
+        self.assertTrue(any(base["knowledge_base_id"] == identity and base["name"] == "项目资料"
+                            and base["description"] == "交付文档" for base in bases))
+
+    def test_existing_legacy_document_indexes_once_without_changing_chunks_or_scope(self):
+        from backend.db.version_repository import document_version
+
+        chunks = save_document_with_chunks("legacy-session", "legacy.md", ["第一段", "第二段"])
+        document_id = chunks[0]["document_id"]
+        fixture.IndexRepositoryTests.execute(self, "UPDATE documents SET knowledge_base_id = 'enterprise_default' WHERE id = ?",
+                                             (document_id,))
+        original = document_version(document_id)
+        params = {"session_id": "upload", "knowledge_base_id": "enterprise_default", "user_role": "kb_admin"}
+        path = f"/documents/{document_id}/index"
+        self.assertEqual(self.client.post(path, params={**params, "knowledge_base_id": "another"}).status_code, 404)
+        response = self.client.post(path, params=params)
+        self.assertEqual(response.status_code, 200, response.text)
+        receipt = response.json()
+        self.assertEqual(receipt["vector_index"]["status"], "ready")
+        self.assertEqual(repository.get_index_operation(receipt["operation_id"])["storage_session_id"], "legacy-session")
+        self.assertEqual(document_version(document_id), original)
+        self.assertEqual(self.client.post(path, params=params).json()["operation_id"], receipt["operation_id"])
+        self.assertEqual(len(self.store.writes), 1)
+        self.assertEqual(self.counts(), (1, 2, 1))
+
     def test_status_query_is_read_only_redacted_and_location_is_usable(self):
         task = self.pending()
         active = repository.claim_index_operation(task["operation_id"], task["state_version"], "other")

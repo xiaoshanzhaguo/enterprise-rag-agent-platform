@@ -88,10 +88,22 @@ def create_logical_document(storage_session_id, knowledge_base_id, display_name)
     return get_logical_document(identity)
 
 
-def get_logical_document(identity):
+def public_storage_sql():
+    return """(storage_session_id = ? OR EXISTS (SELECT 1 FROM documents d
+        WHERE d.logical_document_id = logical_documents.logical_document_id
+        AND d.knowledge_base_id = logical_documents.knowledge_base_id
+        AND d.session_id = logical_documents.storage_session_id))"""
+
+
+def get_logical_document(identity, *, knowledge_base_id=None, storage_session_id=None):
     with closing(get_connection()) as connection:
         connection.execute('BEGIN')
-        row = connection.execute('SELECT * FROM logical_documents WHERE logical_document_id = ?', (identity,)).fetchone()
+        scope = 'logical_document_id = ?'
+        parameters = [identity]
+        if knowledge_base_id is not None:
+            scope += ' AND knowledge_base_id = ? AND ' + public_storage_sql()
+            parameters.extend([knowledge_base_id, storage_session_id])
+        row = connection.execute(f'SELECT * FROM logical_documents WHERE {scope}', parameters).fetchone()
         if not row:
             return None
         result = dict(row)
@@ -108,7 +120,7 @@ def list_logical_documents(knowledge_base_id, *, storage_session_id=None):
         scope = 'knowledge_base_id = ?'
         params = [knowledge_base_id]
         if storage_session_id is not None:
-            scope += ' AND storage_session_id = ?'
+            scope += ' AND ' + public_storage_sql()
             params.append(storage_session_id)
         return [dict(row) for row in connection.execute(f'''SELECT * FROM logical_documents
             WHERE {scope} ORDER BY created_at DESC, logical_document_id''', params)]
@@ -168,6 +180,15 @@ def auto_publish(document_id, *, retrieval_mode='keyword'):
         except VersionConflict:
             return False  # Ready candidate remains available for an explicit CAS publication.
     return False
+
+
+def rename_logical_document(identity, name, expected_state_version):
+    with closing(get_connection()) as connection, connection:
+        cursor = connection.execute("""UPDATE logical_documents SET display_name = ?, updated_at = ?,
+            state_version = state_version + 1
+            WHERE logical_document_id = ? AND state_version = ?""", (name, now(), identity, expected_state_version))
+        if cursor.rowcount != 1:
+            raise VersionConflict('逻辑文档状态已变化。')
 
 
 def disable_document(identity, expected_state_version):

@@ -270,8 +270,8 @@ def ensure_knowledge_base(
             INSERT INTO knowledge_bases (id, name, description, owner_role, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                name = excluded.name,
-                description = excluded.description,
+                name = CASE WHEN ? IS NULL THEN knowledge_bases.name ELSE excluded.name END,
+                description = CASE WHEN ? IS NULL THEN knowledge_bases.description ELSE excluded.description END,
                 owner_role = excluded.owner_role,
                 updated_at = excluded.updated_at
             """,
@@ -282,6 +282,8 @@ def ensure_knowledge_base(
                 owner_role or default_config.get("owner_role") or "kb_admin",
                 now,
                 now,
+                name,
+                description,
             ),
         )
         connection.commit()

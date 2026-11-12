@@ -24,6 +24,10 @@ class PublishVersion(VersionAction):
     document_id: int = Field(gt=0, strict=True)
 
 
+class RenameDocument(VersionAction):
+    display_name: str = Field(min_length=1, max_length=255, pattern=r'\S')
+
+
 def get_version_service():
     return DocumentVersionService()
 
@@ -73,3 +77,10 @@ def publish(identity: UUID, request: PublishVersion, knowledge_base_id: str = Qu
 def disable(identity: UUID, request: VersionAction, knowledge_base_id: str = Query(min_length=1),
             user_role: str | None = None, service: DocumentVersionService = Depends(get_version_service)):
     return response(lambda: service.disable(identity, knowledge_base_id, user_role, request.expected_state_version))
+
+
+@router.post('/logical_documents/{identity}/rename')
+def rename(identity: UUID, request: RenameDocument, knowledge_base_id: str = Query(min_length=1),
+           user_role: str | None = None, service: DocumentVersionService = Depends(get_version_service)):
+    return response(lambda: service.rename(identity, knowledge_base_id, user_role, request.display_name,
+                                           request.expected_state_version))

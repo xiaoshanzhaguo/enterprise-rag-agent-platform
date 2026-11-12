@@ -4,8 +4,8 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 const navigationItems = [
   { to: '/chat', label: '智能问答', icon: MessagesSquare },
-  { to: '/admin/knowledge', label: '知识库管理', icon: Database },
   { to: '/workflow', label: '流程助手', icon: ClipboardList },
+  { to: '/admin/knowledge', label: '知识库管理', icon: Database },
   { to: '/logs', label: '执行日志', icon: FileClock },
   { to: '/eval', label: '评测结果', icon: BarChart3 },
 ]

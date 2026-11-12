@@ -29,9 +29,9 @@ class DocumentVersionService:
         kb = self._public_scope(kb)
         if write and not can_manage_knowledge_base(role):
             raise VersionForbidden()
-        parent = repository.get_logical_document(str(identity))
-        if (not parent or parent['knowledge_base_id'] != kb
-                or parent['storage_session_id'] != build_knowledge_base_storage_session_id(kb)):
+        parent = repository.get_logical_document(str(identity), knowledge_base_id=kb,
+                                                 storage_session_id=build_knowledge_base_storage_session_id(kb))
+        if not parent:
             raise LookupError('当前知识库中未找到逻辑文档。')
         return parent
 
@@ -52,4 +52,9 @@ class DocumentVersionService:
     def disable(self, identity, kb, role, expected_state_version):
         self.get(identity, kb, role, write=True)
         repository.disable_document(str(identity), expected_state_version)
+        return self.get(identity, kb)
+
+    def rename(self, identity, kb, role, name, expected_state_version):
+        self.get(identity, kb, role, write=True)
+        repository.rename_logical_document(str(identity), name.strip(), expected_state_version)
         return self.get(identity, kb)

@@ -65,7 +65,7 @@ test('pending、failed、deleting 不允许发布；ready 和 keyword 可发布'
 test('真实 React 组件展示当前停用、候选发布和历史回退入口', () => {
   const render = document => renderToStaticMarkup(createElement(DocumentVersionControls, { document, knowledgeBaseId: 'kb', onChanged() {} }))
   assert.match(render(doc()), /发布此版本/)
-  assert.match(render(doc({ is_current_version: true })), /停用逻辑文档/)
+  assert.match(render(doc({ is_current_version: true })), /停用文档/)
   assert.match(render(doc({ published_at: '2026-11-04' })), /回退至此版本/)
   assert.match(render(doc({ vector_index: { status: 'pending' } })), /disabled/)
 })

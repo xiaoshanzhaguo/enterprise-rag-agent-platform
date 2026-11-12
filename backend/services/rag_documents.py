@@ -88,9 +88,10 @@ class IndexManagementService:
     @staticmethod
     def _authorize(operation, session_id, knowledge_base_id, user_role, *, write=False):
         knowledge_base_id = normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None
-        scope = (build_knowledge_base_storage_session_id(knowledge_base_id) if knowledge_base_id else session_id)
-        if (not session_id or not session_id.strip() or operation["storage_session_id"] != scope
-                or (knowledge_base_id is None and operation["knowledge_base_id"] != SESSION_SCOPED_KNOWLEDGE_BASE_ID)):
+        matches_scope = (knowledge_base_id != SESSION_SCOPED_KNOWLEDGE_BASE_ID
+                         and operation["knowledge_base_id"] == knowledge_base_id) if knowledge_base_id else (
+            operation["knowledge_base_id"] == SESSION_SCOPED_KNOWLEDGE_BASE_ID and operation["storage_session_id"] == session_id)
+        if not session_id or not session_id.strip() or not matches_scope:
             raise IndexManagementError("not_found")
         if write and knowledge_base_id and not can_manage_knowledge_base(user_role):
             raise IndexManagementError("forbidden")
@@ -143,9 +144,10 @@ class IndexManagementService:
                         process_status=request.process_status or inferred["process_status"] or "active")
         identity = getattr(request, 'logical_document_id', None)
         if identity:
-            parent = version_repository.get_logical_document(identity)
-            scope = build_knowledge_base_storage_session_id(kb) if kb else request.session_id
-            if not parent or parent['storage_session_id'] != scope:
+            parent = version_repository.get_logical_document(
+                identity, knowledge_base_id=kb, storage_session_id=build_knowledge_base_storage_session_id(kb) if kb else None)
+            if (not parent or parent['knowledge_base_id'] != (kb or SESSION_SCOPED_KNOWLEDGE_BASE_ID)
+                    or (not kb and parent['storage_session_id'] != request.session_id)):
                 raise IndexManagementError('not_found')
             if parent['versions']:
                 previous = next((v for v in parent['versions'] if v['document_id'] == parent['current_document_id']), parent['versions'][0])
@@ -187,6 +189,22 @@ class IndexManagementService:
         receipt.update(version_repository.document_version(prepared.document_id))
         return IndexManagementResult(receipt, result.reason)
 
+    def index_existing(self, document_id, *, session_id, knowledge_base_id, user_role):
+        if not can_manage_knowledge_base(user_role):
+            raise IndexManagementError("forbidden")
+        if self.mode != "vector":
+            raise IndexManagementError("vector_disabled")
+        knowledge_base_id = normalize_knowledge_base_id(knowledge_base_id)
+        if knowledge_base_id == SESSION_SCOPED_KNOWLEDGE_BASE_ID:
+            raise IndexManagementError("not_found")
+        try:
+            operation = repository.prepare_existing_document_index(
+                document_id, knowledge_base_id, self.profile_factory())
+        except LookupError as exc:
+            raise IndexManagementError("not_found") from exc
+        return self.action(operation["operation_id"], operation["state_version"], action="resume",
+                           session_id=session_id, knowledge_base_id=knowledge_base_id, user_role=user_role)
+
     def document_status(self, session_id, knowledge_base_id=None):
         result, operations, deletions = get_document_management_snapshot(session_id, knowledge_base_id)
         summary = dict.fromkeys(("ready", "pending", "failed", "not_requested", "unknown"), 0)
@@ -200,6 +218,7 @@ class IndexManagementService:
                        tracking_source="managed" if vector["status"] != "unknown" else "legacy")
             summary[vector["status"]] += 1
         result["has_document"] = any(d.get("is_current_version") for d in result["documents"])
+        result["effective_retrieval_mode"] = self.mode
         result["vector_index_summary"] = summary
         return result
 

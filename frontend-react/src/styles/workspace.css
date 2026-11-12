@@ -170,6 +170,8 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: var(--text-
 .session-dialog-body form { display: grid; gap: 20px; }
 .session-dialog-body p { margin: 0; font-size: var(--text-md); overflow-wrap: anywhere; }
 .session-dialog-body .session-actions { justify-content: flex-end; }
+.session-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 4px; }
+.session-dialog-actions > button { min-width: 88px; min-height: 44px; }
 .session-delete-notice { color: var(--muted); font-size: var(--text-sm); }
 .danger-solid-button { background: #b42318; border-color: #b42318; }
 .danger-solid-button:hover:not(:disabled) { background: #912018; border-color: #912018; }
@@ -251,3 +253,20 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: var(--text-
   .detail-identifiers, .detail-fields { grid-template-columns: 1fr; gap: 16px; }
   .process-steps { padding: 13px; justify-content: space-between; gap: 8px; font-size: var(--text-xs); }
 }
+
+.scope-select { position: relative; min-width: 0; display: grid; gap: 6px; }
+.scope-label { color: var(--muted); font-size: var(--text-xs); font-weight: 500; }
+.scope-trigger { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 12px; color: var(--ink); text-align: left; }
+.scope-trigger > svg:first-child { color: var(--accent); flex-shrink: 0; }
+.scope-trigger > svg:last-child { color: var(--muted); flex-shrink: 0; transition: transform .15s ease; }
+.scope-trigger[aria-expanded=true] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.scope-trigger[aria-expanded=true] > svg:last-child { transform: rotate(180deg); }
+.scope-trigger > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+.scope-options { position: absolute; z-index: 45; bottom: calc(100% - 18px); left: 0; width: 100%; min-width: 200px; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 26px #18283b1a; padding: 5px; }
+.scope-options > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border: 0; background: transparent; text-align: left; padding: 10px; border-radius: 7px; color: var(--ink); }
+.scope-options > button.is-highlighted { background: var(--surface-muted); }
+.scope-options > button[aria-selected=true] { color: var(--accent); background: var(--accent-soft); }
+.scope-options > button > span { display: grid; min-width: 0; gap: 3px; }
+.scope-options strong { font-size: var(--text-sm); font-weight: 500; }
+.scope-options small { color: var(--muted); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.scope-options svg { flex-shrink: 0; }

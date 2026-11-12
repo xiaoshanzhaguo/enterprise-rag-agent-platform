@@ -16,6 +16,7 @@ import type {
   IndexDocumentResponse,
   KnowledgeBaseCategoryListResponse,
   KnowledgeBaseListResponse,
+  KnowledgeBaseItem,
   RagStatusResponse,
   IndexOperationResponse,
   IndexOperationScope,
@@ -25,6 +26,11 @@ import type {
 export function fetchKnowledgeBases() {
   // 后端返回结构是 { knowledge_bases: [...] }。
   return apiGet<KnowledgeBaseListResponse>('/knowledge_bases')
+}
+
+export function createKnowledgeBase(name: string, description: string) {
+  return apiPost<{ name: string; description: string; user_role: string }, KnowledgeBaseItem>(
+    '/knowledge_bases', { name, description, user_role: 'kb_admin' }, AbortSignal.timeout(15_000))
 }
 
 // 获取知识库分类列表，用于渲染 HR / 财务 / IT / 产品等分类选项。
@@ -74,6 +80,12 @@ function operationPath(operationId: string, scope: IndexOperationScope, action =
   if (scope.knowledge_base_id) query.set('knowledge_base_id', scope.knowledge_base_id)
   if (scope.user_role) query.set('user_role', scope.user_role)
   return `/rag_index_operations/${encodeURIComponent(operationId)}${action}?${query}`
+}
+
+export function indexExistingDocument(documentId: number, scope: IndexOperationScope) {
+  const query = new URLSearchParams({ session_id: scope.session_id, knowledge_base_id: scope.knowledge_base_id || '',
+    user_role: scope.user_role || '' })
+  return apiPost<Record<string, never>, IndexOperationResponse>(`/documents/${documentId}/index?${query}`, {}, indexSignal())
 }
 
 export function fetchIndexOperation(operationId: string, scope: IndexOperationScope, signal?: AbortSignal) {
