@@ -12,7 +12,7 @@
 export type UserRole = 'employee' | 'kb_admin' | 'approver' | 'admin'
 
 export type FeedbackRating = 'helpful' | 'unhelpful'
-export type FeedbackReason = '' | 'answer_inaccurate' | 'citation_mismatch' | 'incomplete' | 'other'
+export type FeedbackReason = '' | 'answer_inaccurate' | 'citation_mismatch' | 'incomplete' | 'off_topic' | 'response_issue' | 'unclear' | 'other'
 export interface AnswerFeedback {
   rating: FeedbackRating
   reason: FeedbackReason
@@ -38,6 +38,8 @@ export interface ChatMessage {
   metadata?: AgentStreamMetadata
   messageId?: number
   feedback?: AnswerFeedback
+  notice?: string // 中断说明单独展示，保留已接收到的正文。
+  knowledgeBaseId?: string // 当前页面发送时确认的范围；刷新后的消息以持久化 metadata 为准。
 }
 
 export interface ChatSessionSummary {

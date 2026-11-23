@@ -158,7 +158,8 @@ def _message_row_to_dict(row) -> dict[str, Any]:
     return message
 
 
-def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: str | None = None) -> None:
+def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: str | None = None,
+                        *, owner_user_id: int | None = None) -> None:
     """
     确保聊天会话记录存在，并刷新会话基础信息。
 
@@ -185,10 +186,14 @@ def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: st
         connection.execute('BEGIN IMMEDIATE')
         if connection.execute('SELECT 1 FROM deleted_chat_sessions WHERE session_id = ?', (session_id,)).fetchone():
             raise ValueError('会话已删除，请新建会话。')
+        if owner_user_id is not None:
+            existing = connection.execute('SELECT owner_user_id FROM chat_sessions WHERE id = ?', (session_id,)).fetchone()
+            if existing is not None and existing['owner_user_id'] != owner_user_id:
+                raise ValueError('会话编号不可用，请新建会话。')
         connection.execute(
             """
-            INSERT INTO chat_sessions (id, mode, title, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO chat_sessions (id, mode, title, created_at, updated_at, owner_user_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 mode = CASE
                     WHEN chat_sessions.mode = 'unknown' THEN excluded.mode
@@ -197,7 +202,7 @@ def ensure_chat_session(session_id: str | None, mode: str = "unknown", title: st
                 title = COALESCE(chat_sessions.title, excluded.title),
                 updated_at = excluded.updated_at
             """,
-            (session_id, session_mode, title, now, now),
+            (session_id, session_mode, title, now, now, owner_user_id),
         )
         connection.commit()
 
@@ -368,7 +373,7 @@ def get_session_messages(session_id: str | None) -> list[dict[str, Any]]:
     return [_message_row_to_dict(row) for row in rows]
 
 
-def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]]:
+def load_latest_mode_sessions(mode_names: list[str], *, owner_user_id: int | None = None) -> dict[str, dict[str, Any]]:
     """
     加载各模式最近一次聊天会话。
 
@@ -388,11 +393,11 @@ def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]
                 """
                 SELECT id
                 FROM chat_sessions
-                WHERE mode = ?
+                WHERE mode = ? AND owner_user_id IS ? AND substr(id, 1, 15) <> 'knowledge_base:'
                 ORDER BY updated_at DESC, created_at DESC
                 LIMIT 1
                 """,
-                (mode_name,),
+                (mode_name, owner_user_id),
             ).fetchone()
 
             if not session:
@@ -406,7 +411,8 @@ def load_latest_mode_sessions(mode_names: list[str]) -> dict[str, dict[str, Any]
     return mode_sessions
 
 
-def list_recent_chat_sessions(limit: int = 10, *, mode: str | None = None, include_empty: bool = False) -> list[dict[str, Any]]:
+def list_recent_chat_sessions(limit: int = 10, *, mode: str | None = None, include_empty: bool = False,
+                              owner_user_id: int | None = None) -> list[dict[str, Any]]:
     """
     查询最近更新的聊天会话列表。
 
@@ -425,7 +431,7 @@ def list_recent_chat_sessions(limit: int = 10, *, mode: str | None = None, inclu
     safe_limit = max(1, min(safe_limit, 50))
 
     # 打开数据库连接，读取最近会话摘要
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         # 查询最近更新的非空会话，并用第一条用户消息兜底标题
         rows = connection.execute(
             """
@@ -450,13 +456,14 @@ def list_recent_chat_sessions(limit: int = 10, *, mode: str | None = None, inclu
             FROM chat_sessions
             LEFT JOIN chat_messages ON chat_messages.session_id = chat_sessions.id
             WHERE substr(chat_sessions.id, 1, 15) <> 'knowledge_base:'
+              AND chat_sessions.owner_user_id IS ?
               AND (? IS NULL OR chat_sessions.mode = ?)
             GROUP BY chat_sessions.id
             HAVING ? OR COUNT(chat_messages.id) > 0
             ORDER BY chat_sessions.updated_at DESC, chat_sessions.created_at DESC, chat_sessions.id DESC
             LIMIT ?
             """,
-            (mode, mode, include_empty, safe_limit),
+            (owner_user_id, mode, mode, include_empty, safe_limit),
         ).fetchall()
 
     # 将 sqlite3.Row 转成前端更容易消费的普通字典
@@ -490,7 +497,7 @@ def get_chat_session_detail(session_id: str | None) -> dict[str, Any] | None:
         return None
 
     # 打开数据库连接，查询会话基础信息
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         # 根据主键读取会话记录
         session = connection.execute(
             """

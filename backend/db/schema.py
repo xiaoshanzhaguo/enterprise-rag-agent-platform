@@ -253,6 +253,7 @@ CREATE_INDEX_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_document_deletion_status ON document_deletion_tasks(status, updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_rag_index_tasks_status_updated ON rag_index_tasks(status, updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_chat_sessions_owner_recent ON chat_sessions(owner_user_id, updated_at DESC, created_at DESC, id DESC)",
     "CREATE INDEX IF NOT EXISTS idx_documents_session_id ON documents(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_knowledge_base_id ON documents(knowledge_base_id)",
     "CREATE INDEX IF NOT EXISTS idx_documents_department ON documents(department)",
@@ -272,6 +273,7 @@ CREATE_INDEX_SQL = [
 # 如果本地已经有旧版 app.db，它不会自动给旧表补充新增字段。
 # 所以新增字段后，需要在 init_database() 里按这个清单执行轻量 ALTER TABLE 迁移。
 TABLE_COLUMN_MIGRATIONS = {
+    "chat_sessions": [("owner_user_id", "INTEGER REFERENCES workspace_users(id)")],
     "answer_feedback": [
         ("review_status", "TEXT NOT NULL DEFAULT 'pending'"),
         ("review_note", "TEXT NOT NULL DEFAULT ''"),
@@ -321,7 +323,61 @@ TABLE_COLUMN_MIGRATIONS['documents'].extend([
 TABLE_COLUMN_MIGRATIONS['document_deletion_tasks'] = [
     ('logical_document_id', 'TEXT'), ('version_number', 'INTEGER'),
 ]
+CREATE_TABLE_SQL.extend(["""CREATE TABLE IF NOT EXISTS workspace_users (
+    id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('admin', 'member')),
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1))
+)""", """CREATE TABLE IF NOT EXISTS workspace_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES workspace_users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL
+)""", """CREATE TABLE IF NOT EXISTS process_tickets (
+    number INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL UNIQUE,
+    fields_json TEXT NOT NULL,
+    applicant_id INTEGER NOT NULL REFERENCES workspace_users(id),
+    approver_id INTEGER NOT NULL REFERENCES workspace_users(id),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+    decision_note TEXT,
+    created_at TEXT NOT NULL,
+    decided_at TEXT,
+    CHECK(applicant_id <> approver_id)
+)""", """CREATE TABLE IF NOT EXISTS workspace_departments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL UNIQUE
+)""", """CREATE TABLE IF NOT EXISTS process_approval_rules (
+    id INTEGER PRIMARY KEY,
+    application_type TEXT NOT NULL,
+    department TEXT NOT NULL,
+    application_key TEXT NOT NULL,
+    department_key TEXT NOT NULL,
+    approver_id INTEGER NOT NULL REFERENCES workspace_users(id),
+    UNIQUE(application_key, department_key)
+)"""])
+
+CREATE_PROCESS_TICKET_EVENTS_SQL = """CREATE TABLE IF NOT EXISTS process_ticket_events (
+    event_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL REFERENCES process_tickets(request_id),
+    event_type TEXT NOT NULL CHECK(event_type IN ('process_ticket.submitted', 'process_ticket.approved', 'process_ticket.rejected')),
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'sending', 'sent', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(request_id, event_type)
+)"""
+CREATE_TABLE_SQL.append(CREATE_PROCESS_TICKET_EVENTS_SQL)
+TABLE_COLUMN_MIGRATIONS['workspace_users'] = [
+    ('department', 'TEXT'), ('module_permissions_json', 'TEXT'), ('work_email', 'TEXT'),
+]
 CREATE_INDEX_SQL.extend([
+    'CREATE INDEX IF NOT EXISTS idx_ticket_approver_status ON process_tickets(approver_id, status)',
+    'CREATE INDEX IF NOT EXISTS idx_ticket_applicant ON process_tickets(applicant_id)',
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_document_version ON documents(logical_document_id, version_number)',
     'CREATE INDEX IF NOT EXISTS idx_logical_scope ON logical_documents(knowledge_base_id, storage_session_id)',
 ])

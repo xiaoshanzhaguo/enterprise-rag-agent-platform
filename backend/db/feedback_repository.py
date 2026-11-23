@@ -1,11 +1,11 @@
-"""回答反馈按消息去重；目前为共享演示环境，每条回答保存最新一条反馈。"""
+"""共享工作区每条回答仅接受一次反馈；同值重试幂等。"""
 from contextlib import closing
 from backend.db.connection import get_connection
 from backend.db.repository import _current_timestamp
 
 
 class FeedbackConflict(ValueError):
-    """反馈已变更或当前记录不能作为问题处理。"""
+    """反馈或处理结果已变更。"""
 
 
 def save_feedback(session_id: str, message_id: int, *, rating: str, reason: str, comment: str) -> dict | None:
@@ -16,13 +16,13 @@ def save_feedback(session_id: str, message_id: int, *, rating: str, reason: str,
         if message is None:
             return None
         now = _current_timestamp()
-        # 内容相同的重试不重开已解决问题；内容改变时重新进入待处理。
+        existing = conn.execute('SELECT * FROM answer_feedback WHERE message_id=?', (message_id,)).fetchone()
+        if existing:
+            if any(existing[key] != value for key, value in (('rating', rating), ('reason', reason), ('comment', comment))):
+                raise FeedbackConflict('该回答已提交反馈，不能再次修改。请重新进入会话查看。')
+            return dict(existing)
         conn.execute('''INSERT INTO answer_feedback (message_id, rating, reason, comment, updated_at)
-                        VALUES (?, ?, ?, ?, ?) ON CONFLICT(message_id) DO UPDATE SET
-                        rating=excluded.rating, reason=excluded.reason, comment=excluded.comment, updated_at=excluded.updated_at,
-                        review_status='pending', review_note='', revision=answer_feedback.revision+1
-                        WHERE answer_feedback.rating<>excluded.rating OR answer_feedback.reason<>excluded.reason
-                              OR answer_feedback.comment<>excluded.comment''',
+                        VALUES (?, ?, ?, ?, ?)''',
                      (message_id, rating, reason, comment, now))
         return dict(conn.execute('SELECT * FROM answer_feedback WHERE message_id=?', (message_id,)).fetchone())
 
@@ -34,7 +34,7 @@ def review_feedback(message_id: int, *, status: str, note: str, expected_revisio
         if current is None:
             return None
         if current['rating'] != 'unhelpful':
-            raise FeedbackConflict('仅无帮助反馈需要处理，请刷新列表核对。')
+            raise FeedbackConflict('回复优秀的反馈仅供查看。')
         if current['revision'] != expected_revision:
             raise FeedbackConflict('反馈或处理结果已变更，请刷新列表后重新核对。')
         if current['review_status'] != status or current['review_note'] != note:

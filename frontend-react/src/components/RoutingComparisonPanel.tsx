@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { GitCompareArrows } from 'lucide-react'
+import { ScopeSelect } from './ScopeSelect'
 import productBefore from '../../../eval/routing_before_report.json'
 import productAfter from '../../../eval/routing_after_report.json'
 import securityBefore from '../../../eval/security_routing_before_report.json'
@@ -38,8 +39,8 @@ export function RoutingComparisonPanel() {
   ]
   return <section className="panel routing-comparison" aria-label="路由专项对照">
     <div className="panel-heading"><GitCompareArrows size={20} /><div><h3>{experiment.title} · 同题对照</h3><p>使用固定问题检查改进与回归，可切换查看历轮实测。</p></div></div>
-    <label className="filter-field"><span className="sr-only">路由专项版本</span><select value={selected} onChange={event => setSelected(event.target.value)}>
-      <option value="security">安全规范路由专项</option><option value="product">产品路由专项</option></select></label>
+    <ScopeSelect label="路由专项版本" hideLabel icon={<GitCompareArrows size={17} aria-hidden="true" />} value={selected}
+      options={Object.entries(experiments).map(([value, experiment]) => ({ value, label: experiment.title }))} onChange={setSelected} />
     <div className="eval-snapshot"><span>{new Date(after.executed_at_utc).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })}</span><span>{after.model} · temperature 0</span><span>{experiment.scope}</span></div>
     <div className="table-scroll"><table className="execution-table"><thead><tr><th>专项指标</th><th>修复前</th><th>修复后</th></tr></thead><tbody>
       {rows.map(([label, oldValue, newValue, total]) => <tr key={label}><td>{label}</td><td>{oldValue} / {total}</td><td><strong>{newValue} / {total}</strong></td></tr>)}

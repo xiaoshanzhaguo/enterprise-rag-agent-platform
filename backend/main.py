@@ -17,12 +17,19 @@ FastAPI 后端应用入口模块。
 import tempfile
 
 # 用于创建后端应用实例
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from backend.config import settings
 from backend.api.chat import router as chat_router
-from backend.api.processes import router as process_router
+from backend.api.processes import logs_router, submission_router
+from backend.api.process_tickets import router as process_ticket_router
+from backend.api.process_approval_rules import router as process_approval_router
+from backend.api.process_ticket_automation import router as process_ticket_automation_router
+from backend.api.workspace_auth import require_module, router as workspace_auth_router
+from backend.api.workspace_departments import router as workspace_department_router
 from backend.api.feedback import router as feedback_router
 from backend.api.rag_index import router as rag_index_router
 from backend.api.document_deletion import router as document_deletion_router
@@ -40,11 +47,28 @@ app = FastAPI(
 
 # 注册聊天、工作流、RAG 相关接口
 app.include_router(chat_router)
-app.include_router(process_router)
+app.include_router(submission_router, dependencies=[Depends(require_module('workflow'))])
+app.include_router(logs_router, dependencies=[Depends(require_module('logs'))])
+app.include_router(process_ticket_router)
+app.include_router(process_approval_router)
+app.include_router(process_ticket_automation_router)
+app.include_router(workspace_auth_router)
+app.include_router(workspace_department_router)
 app.include_router(feedback_router)
 app.include_router(rag_index_router)
-app.include_router(document_deletion_router)
-app.include_router(document_versions_router)
+app.include_router(document_deletion_router, dependencies=[Depends(require_module('knowledge'))])
+app.include_router(document_versions_router, dependencies=[Depends(require_module('knowledge'))])
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation(request: Request, error: RequestValidationError):
+    if request.url.path == "/workspace/login":
+        return JSONResponse(status_code=422, content={"detail": "请检查用户名和密码格式。"})
+    if request.url.path.startswith("/workspace/users") and any(item["loc"] == ("body", "username") for item in error.errors()):
+        return JSONResponse(status_code=422, content={"detail": "用户名须为 2 至 64 个字符，可用中文、英文字母、数字、点、下划线和连字符。"})
+    if request.url.path == "/workspace/users" and request.method == "POST":
+        return JSONResponse(status_code=422, content={"detail": "请检查姓名、用户名、所属部门和角色。初始密码至少 8 个字符。"})
+    return await request_validation_exception_handler(request, error)
 
 
 def check_vector_store_writable() -> tuple[bool, str, str | None]:

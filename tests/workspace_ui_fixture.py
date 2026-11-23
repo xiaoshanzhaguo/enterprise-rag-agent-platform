@@ -5,7 +5,7 @@
 
 import argparse
 import asyncio
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 import gc
 import os
 from pathlib import Path
@@ -24,6 +24,9 @@ if __name__ == '__main__':
     os.environ['DATABASE_URL'] = 'sqlite:///' + (Path(runtime.name) / 'ui.db').as_posix()
     os.environ['VECTOR_STORE_DIR'] = str(Path(runtime.name) / 'chroma')
     os.environ['RAG_RETRIEVAL_MODE'] = 'keyword'
+from backend.api.workspace_auth import NewUser, insert_user
+from backend.db.connection import get_connection
+from backend.db.departments import migrate_departments
 from backend.main import app
 from backend.db.init_db import init_database
 from backend.db.process_repository import start_process_execution, finish_process_execution
@@ -78,7 +81,14 @@ if __name__ == '__main__':
         stack.enter_context(patch('backend.api.processes.get_client', return_value=object()))
         stack.enter_context(patch('backend.services.process_extraction.invoke_chat_model', side_effect=model_reply))
         stack.enter_context(patch('backend.services.process_submission._call_n8n_webhook', side_effect=webhook_reply))
+        stack.enter_context(patch('backend.services.process_ticket_events._deliver', return_value='模拟自动化超时'))
         init_database()
+        with closing(get_connection()) as connection, connection:
+            for username, display_name, role in [('admin-demo', '测试审批人', 'admin'), ('employee-demo', '测试员工', 'member')]:
+                insert_user(connection, NewUser(username=username, display_name=display_name, role=role,
+                                                password='local-workspace-fixture'), department='研发部')
+            migrate_departments(connection)
+        print('Fixture login: admin-demo or employee-demo / local-workspace-fixture', flush=True)
         if not args.empty:
             seed_records()
         for category, filename in [('hr', 'leave_policy.md'), ('finance', 'reimbursement_policy.md'), ('it', 'gitlab_access_request.md')]:

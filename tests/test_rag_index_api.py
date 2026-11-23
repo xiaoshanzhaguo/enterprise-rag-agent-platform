@@ -13,11 +13,12 @@ from fastapi.testclient import TestClient
 from backend.api.chat import router as chat_router
 from backend.api.rag_index import router, get_index_management_service
 from backend.db import index_repository as repository
-from backend.db.repository import save_document_with_chunks
+from backend.db.repository import ensure_chat_session, save_document_with_chunks
 from backend.services.rag_documents import IndexManagementService
 from backend.services.rag_indexing import RagIndexingService
 from tests import test_index_repository as fixture
 from tests import test_rag_indexing_service as executors
+from tests.workspace_session_fixture import authenticate_fixture
 
 
 class RagIndexApiTests(unittest.TestCase):
@@ -39,6 +40,7 @@ class RagIndexApiTests(unittest.TestCase):
         app.dependency_overrides[get_index_management_service] = lambda: self.manager
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
+        ensure_chat_session('upload', owner_user_id=authenticate_fixture(self.client))
 
     def upload(self, **changes):
         request = dict(session_id="upload", file_name="finance.md", document_text="报销需要提供发票。")
@@ -284,7 +286,7 @@ class RagIndexApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(self.action(shared, knowledge_base_id="enterprise_default", user_role="kb_admin").status_code, 200)
         self.assertEqual(self.client.get(f"/rag_index_operations/{shared['operation_id']}",
-            params={"session_id": shared["storage_session_id"]}).status_code, 404)
+            params={"session_id": shared["storage_session_id"]}).status_code, 403)
 
     def test_status_list_preserves_legacy_unknown_and_chunk_counts(self):
         self.manager.mode = "keyword"

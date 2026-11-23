@@ -1,31 +1,22 @@
-/** 流程申请：提取 → 人工确认 → 显式提交 → 查询执行记录。 */
-import { CheckCircle2, ClipboardList, Search, SendHorizontal, WandSparkles } from 'lucide-react'
-import { useRef, useState } from 'react'
+/** 填写申请，核对系统分配的审批人，再提交工单。 */
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, CircleAlert, ClipboardList, Clock3, Plus, Search, UserRoundCheck } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { EmptyState } from '../components/WorkspaceUI'
 import { ApiError } from '../api/httpClient'
-import { extractApplicationFields, fetchApplicationExecution, submitApplication } from '../api/processApi'
-import type { ProcessFields, ProcessReceipt, ProcessSubmission } from '../types/process'
+import { createTicket, getApprovalRoutes, getTicket, ticketStatusLabels } from '../api/processApi'
+import type { ApprovalRoutes, ProcessTicket } from '../api/processApi'
+import { SessionActionDialog } from '../components/SessionActionDialog'
+import { ScopeSelect } from '../components/ScopeSelect'
+import { useWorkspaceAccount } from '../components/WorkspaceAccount'
+import '../styles/process-assistant.css'
 
-const STORAGE_KEY = 'enterprise-process-pending-v1'
-const fieldDefinitions: { key: keyof ProcessFields; label: string; required?: boolean }[] = [
-  { key: 'application_type', label: '申请类型', required: true },
-  { key: 'applicant', label: '申请人', required: true },
-  { key: 'department', label: '部门', required: true },
-  { key: 'permission_level', label: '权限级别' },
-  { key: 'approver', label: '审批人' },
-  { key: 'additional_info', label: '补充信息' },
-]
-interface SavedApplication extends ProcessSubmission { input_text: string }
-
-function restoreApplication(): SavedApplication | null {
+const STORAGE_KEY = 'enterprise-process-pending-v2'
+const STEPS = ['确认申请信息', '提交结果']
+const EMPTY_APPLICATION = { applicationType: '', permissionLevel: '', additionalInfo: '' }
+function restoreApplication(storageKey: string) {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null')
-    if (!saved || typeof saved.request_id !== 'string'
-      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saved.request_id)
-      || typeof saved.input_text !== 'string' || !saved.fields) return null
-    if (fieldDefinitions.some(({ key }) => saved.fields[key] !== null && typeof saved.fields[key] !== 'string')) return null
-    return saved as SavedApplication
+    const id = sessionStorage.getItem(storageKey)
+    return id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null
   } catch { return null }
 }
 
@@ -38,55 +29,63 @@ function errorText(error: unknown, fallback: string): string {
   return fallback
 }
 
-function clearSavedApplication() {
-  try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* 不影响已经记录的申请。 */ }
+function clearSavedApplication(storageKey: string) {
+  try { sessionStorage.removeItem(storageKey) } catch { /* 不影响已经记录的申请。 */ }
 }
 
 export function ProcessAssistantPage() {
-  const [pending, setPending] = useState<SavedApplication | null>(restoreApplication)
-  const [processInput, setProcessInput] = useState(pending?.input_text ?? '')
-  const [fields, setFields] = useState<ProcessFields | null>(pending?.fields ?? null)
-  const [busy, setBusy] = useState<'extract' | 'submit' | 'query' | null>(null)
+  const account = useWorkspaceAccount()
+  const storageKey = `${STORAGE_KEY}:${account.id}`
+  const [pending, setPending] = useState(() => restoreApplication(storageKey))
+  const [approvalRoutes, setApprovalRoutes] = useState<ApprovalRoutes | null>(null)
+  const [routeError, setRouteError] = useState('')
+  const [routeRevision, setRouteRevision] = useState(0)
+  const [ticket, setTicket] = useState<ProcessTicket | null>(null)
+  const [fields, setFields] = useState(EMPTY_APPLICATION)
+  const [busy, setBusy] = useState<'submit' | 'query' | null>(null)
   // 同步锁阻止 React 更新按钮状态之前发生的第二次点击。
   const busyRef = useRef(false)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState(pending ? '已恢复申请编号，请查询执行状态，不要重复提交。' : '')
-  const [receipt, setReceipt] = useState<ProcessReceipt | null>(null)
-  const [allowNew, setAllowNew] = useState(false)
-  const missingRequired = fieldDefinitions.filter(({ key, required }) => required && !fields?.[key]?.trim())
-
-  async function handleExtract() {
-    if (busyRef.current || pending || !processInput.trim()) return
-    busyRef.current = true
-    setBusy('extract')
-    setError('')
-    setNotice('')
-    setFields(null)
-    try {
-      const result = await extractApplicationFields(processInput.trim())
-      if (result.status !== 'extracted') throw new Error('提取失败')
-      setFields(result.fields)
-      setNotice('字段已提取。请核对姓名、部门和权限，补充后确认提交。')
-    } catch (err) {
-      setError(errorText(err, '字段提取失败，请检查后端连接后重试。'))
-    } finally { busyRef.current = false; setBusy(null) }
+  const [confirmNew, setConfirmNew] = useState(false)
+  const newApplicationTrigger = useRef<HTMLButtonElement>(null)
+  const step = pending ? 1 : 0
+  const resultTone = ticket ? { pending: 'recorded', approved: 'recorded', rejected: 'failed' }[ticket.status]
+    : busy === 'submit' ? 'processing' : 'unconfirmed'
+  const ResultIcon = resultTone === 'recorded' ? CheckCircle2 : resultTone === 'processing' ? Clock3 : CircleAlert
+  const stepHeading = useRef<HTMLHeadingElement>(null)
+  const previousStep = useRef(step)
+  useEffect(() => {
+    if (previousStep.current === step) return
+    previousStep.current = step
+    stepHeading.current?.focus()
+  }, [step])
+  const approvalRoute = approvalRoutes?.routes.find(route => route.application_type === fields.applicationType)
+  function refreshRoutes() {
+    setApprovalRoutes(null)
+    setRouteError('')
+    setRouteRevision(value => value + 1)
   }
+  useEffect(() => {
+    if (pending) return
+    const controller = new AbortController()
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(10000)])
+    getApprovalRoutes(signal)
+      .then(result => { if (!controller.signal.aborted) setApprovalRoutes(result) })
+      .catch(err => { if (!controller.signal.aborted) setRouteError(errorText(err, '暂时无法查询审批人。')) })
+    return () => controller.abort()
+  }, [routeRevision, pending])
 
   async function handleSubmit() {
-    if (busyRef.current || pending || !fields || missingRequired.length) return
+    if (busyRef.current || pending || !approvalRoute || !approvalRoutes) return
     busyRef.current = true
     setBusy('submit')
     setError('')
-    setNotice('')
-    let application: SavedApplication
+    let requestId: string
     try {
-      application = {
-        request_id: crypto.randomUUID(), input_text: processInput,
-        fields: Object.fromEntries(fieldDefinitions.map(({ key }) => [key, fields[key]?.trim() || null])) as unknown as ProcessFields,
-      }
+      requestId = crypto.randomUUID()
       // 必须在发送前保存编号。刷新页面后只查询，不自动重发。
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(application))
-      setPending(application)
+      sessionStorage.setItem(storageKey, requestId)
+      setPending(requestId)
     } catch {
       setError('无法在浏览器中保存申请编号，本次未提交。请允许会话存储后重试。')
       busyRef.current = false
@@ -94,16 +93,19 @@ export function ProcessAssistantPage() {
       return
     }
     try {
-      const result = await submitApplication({ request_id: application.request_id, fields: application.fields })
-      if (result.status !== 'simulated' || result.request_id !== application.request_id || !result.ticket_id) throw new Error('无效回执')
-      setReceipt(result)
+      setTicket(await createTicket({ request_id: requestId,
+        fields: { application_type: approvalRoute.application_type, applicant: null, department: null, approver: null,
+          permission_level: fields.permissionLevel.trim() || null, additional_info: fields.additionalInfo.trim() || null },
+        expected_approver_id: approvalRoute.approver_id, expected_department: approvalRoutes.department }))
+      clearSavedApplication(storageKey)
     } catch (err) {
-      if (err instanceof ApiError && err.status === 422) {
-        clearSavedApplication()
+      const conflict = err instanceof ApiError && err.status === 409
+        ? (err.payload as { detail?: { code?: string; message?: string } } | null)?.detail : null
+      if (err instanceof ApiError && (err.status === 422 || conflict?.code === 'approval_route_changed')) {
+        clearSavedApplication(storageKey)
         setPending(null)
-        setError('申请字段校验未通过，本次未触发流程。请检查必填字段后重新提交。')
-      } else {
-        setError(errorText(err, '连接中断或回执异常，执行结果未知。请查询执行状态，勿重复提交。'))
+        refreshRoutes()
+        setError(conflict?.message || errorText(err, '申请字段校验未通过，请核对后重新提交。'))
       }
     } finally { busyRef.current = false; setBusy(null) }
   }
@@ -113,108 +115,116 @@ export function ProcessAssistantPage() {
     busyRef.current = true
     setBusy('query')
     setError('')
-    setNotice('')
     try {
-      const record = await fetchApplicationExecution(pending.request_id)
-      if (record.request_id !== pending.request_id) throw new Error('申请编号不匹配')
-      if (record.status === 'simulated' && record.output?.request_id === pending.request_id && record.output.ticket_id) {
-        setReceipt(record.output)
-      } else {
-        const descriptions = {
-          running: '申请已记录，流程仍在执行或结果尚待核对。稍后可再次查询，请勿重复提交。',
-          timeout: '申请已记录，但调用超时，是否执行成功尚不确定。请在 n8n 核对此申请编号。',
-          failed: `申请调用失败，失败记录已保存。${record.error_message || ''} 请先核对 n8n 再决定是否另建申请。`,
-          simulated: '流程记录存在，但回执不完整，请核对 n8n 执行记录。',
-        }
-        setNotice(descriptions[record.status] || '执行状态未知，请核对 n8n。')
-      }
+      setTicket(await getTicket(pending))
+      clearSavedApplication(storageKey)
     } catch (err) {
       setError(err instanceof ApiError && err.status === 404
-        ? '暂未查到申请记录，不能据此确认未执行。请核对后端和 n8n 后再决定是否另建申请。'
-        : errorText(err, '执行状态查询失败，已保留申请编号，请稍后再次查询。'))
+        ? '暂未查到工单。请稍后再查，或在另建申请前核对我的工单。'
+        : '暂时无法查询工单状态，请稍后再试。')
     } finally { busyRef.current = false; setBusy(null) }
   }
 
   function handleNewApplication() {
-    if (busyRef.current || (pending && !receipt && !allowNew)) return
-    clearSavedApplication()
+    if (busyRef.current || (pending && !ticket && !confirmNew)) return
+    clearSavedApplication(storageKey)
     setPending(null)
-    setFields(null)
-    setProcessInput('')
-    setReceipt(null)
+    setFields(EMPTY_APPLICATION)
+    setTicket(null)
     setError('')
-    setNotice('')
-    setAllowNew(false)
+    setConfirmNew(false)
   }
 
   return (
-    <section className="page-stack">
+    <section className="page-stack process-assistant">
       <header className="page-header">
-        <div>
-          <p className="eyebrow">流程侧 · 申请办理</p>
-          <h2>流程助手</h2>
-          <p>描述申请需求，核对字段后提交，并查看流程执行记录。</p>
+        <div className="application-page-heading">
+          <Link to="/tickets" className="text-button application-back"><ArrowLeft size={16} aria-hidden="true" />返回工单中心</Link>
+          <h2>新建申请</h2>
         </div>
       </header>
-      <ol className="process-steps" aria-label="办理步骤">
-        <li><span>01</span> 描述需求</li><li><span>02</span> 核对字段</li><li><span>03</span> 提交与记录</li>
+
+      <ol className="application-steps" aria-label="办理进度">
+        {STEPS.map((label, index) => (
+          <li key={label} aria-current={index === step ? 'step' : undefined} data-complete={index < step}>
+            <span className="application-step-number" aria-hidden="true">
+              {index < step ? <Check size={15} /> : index + 1}
+            </span>
+            {label}
+          </li>
+        ))}
       </ol>
-      <div className="workspace-grid">
-        <section className="panel process-form-panel">
-          <div className="panel-heading">
-            <ClipboardList aria-hidden="true" size={20} />
-            <div><h3>流程申请草稿</h3><p>字段提取不会提交申请；确认后才触发流程。</p></div>
+
+      <section className="panel application-panel" aria-labelledby="application-step-heading">
+        <div className="panel-heading" data-result={resultTone} aria-live={pending ? 'polite' : undefined} aria-atomic="true">
+          {pending ? <ResultIcon aria-hidden="true" size={21} />
+            : <ClipboardList aria-hidden="true" size={21} />}
+          <div>
+            <h3 id="application-step-heading" ref={stepHeading} tabIndex={-1}>
+              {!pending ? '确认申请信息'
+                : ticket ? ticketStatusLabels[ticket.status] : busy === 'submit' ? '正在提交申请' : '提交结果待确认'}
+            </h3>
+            <p>{!pending ? '选择申请类型后，系统会显示对应的审批人。'
+              : ticket ? `工单已创建，审批人：${ticket.approver_name}。`
+                : busy === 'submit' ? '正在保存工单，请稍候。' : '请先查询原申请状态，避免重复提交。'}</p>
           </div>
-          <label className="field">
-            <span>申请描述</span>
-            <textarea rows={5} maxLength={20000} value={processInput} disabled={!!busy || !!pending}
-              placeholder="例如：我是研发部张三，申请 VPN 只读权限，用于远程办公，审批人为李经理。"
-              onChange={(event) => { setProcessInput(event.target.value); setFields(null); setError(''); setNotice('') }} />
-          </label>
-          <button className="primary-button" type="button" onClick={handleExtract} disabled={!processInput.trim() || !!busy || !!pending}>
-            <WandSparkles aria-hidden="true" size={18} />{busy === 'extract' ? '正在提取字段…' : fields ? '重新提取字段' : '提取申请字段'}
-          </button>
-          {fields && <section className="process-extraction-panel" aria-label="申请字段">
-            <div className="process-extraction-heading"><WandSparkles aria-hidden="true" size={18} /><div>
-              <strong>核对申请字段</strong><span>标记 * 的字段为提交必填项，其余可留空。</span>
-            </div></div>
-            <div className="process-field-list">
-              {fieldDefinitions.map(({ key, label, required }) => <label className="field" key={key}>
-                <span>{label}{required ? ' *' : ''}</span>
-                {key === 'additional_info' ? <textarea aria-label={label} rows={3} value={fields[key] ?? ''} disabled={!!busy || !!pending}
-                  placeholder="原因、用途、时间等补充信息，可选填"
-                  onChange={(event) => setFields({ ...fields, [key]: event.target.value || null })} /> : <input aria-label={label} required={required} value={fields[key] ?? ''} disabled={!!busy || !!pending}
-                  placeholder={required ? '请补充' : '未提供，可选填'}
-                  onChange={(event) => setFields({ ...fields, [key]: event.target.value || null })} />}
-              </label>)}
+        </div>
+
+        {error && <div className="alert error" role="alert">{error}</div>}
+
+        {!pending && <form className="application-form" onSubmit={event => { event.preventDefault(); void handleSubmit() }}>
+          <div className="application-fields">
+            <label className="field"><span>申请人</span><input value={account.display_name} readOnly /></label>
+            <label className="field"><span>所属部门</span><input value={approvalRoutes?.department ?? account.department ?? ''} placeholder="未设置" readOnly /></label>
+            <ScopeSelect label="申请类型 *" value={approvalRoute?.application_type ?? ''} icon={<ClipboardList size={17} aria-hidden="true" />}
+              disabled={!!busy || !approvalRoutes?.routes.length} placeholder="请选择已配置的申请类型"
+              options={(approvalRoutes?.routes ?? []).map(route => ({ label: route.application_type, value: route.application_type }))}
+              onChange={value => setFields({ ...fields, applicationType: value })} />
+            <label className="field"><span>权限级别 <small>选填</small></span><input value={fields.permissionLevel}
+              onChange={event => setFields({ ...fields, permissionLevel: event.target.value })} disabled={!!busy} placeholder="例如只读或读写" /></label>
+            <label className="field application-wide"><span>补充信息 <small>选填</small></span>
+              <textarea rows={3} value={fields.additionalInfo} disabled={!!busy} placeholder="例如申请原因、日期或时间"
+                onChange={event => setFields({ ...fields, additionalInfo: event.target.value })} /></label>
+          </div>
+          <div className="application-approver" aria-live="polite">
+            <UserRoundCheck size={19} aria-hidden="true" />
+            <div><strong>审批人</strong><p>{approvalRoute?.approver_name || routeError || (!approvalRoutes ? '正在查询审批规则…'
+              : !approvalRoutes.routes.length ? '当前部门没有可用的审批规则，请联系管理员。'
+                : '选择申请类型后显示。')}</p></div>
+            {(routeError || approvalRoutes?.routes.length === 0) && <button className="text-button" type="button" disabled={!!busy} onClick={refreshRoutes}>重新查询</button>}
+          </div>
+          <div className="application-actions">
+            <button className="primary-button application-primary" type="submit" disabled={!!busy || !approvalRoute}>
+              提交审批
+            </button>
+          </div>
+        </form>}
+
+        {pending && <>
+          {ticket && <dl className="application-record"><div><dt>工单编号</dt><dd>{ticket.ticket_number}</dd></div>
+            {ticket.decision_note && <div><dt>审批意见</dt><dd>{ticket.decision_note}</dd></div>}</dl>}
+          <div className="application-actions">
+            <Link className="text-button" to="/tickets">查看我的工单 <ArrowRight aria-hidden="true" size={15} /></Link>
+            {ticket ? <button className="primary-button application-primary" type="button" onClick={handleNewApplication}>新建申请</button>
+              : busy !== 'submit' && <>
+                <button ref={newApplicationTrigger} className="ghost-button" type="button" disabled={!!busy}
+                  onClick={() => setConfirmNew(true)}><Plus aria-hidden="true" size={16} />另建申请</button>
+                <button className="primary-button application-primary" type="button" disabled={!!busy} onClick={() => void handleQuery()}>
+                  <Search aria-hidden="true" size={16} />{busy === 'query' ? '正在查询…' : '查询工单状态'}
+                </button>
+              </>}
+          </div>
+          {confirmNew && <SessionActionDialog title="确认另建申请" busy={!!busy}
+            returnFocusTo={newApplicationTrigger} onClose={() => setConfirmNew(false)}>
+            <p>原申请可能已提交。请先核对我的工单，确认需要另建后再继续。</p>
+            <div className="session-dialog-actions">
+              <button className="ghost-button" type="button" autoFocus onClick={() => setConfirmNew(false)}>取消</button>
+              <button className="primary-button" type="button" onClick={handleNewApplication}>确认另建</button>
             </div>
-            {!pending && missingRequired.length > 0 && <p className="muted-text">待补充：{missingRequired.map(f => f.label).join('、')}。</p>}
-            <button className="primary-button" type="button" onClick={handleSubmit} disabled={!!busy || !!pending || missingRequired.length > 0}>
-              <SendHorizontal aria-hidden="true" size={18} />{busy === 'submit' ? '正在提交，请勿重复操作…' : pending ? '本申请已提交，勿重复提交' : '确认提交'}
-            </button>
-          </section>}
-          {error && <div className="alert error" role="alert">{error}</div>}
-          {notice && <p className="process-notice" role="status">{notice}</p>}
-        </section>
-        <aside className="panel process-result-panel" aria-label="流程执行结果">
-          <div className="panel-heading"><Search aria-hidden="true" size={20} /><div><h3>流程执行结果</h3><p>提交后可查询已保存的执行状态。</p></div></div>
-          {receipt ? <div className="process-success" role="status">
-            <CheckCircle2 aria-hidden="true" size={24} /><div><strong>流程已触发 / 已记录</strong><p>模拟流程执行完成，回执已保存，可在执行日志中查看。</p></div>
-          </div> : pending ? <p className="muted-text">已保留申请编号。结果不明时先查询，不自动重发。</p> : <EmptyState title="等待确认提交">完成字段核对后，申请编号与执行结果会显示在这里。</EmptyState>}
-          {pending && <>
-            <dl className="process-record-details"><div><dt>申请编号</dt><dd>{pending.request_id}</dd></div>
-              <div><dt>模拟工单编号</dt><dd>{receipt?.ticket_id || '等待有效回执'}</dd></div></dl>
-            <button className="primary-button" type="button" disabled={!!busy} onClick={handleQuery}>
-              <Search aria-hidden="true" size={16} />{busy === 'query' ? '正在查询…' : '查询执行状态'}
-            </button>
-            <Link className="text-button" to={`/logs?request_id=${encodeURIComponent(pending.request_id)}`}>在执行日志中查看此申请 →</Link>
-            {!receipt && <label className="process-new-confirm"><input type="checkbox" checked={allowNew} disabled={!!busy}
-              onChange={event => setAllowNew(event.target.checked)} />我已核对原申请结果，确认需要另建申请。</label>}
-            <button className="process-secondary-button" type="button" onClick={handleNewApplication} disabled={!!busy || (!receipt && !allowNew)}>新建另一份申请</button>
-          </>}
-          <p className="process-simulation-note">当前为模拟流程：生成表格记录、通知内容和模拟工单，不会真实发送通知或授予权限。</p>
-        </aside>
-      </div>
+          </SessionActionDialog>}
+        </>}
+      </section>
+
     </section>
   )
 }

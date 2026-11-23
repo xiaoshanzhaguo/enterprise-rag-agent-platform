@@ -1,0 +1,29 @@
+{
+  "name": "知行工单事件 · 自动化模板",
+  "active": false,
+  "nodes": [
+    {
+      "id": "ticket-webhook", "name": "Receive Ticket Event", "type": "n8n-nodes-base.webhook", "typeVersion": 2,
+      "position": [0, 0], "webhookId": "zhixing-process-ticket-events",
+      "parameters": { "httpMethod": "POST", "path": "process-ticket-events", "authentication": "headerAuth", "responseMode": "responseNode", "options": {} }
+    },
+    {
+      "id": "ticket-action", "name": "Prepare Automation Action", "type": "n8n-nodes-base.code", "typeVersion": 2,
+      "position": [260, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const body = $input.first().json.body;\nconst actions = { 'process_ticket.submitted': 'notify_approver', 'process_ticket.approved': 'sync_approved_ticket' };\nif (!body || !Object.hasOwn(actions, body.event) || typeof body.request_id !== 'string' || body.event_id !== `${body.request_id}:${body.event}` || !/^WO-\\d{6,}$/.test(body.ticket_number ?? '')) throw new Error('Invalid ticket event');\nreturn [{ json: { event_id: body.event_id, accepted: true, mode: 'simulation', action: actions[body.event], ticket: body } }];"
+      }
+    },
+    {
+      "id": "ticket-receipt", "name": "Respond to FastAPI", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.4,
+      "position": [520, 0],
+      "parameters": { "respondWith": "json", "responseBody": "={{ { event_id: $json.event_id, accepted: $json.accepted, mode: $json.mode, action: $json.action } }}", "options": { "responseCode": 200 } }
+    }
+  ],
+  "connections": {
+    "Receive Ticket Event": { "main": [[{ "node": "Prepare Automation Action", "type": "main", "index": 0 }]] },
+    "Prepare Automation Action": { "main": [[{ "node": "Respond to FastAPI", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

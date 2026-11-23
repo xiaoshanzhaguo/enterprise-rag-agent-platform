@@ -8,13 +8,6 @@ export interface ProcessFields {
   additional_info: string | null
 }
 
-export interface ProcessExtractionResult {
-  fields: ProcessFields
-  missing_fields: string[]
-  status: 'extracted' | 'failed'
-  error: string | null
-}
-
 export interface ProcessSubmission {
   request_id: string
   fields: ProcessFields

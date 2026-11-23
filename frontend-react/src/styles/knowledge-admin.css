@@ -18,12 +18,9 @@
 .kb-empty p { font-size: var(--text-sm); margin: 0; }
 .kb-empty-icon { display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); border-radius: 9px; }
 .kb-empty-icon { width: 48px; height: 48px; }
-.kb-table-scroll { margin: 0 18px 18px; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
-.kb-table { width: 100%; min-width: 650px; border-collapse: collapse; text-align: left; font-size: var(--text-sm); }
-.kb-table th, .kb-table td { padding: 12px 16px; border-top: 1px solid var(--line); }
-.kb-table thead th { border-top: 0; background: var(--surface-muted); color: var(--muted); font-weight: 600; }
+.kb-table-scroll { margin: 0 18px; }
+.kb-pagination { padding: 12px 18px 18px; }
 .kb-table tbody th { width: 40%; font-weight: 600; overflow-wrap: anywhere; }
-.kb-table tbody tr:hover { background: var(--surface-muted); }
 .kb-table td small { display: block; color: var(--muted); margin-top: 3px; }
 .kb-table-name { display: flex; align-items: center; gap: 8px; }
 .kb-table-name svg { flex-shrink: 0; color: var(--accent); }

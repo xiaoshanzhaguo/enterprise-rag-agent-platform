@@ -24,6 +24,7 @@ from backend.services.document_deletion import DocumentDeletionService
 from backend.services.rag_indexing import RagIndexingService
 from tests import test_index_repository as fixture
 from tests.test_rag_indexing_service import FakeEmbedding, FakeVectorStore
+from tests.workspace_session_fixture import authenticate_fixture
 
 
 TARGET = {key: fixture.PROFILE[key] for key in ('collection_name', 'vector_store_fingerprint')}
@@ -80,6 +81,7 @@ class DocumentDeletionTests(unittest.TestCase):
         app.dependency_overrides[get_deletion_service] = lambda: self.service
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
+        authenticate_fixture(self.client)
 
     def document(self, **kwargs):
         args = dict(knowledge_base_id='enterprise_default', knowledge_base_type='finance')

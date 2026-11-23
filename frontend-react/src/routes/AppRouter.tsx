@@ -5,7 +5,12 @@
 // replace 的意思是：跳转到 /chat 时，替换当前这条浏览器历史记录，而不是新增一条历史记录。
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { canOpenModule, workspaceNavigation } from '../api/workspaceApi'
+import type { WorkspaceModule } from '../api/workspaceApi'
+import { useWorkspaceAccount } from '../components/WorkspaceAccount'
+import type { ReactNode } from 'react'
 import { MainLayout } from '../layouts/MainLayout'
+import { SettingsLayout, SettingsOverview } from '../layouts/SettingsLayout'
 import { ChatWorkspacePage } from '../pages/ChatWorkspacePage'
 // 评测结果页面。
 import { EvaluationResultPage } from '../pages/EvaluationResultPage'
@@ -15,6 +20,30 @@ import { KnowledgeAdminPage } from '../pages/KnowledgeAdminPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 // 流程助手页面。
 import { ProcessAssistantPage } from '../pages/ProcessAssistantPage'
+import { WorkspaceAccess } from '../pages/WorkspaceAccess'
+import { UserManagementPage } from '../pages/UserManagementPage'
+import { ApprovalSettingsPage } from '../pages/ApprovalSettingsPage'
+import { FeedbackReviewPanel } from '../components/FeedbackReviewPanel'
+import { DepartmentManagementPage } from '../pages/DepartmentManagementPage'
+import { ProcessTicketsPage } from '../pages/ProcessTicketsPage'
+
+function WorkspaceHome() {
+  const account = useWorkspaceAccount()
+  const first = workspaceNavigation.find(module => canOpenModule(account.module_permissions, module.id))
+  if (first) return <Navigate to={first.path} replace />
+  if (account.role === 'admin') return <Navigate to="/settings" replace />
+  return <p role="status">当前账号尚未开通工作台模块，请联系管理员。</p>
+}
+
+function ModuleAccess({ module, children, exact = false }: { module: WorkspaceModule; children: ReactNode; exact?: boolean }) {
+  const { module_permissions: permissions } = useWorkspaceAccount()
+  const allowed = exact ? permissions.includes(module) : canOpenModule(permissions, module)
+  return allowed ? children : <p role="alert">当前账号未开通此模块。</p>
+}
+
+function FeedbackAccess() {
+  return useWorkspaceAccount().role === 'admin' ? <FeedbackReviewPanel /> : <Navigate to="/" replace />
+}
 
 // 定义一个 React 函数组件，并将这个组件导出
 export function AppRouter() {
@@ -27,18 +56,29 @@ export function AppRouter() {
       {/*可以理解为：Routes: 路由规则列表；Route: 列表里的某一条规则。*/}
       <Routes>
         {/*定义一个父级路由。含义：下面这些子路由，都共用 MainLayout 这个布局。即 /chat 等都会先显示 MainLayout，然后再在 MainLayout 里面显示具体页面。*/}
-        <Route element={<MainLayout />}>
+        <Route element={<WorkspaceAccess><MainLayout /></WorkspaceAccess>}>
           {/*默认子路由：访问 / 时跳转到 /chat。index 表示默认页面，因为它写在内部，因此它表示 MainLayout 下的默认子页面。*/}
           {/*整行理解：用户访问首页 / 时，自动跳转到 /chat，并且不要在浏览器历史里保留 /。*/}
-          <Route index element={<Navigate to="/chat" replace />} />
-          <Route path="/chat" element={<ChatWorkspacePage />} />
-          <Route path="/admin/knowledge" element={<KnowledgeAdminPage />} />
-          {/* 流程助手路由。 */}
-          <Route path="/workflow" element={<ProcessAssistantPage />} />
+          <Route index element={<WorkspaceHome />} />
+          <Route path="/chat" element={<ModuleAccess module="chat"><ChatWorkspacePage /></ModuleAccess>} />
+          <Route path="/admin/knowledge" element={<ModuleAccess module="knowledge"><KnowledgeAdminPage /></ModuleAccess>} />
+          <Route path="/workflow" element={<Navigate to="/tickets/new" replace />} />
+          <Route path="/workflow/tickets" element={<Navigate to="/tickets" replace />} />
+          <Route path="/tickets" element={<ModuleAccess module="tickets"><ProcessTicketsPage key="mine" view="mine" /></ModuleAccess>} />
+          <Route path="/tickets/new" element={<ModuleAccess module="workflow"><ProcessAssistantPage /></ModuleAccess>} />
+          <Route path="/tickets/approvals" element={<ModuleAccess module="tickets" exact><ProcessTicketsPage key="assigned" view="assigned" /></ModuleAccess>} />
+          <Route path="/feedback" element={<FeedbackAccess />} />
+          <Route path="/settings" element={<SettingsLayout />}>
+            <Route index element={<SettingsOverview />} />
+            <Route path="users" element={<UserManagementPage />} />
+            <Route path="departments" element={<DepartmentManagementPage />} />
+            <Route path="approvals" element={<ApprovalSettingsPage />} />
+            <Route path="feedback" element={<Navigate to="/feedback" replace />} />
+          </Route>
           {/* 执行日志路由。 */}
-          <Route path="/logs" element={<ExecutionLogPage />} />
+          <Route path="/logs" element={<ModuleAccess module="logs"><ExecutionLogPage /></ModuleAccess>} />
           {/* 评测结果路由。 */}
-          <Route path="/eval" element={<EvaluationResultPage />} />
+          <Route path="/eval" element={<ModuleAccess module="evaluation"><EvaluationResultPage /></ModuleAccess>} />
           {/* *表示：匹配所有没有被前面 Route 匹配到的路径。整行含义：如果用户访问了不存在的页面，就显示 NotFoundPage。*/}
           <Route path="*" element={<NotFoundPage />} />
         </Route>

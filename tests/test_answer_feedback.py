@@ -14,6 +14,7 @@ from backend.api.feedback import router
 from backend.db.connection import get_connection
 from backend.db.init_db import init_database
 from backend.db.repository import delete_chat_session, ensure_chat_session, save_chat_message
+from tests.workspace_session_fixture import authenticate_fixture
 
 
 class AnswerFeedbackTests(unittest.TestCase):
@@ -28,18 +29,19 @@ class AnswerFeedbackTests(unittest.TestCase):
         self.database_url = config.database_url
         app = FastAPI(); app.include_router(router); app.include_router(chat_router)
         self.client = TestClient(app)
-        ensure_chat_session('a', mode='企业知识库问答', title='反馈测试')
+        self.owner_id = authenticate_fixture(self.client)
+        ensure_chat_session('a', mode='企业知识库问答', title='反馈测试', owner_user_id=self.owner_id)
         self.question = save_chat_message('a', 'user', '年假怎么申请？')
         self.answer = save_chat_message('a', 'assistant', '提前申请。', metadata={'rag_preview_chunks': [{'source': 'leave.md#chunk-1'}]})
 
     def post(self, payload, session='a', message=None):
         return self.client.post(f'/chat_session/{session}/messages/{message or self.answer}/feedback', json=payload)
 
-    def test_upsert_and_history_restore_use_persisted_message_id(self):
-        self.assertEqual(self.post({'rating': 'helpful'}).status_code, 200)
+    def test_once_only_and_history_restore_use_persisted_message_id(self):
         payload = {'rating': 'unhelpful', 'reason': 'incomplete', 'comment': '  缺少时限  '}
         for _ in range(2):
             self.assertEqual(self.post(payload).status_code, 200)
+        self.assertEqual(self.post({'rating': 'helpful'}).status_code, 409)
         history = self.client.get('/chat_session/a').json()['messages']
         self.assertEqual(history[1]['message_id'], self.answer)
         self.assertEqual(history[1]['feedback']['comment'], '缺少时限')
@@ -52,8 +54,23 @@ class AnswerFeedbackTests(unittest.TestCase):
         self.assertEqual(result['items'][0]['question'], '年假怎么申请？')
         self.assertEqual(result['items'][0]['answer'], '提前申请。')
 
+    def test_concurrent_feedback_cannot_overwrite_first_submission(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from backend.db.feedback_repository import save_feedback, FeedbackConflict
+
+        def submit(comment):
+            try:
+                return save_feedback('a', self.answer, rating='helpful', reason='', comment=comment)
+            except FeedbackConflict:
+                return 'conflict'
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(submit, ['甲', '乙']))
+        self.assertEqual(results.count('conflict'), 1)
+        item = self.client.get('/answer_feedback').json()['items'][0]
+        self.assertEqual(item['revision'], 1)
+
     def test_reject_wrong_session_user_message_deleted_and_reserved(self):
-        ensure_chat_session('b')
+        ensure_chat_session('b', owner_user_id=self.owner_id)
         for session, message in [('b', self.answer), ('a', self.question), ('a', 999999)]:
             self.assertEqual(self.post({'rating': 'helpful'}, session, message).status_code, 404)
         self.assertEqual(self.post({'rating': 'helpful'}, 'knowledge_base:enterprise_default').status_code, 403)

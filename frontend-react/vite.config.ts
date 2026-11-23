@@ -42,6 +42,8 @@ export default defineConfig(({ mode }) => {
     // server 只影响本地 npm run dev，不影响生产构建 (npm run build)。
     // 所以这里配置的代理，只是在本地调试时生效。可以记为：server = 本地开发服务器配置。
     server: {
+      host: '127.0.0.1',
+      port: 15173,
       // proxy 用于把前端请求转发给后端。
       // 它的作用是，当前端请求某个路径时，不直接由前端处理，而是转发给后端。
       // 比如前端请求 /api/health，Vite 开发服务器会帮你转发到：http://127.0.0.1:18000/health，这样可以避免浏览器跨域问题。

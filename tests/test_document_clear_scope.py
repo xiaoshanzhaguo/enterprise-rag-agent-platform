@@ -11,9 +11,10 @@ from fastapi.testclient import TestClient
 
 from backend.api.chat import router
 from backend.db.connection import get_connection
-from backend.db.repository import delete_session_documents
+from backend.db.repository import delete_session_documents, ensure_chat_session
 from backend.rag.store import clear_document_chunks
 from tests import test_index_repository as fixture
+from tests.workspace_session_fixture import authenticate_fixture
 
 
 class DocumentClearScopeTests(unittest.TestCase):
@@ -22,6 +23,12 @@ class DocumentClearScopeTests(unittest.TestCase):
 
     def setUp(self):
         self.setUpDatabase()
+        app = FastAPI()
+        app.include_router(router)
+        self.client = TestClient(app)
+        self.addCleanup(self.client.close)
+        self.owner_id = authenticate_fixture(self.client)
+        ensure_chat_session('employee-session', owner_user_id=self.owner_id)
         self.private = self.prepare(session_id='employee-session')
         self.shared = self.prepare(session_id='uploader', knowledge_base_id='enterprise_default')
         self.vectors = {
@@ -36,10 +43,6 @@ class DocumentClearScopeTests(unittest.TestCase):
         settings = patch('backend.rag.store.settings', SimpleNamespace(rag_retrieval_mode='vector'))
         self.settings = settings.start()
         self.addCleanup(settings.stop)
-        app = FastAPI()
-        app.include_router(router)
-        self.client = TestClient(app)
-        self.addCleanup(self.client.close)
 
     def delete_vectors(self, *, where):
         self.vectors = {key: value for key, value in self.vectors.items()
@@ -121,6 +124,7 @@ class DocumentClearScopeTests(unittest.TestCase):
         self.assertEqual(list(self.vectors), ['knowledge_base:enterprise_default:2'])
 
     def test_similar_non_internal_session_name_is_allowed(self):
+        ensure_chat_session('knowledge_base_employee', owner_user_id=self.owner_id)
         self.prepare(session_id='knowledge_base_employee')
         response = self.client.delete('/clear_document/knowledge_base_employee')
         self.assertEqual(response.status_code, 200, response.text)

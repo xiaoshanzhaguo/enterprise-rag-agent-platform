@@ -2,9 +2,9 @@ import { Check, ChevronDown } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
-export function ScopeSelect({ label, value, options, disabled = false, hideLabel = false, placeholder = '请选择', icon, onChange }: {
+export function ScopeSelect({ label, value, options, disabled = false, hideLabel = false, placeholder = '请选择', icon, menuMinWidth = 200, onChange }: {
   label: string; value: string; options: { value: string; label: string; description?: string | null }[];
-  disabled?: boolean; hideLabel?: boolean; placeholder?: string; icon: ReactNode; onChange: (value: string) => void
+  disabled?: boolean; hideLabel?: boolean; placeholder?: string; icon?: ReactNode; menuMinWidth?: number; onChange: (value: string) => void
 }) {
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
@@ -36,7 +36,7 @@ export function ScopeSelect({ label, value, options, disabled = false, hideLabel
       const below = window.innerHeight - rect.bottom - 12
       const above = rect.top - 12
       const down = below >= 240 || below >= above
-      const width = Math.min(Math.max(rect.width, 200), window.innerWidth - 16)
+      const width = Math.min(Math.max(rect.width, menuMinWidth), window.innerWidth - 16)
       setMenuStyle({ position: 'fixed', left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), width,
         minWidth: 0, maxHeight: Math.max(40, Math.min(240, down ? below : above)),
         top: down ? rect.bottom + 6 : 'auto', bottom: down ? 'auto' : window.innerHeight - rect.top + 6 })

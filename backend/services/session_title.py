@@ -142,6 +142,30 @@ def build_fallback_session_title(user_text: str, mode: str) -> str:
     return _clean_title_text(candidate_title) or "未命名会话"
 
 
+def is_default_title(title: str | None) -> bool:
+    return not title or title.strip() in ('', '新会话', '未命名会话')
+
+
+def ensure_generated_session_title(session_id: str, mode: str, user_text: str, client) -> str:
+    from backend.db.repository import ensure_chat_session
+    from backend.db.session_titles import load_title_input, save_generated_title
+
+    ensure_chat_session(session_id, mode=mode)
+    snapshot = load_title_input(session_id)
+    if snapshot is None:
+        raise ValueError('会话不存在或已删除。')
+    if not is_default_title(snapshot['title']):
+        return snapshot['title']
+    # Existing conversations are named after their first question, not the latest turn.
+    question = snapshot['first_question'] or user_text
+    if not question.strip():
+        return snapshot['title'] or '新会话'
+    generated = generate_session_title(user_text=question, mode=mode, client=client)
+    save_generated_title(session_id, snapshot['title'], generated)
+    latest = load_title_input(session_id)
+    return latest['title'] if latest else generated
+
+
 def generate_session_title(user_text: str, mode: str, client) -> str:
     """
     使用大模型生成会话标题。

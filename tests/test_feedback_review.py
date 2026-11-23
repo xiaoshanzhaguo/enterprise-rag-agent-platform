@@ -23,7 +23,8 @@ class FeedbackReviewTests(unittest.TestCase):
                                 json={'status': status, 'expected_revision': revision, 'note': note})
 
     def test_transitions_notes_and_restart_persistence(self):
-        self.assertEqual(self.seed()['review_status'], 'pending')
+        self.seed()
+        self.assertEqual(self.client.get('/answer_feedback').json()['items'][0]['review_status'], 'pending')
         working = self.review('in_progress', note='核对制度').json()
         self.assertEqual((working['review_status'], working['revision']), ('in_progress', 2))
         resolved = self.review('resolved', 2, '  已补充资料并复测原问题  ').json()
@@ -36,22 +37,22 @@ class FeedbackReviewTests(unittest.TestCase):
         self.assertEqual(item['review_status'], 'resolved')
         self.assertEqual(self.review('pending', 3, '需要补充复核').json()['revision'], 4)
 
-    def test_identical_feedback_preserves_resolution_changed_content_reopens(self):
+    def test_identical_feedback_preserves_resolution_changed_content_is_rejected(self):
         self.seed(); self.review('resolved', note='人工复测通过')
         unchanged = self.seed()
-        self.assertEqual((unchanged['review_status'], unchanged['revision']), ('resolved', 2))
-        changed = self.post({'rating': 'unhelpful', 'reason': 'citation_mismatch', 'comment': '新问题'}).json()
-        self.assertEqual((changed['review_status'], changed['review_note'], changed['revision']), ('pending', '', 3))
-        conflict = self.review('resolved', 2, '旧反馈的处理结果')
-        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(unchanged['comment'], '缺少时限')
+        self.assertTrue({'review_status', 'review_note', 'revision'}.isdisjoint(unchanged))
+        changed = self.post({'rating': 'unhelpful', 'reason': 'citation_mismatch', 'comment': '新问题'})
+        self.assertEqual(changed.status_code, 409)
         item = self.client.get('/answer_feedback').json()['items'][0]
-        self.assertEqual(item['review_note'], '')
+        self.assertEqual((item['review_note'], item['revision'], item['review_status']), ('人工复测通过', 2, 'resolved'))
 
     def test_positive_missing_and_invalid_input(self):
         self.assertEqual(self.review('in_progress').status_code, 404)
-        self.post({'rating': 'helpful'})
-        self.assertEqual(self.review('in_progress').status_code, 409)
-        self.seed()
+        saved = self.post({'rating': 'helpful', 'comment': '希望保留分步骤的回答'}).json()
+        self.assertEqual(saved['comment'], '希望保留分步骤的回答')
+        self.assertEqual(self.review('in_progress', note='纳入答复模板').status_code, 409)
+        self.assertEqual(self.client.get('/answer_feedback?rating=helpful').json()['items'][0]['comment'], saved['comment'])
         for body in ({'status': 'resolved', 'note': ' ', 'expected_revision': 2},
                      {'status': 'done', 'expected_revision': 2}, {'status': 'pending'},
                      {'status': 'pending', 'expected_revision': 0},
@@ -70,7 +71,7 @@ class FeedbackReviewTests(unittest.TestCase):
         for status in ('pending', 'in_progress', 'resolved'):
             result = self.client.get('/answer_feedback', params={'review_status': status}).json()
             self.assertEqual(result['total'], 1)
-            self.assertEqual(result['items'][0]['review_status'], status)
+            self.assertTrue(all(item['review_status'] == status for item in result['items']))
             self.assertEqual(result['review_counts'], dict(pending=1, in_progress=1, resolved=1))
             self.assertEqual(result['counts'], dict(helpful=1, unhelpful=3))
         self.assertEqual(self.client.get('/answer_feedback?rating=helpful&review_status=pending').json()['total'], 0)

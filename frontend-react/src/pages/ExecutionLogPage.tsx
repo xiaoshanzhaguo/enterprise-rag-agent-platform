@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { fetchApplicationExecution, fetchApplicationExecutions } from '../api/processApi'
 import { formatApiError } from '../api/httpClient'
 import { EmptyState, ErrorNotice, StatusBadge } from '../components/WorkspaceUI'
+import { ScopeSelect } from '../components/ScopeSelect'
 import { formatTime, statusLabels } from '../api/processDisplay'
 import type { ProcessExecution, ProcessExecutionPage, ProcessStatus } from '../types/process'
 
@@ -75,7 +76,7 @@ export function ExecutionLogPage() {
   const counts = !loading && !error ? data?.status_counts : undefined
   const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined
   return <section className="page-stack">
-    <header className="page-header"><div><p className="eyebrow">流程追踪</p><h2>每一次申请，都有记录。</h2><p>查看流程状态、核对申请字段，追溯已保存的模拟回执。</p></div>
+    <header className="page-header"><div><h2>每一次申请，都有记录。</h2><p>查看流程状态、核对申请字段，追溯已保存的模拟回执。</p></div>
       <button type="button" className="ghost-button" disabled={loading} onClick={() => setRevision(v => v + 1)}><RefreshCw size={16} className={loading ? 'spin' : ''} aria-hidden="true" />刷新记录</button></header>
     <div className="metric-grid log-metrics" aria-label="全部流程记录统计">
       {[['全部申请', total, '所有已记录的流程申请'], ['模拟完成', counts?.simulated, '有效回执已保存'], ['待核对', counts ? counts.running + counts.timeout : undefined, '执行中或响应超时'], ['执行失败', counts?.failed, '请核对失败原因']].map(([label, value, note], index) =>
@@ -85,13 +86,14 @@ export function ExecutionLogPage() {
       <div className="section-title"><div className="panel-heading"><FileClock size={20} aria-hidden="true" /><div><h3>流程执行记录</h3><p>按最新申请排序 · 当前仅包含流程申请记录</p></div></div><small className="muted-text">{updated && !error ? `更新于 ${formatTime(updated)}` : '等待读取'}</small></div>
       <form className="log-toolbar" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('request_id'); changeQuery({ request_id: String(value || '').trim(), page: '' }) }}>
         <label className="search-field"><Search size={17} aria-hidden="true" /><input key={requestId} name="request_id" aria-label="申请编号" placeholder="输入完整申请编号查询" defaultValue={requestId} /></label>
-        <label className="filter-field"><span className="sr-only">执行状态</span><select aria-label="执行状态" value={status} onChange={event => changeQuery({ status: event.target.value, page: '' })}>
-          <option value="">全部状态</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select></label><button className="ghost-button" type="submit">查询</button>
+        <ScopeSelect label="执行状态" hideLabel icon={<FileClock size={17} aria-hidden="true" />} value={status}
+          options={[{ value: '', label: '全部状态' }, ...Object.entries(statusLabels).map(([value, label]) => ({ value, label }))]}
+          onChange={value => changeQuery({ status: value, page: '' })} />
+        <button className="ghost-button" type="submit">查询</button>
         {(status || requestId) && <button type="button" className="text-button" onClick={event => { event.currentTarget.form?.reset(); changeQuery({ status: '', request_id: '', page: '' }) }}>清除筛选</button>}
       </form>
       {error ? <ErrorNotice message={error} retry={() => setRevision(v => v + 1)} /> : loading ? <div className="table-loading" role="status"><RefreshCw size={18} className="spin" />正在读取执行记录…</div> : !data?.items.length ?
-        <EmptyState title={requestId || status ? '没有符合条件的记录' : '还没有流程申请'} action={requestId || status ? undefined : <Link to="/workflow" className="primary-button">发起第一份申请<ArrowUpRight size={16} /></Link>}>
+        <EmptyState title={requestId || status ? '没有符合条件的记录' : '还没有流程申请'} action={requestId || status ? undefined : <Link to="/tickets/new" className="primary-button">发起第一份申请<ArrowUpRight size={16} /></Link>}>
           {requestId || status ? '试试其他状态或核对申请编号，也可以清除筛选查看全部。' : '在流程助手核对字段并确认提交后，执行状态和回执会出现在这里。'}
         </EmptyState> : <><div className="table-scroll"><table className="execution-table"><caption className="sr-only">流程申请执行记录</caption><thead><tr><th>申请 / 编号</th><th>申请人</th><th>创建时间</th><th>执行状态</th><th><span className="sr-only">操作</span></th></tr></thead>
           <tbody>{data.items.map(row => <tr key={row.request_id} className={selected === row.request_id ? 'is-selected' : ''}>

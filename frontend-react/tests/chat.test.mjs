@@ -79,3 +79,67 @@ test('历史执行摘要按回答恢复，缺少摘要的旧消息不伪造数�
   assert.equal(restored[0].metadata.execution_trace, undefined)
   assert.deepEqual(restored[1].metadata.execution_trace, trace)
 })
+
+test('final 已收到时立即结束，不等待服务端关闭连接', async () => {
+  let cancelled = false
+  globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('data: {"event_type":"final","content":"完成"}\n\n'))
+  }, cancel() { cancelled = true } }), { headers: { 'content-type': 'text/event-stream' } })
+  const events = []
+  await streamAgentAnswer(request, event => events.push(event), undefined, { firstResponseMs: 100, idleMs: 100, totalMs: 200 })
+  assert.equal(events.length, 1)
+  assert.equal(cancelled, true)
+})
+
+test('首响应超时中止连接，且不会自动重发', async () => {
+  let count = 0; let signal
+  globalThis.fetch = (_url, options) => { count++; signal = options.signal; return new Promise(() => {}) }
+  await assert.rejects(streamAgentAnswer(request, () => {}, undefined,
+    { firstResponseMs: 15, idleMs: 100, totalMs: 200 }), { name: 'TimeoutError' })
+  assert.equal(count, 1)
+  assert.equal(signal.aborted, true)
+})
+
+test('静默流超时取消读取，已收到的 delta 不丢失', async () => {
+  let cancelled = false
+  globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('data: {"event_type":"delta","content":"部分回答"}\n\n'))
+  }, cancel() { cancelled = true } }), { headers: { 'content-type': 'text/event-stream' } })
+  const events = []
+  await assert.rejects(streamAgentAnswer(request, event => events.push(event), undefined,
+    { firstResponseMs: 100, idleMs: 15, totalMs: 200 }), { name: 'TimeoutError' })
+  assert.equal(events[0].content, '部分回答')
+  assert.equal(cancelled, true)
+})
+
+test('用户停止能打断静默读取，不需要等到超时', async () => {
+  let cancelled = false
+  globalThis.fetch = async () => new Response(new ReadableStream({ cancel() { cancelled = true } }),
+    { headers: { 'content-type': 'text/event-stream' } })
+  const controller = new AbortController()
+  const running = streamAgentAnswer(request, () => {}, controller.signal,
+    { firstResponseMs: 1000, idleMs: 1000, totalMs: 2000 })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  controller.abort()
+  await assert.rejects(running, { name: 'AbortError' })
+  assert.equal(cancelled, true)
+})
+
+test('持续心跳不能无限延长总等待时间', async () => {
+  let heartbeat; let cancelled = false
+  globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) {
+    heartbeat = setInterval(() => controller.enqueue(new TextEncoder().encode(': heartbeat\n\n')), 5)
+  }, cancel() { cancelled = true; clearInterval(heartbeat) } }), { headers: { 'content-type': 'text/event-stream' } })
+  try {
+    await assert.rejects(streamAgentAnswer(request, () => {}, undefined,
+      { firstResponseMs: 100, idleMs: 100, totalMs: 30 }), { name: 'TimeoutError' })
+    assert.equal(cancelled, true)
+  } finally { clearInterval(heartbeat) }
+})
+
+test('连接无final即关闭和损坏的SSE均明确报错', async () => {
+  mockStream('data: {"event_type":"delta","content":"部分回答"}\n\n', 100)
+  await assert.rejects(streamAgentAnswer(request, () => {}), /尚未收到完整回答/)
+  mockStream('data: {broken}\n\n', 100)
+  await assert.rejects(streamAgentAnswer(request, () => {}), SyntaxError)
+})

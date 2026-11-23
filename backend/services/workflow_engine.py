@@ -42,7 +42,7 @@ from backend.schema.chat_schema import ChatRequest, StreamEvent
 # 导入 assistant 消息展示元数据构造函数，用于保存当前回答对应的引用模块
 from backend.services.message_metadata import build_assistant_message_metadata
 # 导入会话标题生成函数，用于侧边栏历史会话主题展示
-from backend.services.session_title import generate_session_title
+from backend.services.session_title import ensure_generated_session_title, is_default_title
 # 导入 SSE 格式化工具，将 StreamEvent 转换为 text/event-stream 格式
 from backend.utils.stream_helper import to_sse
 # 导入 RAG 上下文构造函数，用于为当前请求生成检索增强参考内容
@@ -136,11 +136,11 @@ def run_workflow_stream(request: ChatRequest, client) -> StreamingResponse:
             # 优先使用前端传入的展示文本；如果没有传 display_text，则默认使用实际输入文本
             display_text = request.user_options.get("display_text", request.input_text)
             # 已有标题的会话不重复生成；新会话才调用模型生成侧边栏主题
-            session_title = get_chat_session_title(request.session_id) or generate_session_title(
-                user_text=display_text,
-                mode=request.mode,
-                client=client
-            )
+            session_title = get_chat_session_title(request.session_id)
+            if is_default_title(session_title):
+                session_title = ensure_generated_session_title(
+                    session_id=request.session_id, user_text=display_text, mode=request.mode, client=client
+                )
             ensure_chat_session(
                 session_id=request.session_id,
                 mode=request.mode,

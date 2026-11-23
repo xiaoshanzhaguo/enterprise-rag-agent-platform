@@ -46,9 +46,11 @@ RAG 相关：
 - RAG 检索记录持久化存储于 SQLite，检索预览会返回引用来源和命中原文片段
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.api.rag_index import ERROR_RESPONSES, get_index_management_service, index_http_response
+from backend.api.session_access import WorkspaceUser, authorize_document_scope, require_session_owner, validate_shared_knowledge_base
+from backend.api.workspace_auth import require_module
 from backend.services.rag_documents import IndexManagementService, infer_document_business_fields
 from backend.llm.client import get_client
 from backend.rag.store import clear_document_chunks
@@ -70,6 +72,8 @@ from backend.rag.knowledge_bases import can_manage_knowledge_base
 from pydantic import BaseModel, Field, ConfigDict
 from uuid import uuid4
 from backend.db.repository import list_recent_chat_sessions
+from backend.db.session_listing import list_session_page
+from backend.db.session_drafts import get_or_create_draft
 from backend.db.repository import load_latest_mode_sessions
 from backend.schema.chat_schema import (
     ChatRequest,
@@ -89,6 +93,7 @@ from backend.schema.chat_schema import (
 from backend.services.chat_service import chat_with_ai
 from backend.services.workflow_engine import run_workflow_stream
 from backend.services.agent_service import run_agent_stream
+from backend.services.session_title import ensure_generated_session_title
 
 # 路由注册器：集中管理当前模块下的所有接口
 router = APIRouter()
@@ -97,7 +102,7 @@ router = APIRouter()
 
 
 @router.post("/chat_history")
-def chat_history(request: ChatHistoryRequest):
+def chat_history(request: ChatHistoryRequest, user: WorkspaceUser):
     """
     返回每个前端模式最近一次数据库会话及其消息，用于刷新后恢复聊天历史。
 
@@ -106,12 +111,13 @@ def chat_history(request: ChatHistoryRequest):
     """
     # 加载各模式最近一次数据库会话及其消息
     return {
-        "mode_sessions": load_latest_mode_sessions(request.mode_names)
+        "mode_sessions": load_latest_mode_sessions(request.mode_names, owner_user_id=user['id'])
     }
 
 
 @router.get("/chat_sessions", response_model=ChatSessionListResponse)
-def chat_sessions(limit: int = Query(default=10, ge=1, le=50), mode: str | None = None, include_empty: bool = False):
+def chat_sessions(user: WorkspaceUser, limit: int = Query(default=10, ge=1, le=50),
+                  mode: str | None = None, include_empty: bool = False):
     """
     返回最近更新的聊天会话列表，用于前端侧边栏展示历史会话。
 
@@ -119,15 +125,29 @@ def chat_sessions(limit: int = Query(default=10, ge=1, le=50), mode: str | None 
     :return: 最近会话摘要列表
     """
     # 兼容旧入口默认隐藏空会话；React 显式请求 include_empty。
-    sessions = list_recent_chat_sessions(limit=limit, mode=mode, include_empty=include_empty)
+    sessions = list_recent_chat_sessions(limit=limit, mode=mode, include_empty=include_empty, owner_user_id=user['id'])
     # 按响应模型返回，保证前端拿到稳定字段
     return {
         "sessions": sessions
     }
 
 
+class ChatSessionPageResponse(ChatSessionListResponse):
+    next_cursor: str | None = None
+
+
+@router.get('/chat_session_pages', response_model=ChatSessionPageResponse)
+def chat_session_pages(user: WorkspaceUser, limit: int = Query(default=50, ge=1, le=50),
+                       cursor: str | None = Query(default=None, max_length=2048),
+                       mode: str | None = None, include_empty: bool = False):
+    try:
+        return list_session_page(limit=limit, cursor=cursor, mode=mode, include_empty=include_empty, owner_user_id=user['id'])
+    except ValueError as error:
+        raise HTTPException(status_code=400,detail='会话分页标记无效，请刷新会话列表。') from error
+
+
 @router.get("/chat_session/{session_id}", response_model=ChatSessionDetailResponse)
-def chat_session_detail(session_id: str):
+def chat_session_detail(session_id: str, user: WorkspaceUser):
     """
     返回指定会话详情，用于前端点击历史会话后恢复对应消息。
 
@@ -135,8 +155,7 @@ def chat_session_detail(session_id: str):
     :return: 会话详情与消息列表
     """
     # 从数据库读取指定会话详情
-    if session_id.startswith('knowledge_base:'):
-        raise HTTPException(status_code=403, detail='公共知识库不是聊天会话。')
+    require_session_owner(session_id, user)
     session = get_chat_session_detail(session_id)
     # 会话不存在时返回 404，避免前端误以为恢复成功
     if not session:
@@ -146,8 +165,29 @@ def chat_session_detail(session_id: str):
     return session
 
 
+@router.post('/chat_session/{session_id}/auto_title')
+def auto_title(session_id: str, user: WorkspaceUser):
+    require_session_owner(session_id, user)
+    session = get_chat_session_detail(session_id)
+    if session is None:
+        raise HTTPException(404, '会话不存在或已被删除。')
+    # No user input: leave the empty draft unchanged, without a model request.
+    if not any(message['role'] == 'user' for message in session['messages']):
+        return {'session_id': session_id, 'title': session['title'] or '新会话'}
+    return {'session_id': session_id, 'title': ensure_generated_session_title(
+        session_id, session['mode'], '', get_client())}
+
+
+@router.post('/chat_session_draft')
+def chat_session_draft(request: ChatSessionCreateRequest, user: WorkspaceUser):
+    try:
+        return {'session_id': get_or_create_draft(request.session_id, request.mode, owner_user_id=user['id']), 'mode': request.mode}
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
 @router.post("/chat_session")
-def create_chat_session(request: ChatSessionCreateRequest):
+def create_chat_session(request: ChatSessionCreateRequest, user: WorkspaceUser):
     """
     创建一个空聊天会话，主要用于前端新建或清空当前模式聊天后的状态同步。
 
@@ -158,7 +198,7 @@ def create_chat_session(request: ChatSessionCreateRequest):
     if not request.session_id.strip() or request.session_id.startswith('knowledge_base:'):
         raise HTTPException(status_code=400, detail='会话编号无效。')
     try:
-        ensure_chat_session(session_id=request.session_id, mode=request.mode, title=request.title)
+        ensure_chat_session(session_id=request.session_id, mode=request.mode, title=request.title, owner_user_id=user['id'])
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
@@ -168,7 +208,7 @@ def create_chat_session(request: ChatSessionCreateRequest):
 
 
 @router.delete("/chat_session/{session_id}")
-def clear_chat_session(session_id: str):
+def clear_chat_session(session_id: str, user: WorkspaceUser):
     """
     删除一个聊天会话及其消息、文档、RAG 查询等级联数据。
 
@@ -176,8 +216,7 @@ def clear_chat_session(session_id: str):
     :return: 删除结果提示信息
     """
     # 删除数据库中的会话及所有级联关联数据
-    if session_id.startswith('knowledge_base:'):
-        raise HTTPException(status_code=403, detail='不能删除公共知识库会话。')
+    require_session_owner(session_id, user)
     delete_chat_session(session_id)
     # 同时清理当前会话在数据库 RAG store 中的文档索引
     clear_document_chunks(session_id)
@@ -185,16 +224,22 @@ def clear_chat_session(session_id: str):
 
 
 @router.patch('/chat_session/{session_id}')
-def update_chat_session_title(session_id: str, request: ChatSessionRenameRequest):
-    if session_id.startswith('knowledge_base:'):
-        raise HTTPException(status_code=403, detail='不能修改公共知识库会话。')
+def update_chat_session_title(session_id: str, request: ChatSessionRenameRequest, user: WorkspaceUser):
+    require_session_owner(session_id, user)
     if not rename_chat_session(session_id, request.title):
         raise HTTPException(status_code=404, detail='会话不存在。')
     return {'session_id': session_id, 'title': request.title}
 
 
+def authorize_chat_request(request: ChatRequest, user: WorkspaceUser):
+    if request.session_id:
+        require_session_owner(request.session_id, user)
+    validate_shared_knowledge_base(request.user_options.get('knowledge_base_id'))
+    return request
+
+
 @router.post("/chat_stream")
-def chat_stream(request: ChatRequest):
+def chat_stream(request: ChatRequest = Depends(authorize_chat_request)):
     """
     聊天流式接口。
 
@@ -205,7 +250,7 @@ def chat_stream(request: ChatRequest):
 
 
 @router.post("/workflow_stream")
-def workflow_stream(request: ChatRequest):
+def workflow_stream(request: ChatRequest = Depends(authorize_chat_request)):
     """
     工作流流式接口。
 
@@ -216,7 +261,7 @@ def workflow_stream(request: ChatRequest):
 
 
 @router.post("/agent_stream")
-def agent_stream(request: ChatRequest):
+def agent_stream(request: ChatRequest = Depends(authorize_chat_request)):
     """
     企业知识库问答 Agent 流式接口。
 
@@ -226,7 +271,7 @@ def agent_stream(request: ChatRequest):
     return run_agent_stream(request, client)  # 将请求交给轻量 Agent 服务处理
 
 
-@router.get("/knowledge_base_categories", response_model=KnowledgeBaseCategoryListResponse)
+@router.get("/knowledge_base_categories", response_model=KnowledgeBaseCategoryListResponse, dependencies=[Depends(require_module('chat', 'knowledge'))])
 def knowledge_base_categories():
     """
     返回前端可选的知识库分类列表。
@@ -240,7 +285,7 @@ def knowledge_base_categories():
     }
 
 
-@router.get("/knowledge_bases", response_model=KnowledgeBaseListResponse)
+@router.get("/knowledge_bases", response_model=KnowledgeBaseListResponse, dependencies=[Depends(require_module('chat', 'knowledge'))])
 def knowledge_bases():
     """
     返回可查询的企业知识库列表。
@@ -261,7 +306,7 @@ class CreateKnowledgeBase(BaseModel):
     user_role: str | None = None
 
 
-@router.post("/knowledge_bases", status_code=201)
+@router.post("/knowledge_bases", status_code=201, dependencies=[Depends(require_module('knowledge'))])
 def create_knowledge_base(request: CreateKnowledgeBase):
     if not can_manage_knowledge_base(request.user_role):
         raise HTTPException(403, "当前角色没有知识库管理权限。")
@@ -271,15 +316,18 @@ def create_knowledge_base(request: CreateKnowledgeBase):
 
 
 @router.post("/index_document", response_model=IndexDocumentResponse, responses={**ERROR_RESPONSES, 202: {"model": IndexDocumentResponse}})
-def index_document(request: IndexDocumentRequest, service: IndexManagementService = Depends(get_index_management_service)):
+def index_document(request: IndexDocumentRequest, http_request: Request,
+                   service: IndexManagementService = Depends(get_index_management_service)):
+    authorize_document_scope(http_request, request.session_id, request.knowledge_base_id)
     return index_http_response(lambda: service.upload(request), IndexDocumentResponse)
 
 
 @router.post("/rag_preview", response_model=RagPreviewResponse)
-def rag_preview(request: RagPreviewRequest):
+def rag_preview(request: RagPreviewRequest, http_request: Request):
     """
     返回当前 query 命中的 RAG 引用来源和原文片段，便于前端展示检索依据。
     """
+    authorize_document_scope(http_request, request.session_id, request.knowledge_base_id, preview=True)
     # 检索过滤条件必须先校验。None 表示不过滤分类，也就是检索当前会话全部文档。
     try:
         knowledge_base_type_filter = normalize_knowledge_base_type(
@@ -313,15 +361,16 @@ def rag_preview(request: RagPreviewRequest):
 
 
 @router.get("/rag_status/{session_id}", response_model=RagStatusResponse, responses=ERROR_RESPONSES)
-def rag_status(session_id: str, knowledge_base_id: str | None = Query(default=None),
+def rag_status(session_id: str, request: Request, knowledge_base_id: str | None = Query(default=None),
                service: IndexManagementService = Depends(get_index_management_service)):
+    authorize_document_scope(request, session_id, knowledge_base_id)
     return index_http_response(lambda: service.document_status(session_id,
         knowledge_base_id=normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None),
         RagStatusResponse, query=True)
 
 
 @router.delete("/clear_document/{session_id}")
-def clear_document(session_id: str):
+def clear_document(session_id: str, user: WorkspaceUser):
     """
     清理某个 session 对应的临时 RAG 文档索引
 
@@ -331,5 +380,6 @@ def clear_document(session_id: str):
     """
     if session_id.startswith('knowledge_base:'):
         raise HTTPException(status_code=403, detail='不能通过会话清空接口删除公共知识库文档。')
+    require_session_owner(session_id, user)
     clear_document_chunks(session_id) # 从数据库 RAG store 中删除该会话对应的文档记录
     return {"message": f"session {session_id} 的文档索引已清理"}

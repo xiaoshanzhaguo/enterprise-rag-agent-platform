@@ -2,8 +2,10 @@
 
 import sqlite3
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
+from backend.api.session_access import authorize_document_scope
+from backend.api.workspace_auth import require_module
 
 from backend.db.index_repository import IndexOperationConflict
 from backend.db.version_repository import VersionConflict
@@ -60,7 +62,8 @@ def index_http_response(call, schema, *, query=False):
     return JSONResponse(status_code=code, content={"detail": detail, "receipt": None})
 
 
-@router.post("/documents/{document_id}/index", response_model=IndexOperationResponse, responses=ERROR_RESPONSES)
+@router.post("/documents/{document_id}/index", response_model=IndexOperationResponse, responses=ERROR_RESPONSES,
+             dependencies=[Depends(require_module('knowledge'))])
 def index_existing(document_id: int, session_id: str = Query(min_length=1, pattern=r"\S"),
                    knowledge_base_id: str = Query(min_length=1, pattern=r"\S"), user_role: str | None = None,
                    service: IndexManagementService = Depends(get_index_management_service)):
@@ -69,26 +72,29 @@ def index_existing(document_id: int, session_id: str = Query(min_length=1, patte
 
 
 @router.get("/rag_index_operations/{operation_id}", response_model=IndexOperationResponse, responses=ERROR_RESPONSES)
-def get_operation(operation_id: UUID, session_id: str = Query(min_length=1, pattern=r"\S"),
+def get_operation(operation_id: UUID, request: Request, session_id: str = Query(min_length=1, pattern=r"\S"),
                   knowledge_base_id: str | None = None, user_role: str | None = None,
                   service: IndexManagementService = Depends(get_index_management_service)):
+    authorize_document_scope(request, session_id, knowledge_base_id)
     return index_http_response(lambda: service.query(operation_id, session_id=session_id,
         knowledge_base_id=knowledge_base_id, user_role=user_role), IndexOperationResponse, query=True)
 
 
 @router.post("/rag_index_operations/{operation_id}/resume", response_model=IndexOperationResponse,
              responses={**ERROR_RESPONSES, 202: {"model": IndexOperationResponse}})
-def resume_operation(operation_id: UUID, request: IndexActionRequest,
+def resume_operation(operation_id: UUID, request: IndexActionRequest, http_request: Request,
                      session_id: str = Query(min_length=1, pattern=r"\S"), knowledge_base_id: str | None = None,
                      user_role: str | None = None, service: IndexManagementService = Depends(get_index_management_service)):
+    authorize_document_scope(http_request, session_id, knowledge_base_id)
     return index_http_response(lambda: service.action(operation_id, request.expected_state_version, action="resume",
         session_id=session_id, knowledge_base_id=knowledge_base_id, user_role=user_role), IndexOperationResponse)
 
 
 @router.post("/rag_index_operations/{operation_id}/retry", response_model=IndexOperationResponse,
              responses={**ERROR_RESPONSES, 202: {"model": IndexOperationResponse}})
-def retry_operation(operation_id: UUID, request: IndexActionRequest,
+def retry_operation(operation_id: UUID, request: IndexActionRequest, http_request: Request,
                     session_id: str = Query(min_length=1, pattern=r"\S"), knowledge_base_id: str | None = None,
                     user_role: str | None = None, service: IndexManagementService = Depends(get_index_management_service)):
+    authorize_document_scope(http_request, session_id, knowledge_base_id)
     return index_http_response(lambda: service.action(operation_id, request.expected_state_version, action="retry",
         session_id=session_id, knowledge_base_id=knowledge_base_id, user_role=user_role), IndexOperationResponse)

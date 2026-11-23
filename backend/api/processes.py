@@ -14,10 +14,11 @@ from backend.services.process_extraction import extract_process_fields
 from backend.services.process_submission import ProcessSubmissionError, submit_process_application
 
 
-router = APIRouter(tags=["流程申请"])
+submission_router = APIRouter(tags=["流程申请"])
+logs_router = APIRouter(tags=["流程申请"])
 
 
-@router.post("/process_fields/extract", response_model=ProcessExtractionResult)
+@submission_router.post("/process_fields/extract", response_model=ProcessExtractionResult)
 def extract_application_fields(request: ProcessExtractionRequest):
     """只提取字段，不提交申请或创建执行记录。"""
     try:
@@ -30,7 +31,7 @@ def extract_application_fields(request: ProcessExtractionRequest):
     return result
 
 
-@router.post("/process_applications", response_model=ProcessSubmissionResponse)
+@submission_router.post("/process_applications", response_model=ProcessSubmissionResponse)
 def submit_application(request: ProcessSubmissionRequest):
     """提交已经确认的申请字段到 n8n 模拟流程。"""
     try:
@@ -41,7 +42,7 @@ def submit_application(request: ProcessSubmissionRequest):
         ) from exc
 
 
-@router.get('/process_applications', response_model=ProcessExecutionPage)
+@logs_router.get('/process_applications', response_model=ProcessExecutionPage)
 def list_application_executions(
     page: int = Query(default=1, ge=1, le=100000),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -56,7 +57,7 @@ def list_application_executions(
         raise HTTPException(status_code=503, detail='执行记录暂不可用，请稍后刷新。') from exc
 
 
-@router.get("/process_applications/{request_id}", response_model=ProcessExecutionRecord)
+@logs_router.get("/process_applications/{request_id}", response_model=ProcessExecutionRecord)
 def get_application_execution(request_id: UUID):
     """查询 SQLite 中的申请输入、执行状态和回执。"""
     try:
@@ -66,3 +67,8 @@ def get_application_execution(request_id: UUID):
     if record is None:
         raise HTTPException(status_code=404, detail="申请执行记录不存在。")
     return record
+
+
+router = APIRouter()
+router.include_router(submission_router)
+router.include_router(logs_router)

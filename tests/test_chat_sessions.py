@@ -13,6 +13,7 @@ from backend.api.chat import router
 from backend.db.connection import get_connection
 from backend.db.init_db import init_database
 from backend.db.repository import ensure_chat_session, save_chat_message, save_document_with_chunks
+from tests.workspace_session_fixture import authenticate_fixture
 
 MODE = '企业知识库问答'
 
@@ -29,6 +30,7 @@ class ChatSessionTests(unittest.TestCase):
         app = FastAPI()
         app.include_router(router)
         self.client = TestClient(app)
+        authenticate_fixture(self.client)
         vector_cleanup = patch('backend.api.chat.clear_document_chunks')
         self.cleanup_vectors = vector_cleanup.start()
         self.addCleanup(vector_cleanup.stop)
@@ -89,7 +91,7 @@ class ChatSessionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '已删除'):
             save_chat_message('a', 'assistant', '迟到的回答')
         self.assertEqual(self.client.post('/chat_session', json={'session_id': 'a', 'mode': MODE}).status_code, 409)
-        self.assertEqual(self.client.delete('/chat_session/a').status_code, 200)
+        self.assertEqual(self.client.delete('/chat_session/a').status_code, 404)
         self.assertEqual(self.client.get('/chat_sessions?include_empty=true').json()['sessions'], [])
 
     def test_public_knowledge_base_cannot_be_managed_as_chat(self):

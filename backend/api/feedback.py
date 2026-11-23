@@ -1,8 +1,10 @@
 """反馈只针对已经保存的回答；不接受前端上传答案副本。"""
 import sqlite3
 from typing import Literal
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field, model_validator
+from backend.api.session_access import WorkspaceUser, require_session_owner
+from backend.api.workspace_auth import require_admin
 from backend.db.feedback_repository import FeedbackConflict, list_feedback, review_feedback, save_feedback
 
 router = APIRouter()
@@ -25,32 +27,34 @@ class FeedbackReviewRequest(BaseModel):
 class FeedbackRequest(BaseModel):
     model_config = {'str_strip_whitespace': True, 'extra': 'forbid'}
     rating: Literal['helpful', 'unhelpful']
-    reason: Literal['', 'answer_inaccurate', 'citation_mismatch', 'incomplete', 'other'] = ''
+    reason: Literal['', 'answer_inaccurate', 'citation_mismatch', 'incomplete', 'off_topic', 'response_issue', 'unclear', 'other'] = ''
     comment: str = Field(default='', max_length=500)
 
     @model_validator(mode='after')
     def check_reason(self):
         if self.rating == 'helpful' and self.reason:
-            raise ValueError('有帮助的回答无需选择问题原因。')
+            raise ValueError('回复优秀无需选择问题原因。')
         if self.rating == 'unhelpful' and not self.reason:
-            raise ValueError('请为无帮助的回答选择原因。')
+            raise ValueError('请选择回复不佳的原因。')
         return self
 
 
 @router.post('/chat_session/{session_id}/messages/{message_id}/feedback')
-def submit_feedback(session_id: str, request: FeedbackRequest, message_id: int = Path(gt=0, le=9223372036854775807)):
-    if session_id.startswith('knowledge_base:'):
-        raise HTTPException(403, '公共知识库不是聊天会话。')
+def submit_feedback(session_id: str, request: FeedbackRequest, user: WorkspaceUser,
+                    message_id: int = Path(gt=0, le=9223372036854775807)):
+    require_session_owner(session_id, user)
     try:
         result = save_feedback(session_id, message_id, **request.model_dump())
+    except FeedbackConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
     except sqlite3.Error as exc:
         raise HTTPException(503, '反馈暂未确认保存，请刷新历史核对后重试。') from exc
     if result is None:
         raise HTTPException(404, '回答不存在、已删除或不属于当前会话。')
-    return result
+    return {key: result[key] for key in ('message_id', 'rating', 'reason', 'comment', 'updated_at')}
 
 
-@router.get('/answer_feedback')
+@router.get('/answer_feedback', dependencies=[Depends(require_admin)])
 def feedback_list(rating: Literal['helpful', 'unhelpful'] | None = None,
                   page: int = Query(default=1, ge=1), page_size: int = Query(default=10, ge=1, le=50),
                   review_status: ReviewStatus | None = None):
@@ -60,7 +64,7 @@ def feedback_list(rating: Literal['helpful', 'unhelpful'] | None = None,
         raise HTTPException(503, '反馈列表暂不可用，请稍后刷新。') from exc
 
 
-@router.post('/answer_feedback/{message_id}/review')
+@router.post('/answer_feedback/{message_id}/review', dependencies=[Depends(require_admin)])
 def submit_review(request: FeedbackReviewRequest, message_id: int = Path(gt=0, le=9223372036854775807)):
     try:
         result = review_feedback(message_id, **request.model_dump())

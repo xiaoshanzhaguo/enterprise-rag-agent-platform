@@ -105,7 +105,36 @@ docker compose up -d --build --force-recreate backend web
 
 不会自动导入业务文档、初始化 n8n 凭据或创建 Dify 应用；按以下对应步骤完成。
 
-## 4. n8n 模拟流程
+## 4. 工单审批与自动化
+
+1. 管理员在「设置 → 部门管理」维护部门，然后在「用户管理」新建申请账号并选择所属部门。升级时，已有用户和审批规则中的部门名称会导入部门列表。
+2. 打开「审批与自动化」，配置部门和申请类型对应的审批账号。申请类型按标准化后的完整名称匹配，例如「研发部」和「VPN 权限」。规则只影响新工单，已提交工单由原审批人继续处理。
+3. 选择工单自动化平台，按对应步骤配置后重启 FastAPI。
+
+### Dify 工单工作流
+
+发布工单工作流，并在该应用的「API 访问」中创建应用 API Key。工作流输入为四个必填文本变量 `request_id`、`event`、`event_id`、`ticket_number`。支持 `process_ticket.submitted` 和 `process_ticket.approved`。输出至少包含原样返回的 `event_id` 和布尔值 `accepted`。
+
+```dotenv
+TICKET_AUTOMATION_PROVIDER=dify
+DIFY_TICKET_API_BASE_URL=https://api.dify.ai/v1
+DIFY_TICKET_API_KEY=替换为已发布的工单应用密钥
+DIFY_TICKET_TIMEOUT_SECONDS=10
+```
+
+`DIFY_TICKET_API_BASE_URL` 填「API 访问」显示的基础地址，保留末尾的 `/v1`。FastAPI 会追加 `/workflows/run`，使用 Bearer 认证，并校验成功运行的 `data.outputs`。应用 API Key 放在后端本地 `.env`，前端无需配置。
+
+**启用审批人邮件提醒。** 在「用户管理」为审批账号保存工作邮箱。Dify 工作流新增选填文本输入 `approver_email`，仅在 `process_ticket.submitted` 分支将该值绑定到邮件收件人，并继续用 `event_id` 作为幂等键。收件地址为空或邮件服务未接受发送请求时，该分支应失败。先验证草稿并发布，再在后端 `.env` 设置 `DIFY_TICKET_APPROVER_EMAIL_ENABLED=true` 并重启 FastAPI。邮箱缺失时，工单仍可审批。在「审批与自动化」查看失败原因，补充邮箱后可重试。邮件尝试后若邮箱发生变更，先核对原投递记录。
+
+**启用审批结果通知。** 为发起账号保存工作邮箱。在 Dify 新增选填文本输入 `applicant_email`，并让代码节点接受 `process_ticket.approved` 和 `process_ticket.rejected`。分别按事件类型发送通过和驳回通知，两条分支均将 `applicant_email` 设为唯一收件人，沿用 `event_id` 作为发信幂等键。邮件服务接受发送请求后，再返回 `accepted: true` 及原事件编号。两条分支都发布后，在后端 `.env` 设置 `DIFY_TICKET_APPLICANT_EMAIL_ENABLED=true` 并重启 FastAPI。通知失败会记录在「审批与自动化」，审批结果仍然保存。驳回理由可在知行工单中心查看。
+
+### n8n 工单 Webhook
+
+默认使用 `TICKET_AUTOMATION_PROVIDER=n8n`。导入 [process_ticket_events.json](../integrations/n8n/process_ticket_events.json)，在 `Receive Ticket Event` 绑定 `X-Webhook-Token` 的 Header Auth。将已发布的 Production URL 写入 `N8N_TICKET_WEBHOOK_URL`，使用已有的 `N8N_WEBHOOK_TOKEN`。
+
+工单提交和审批通过后，各自保留一条独立的自动化事件。模拟工作流仅生成回执。接入真实通知或工单系统时，下游按 `event_id` 幂等处理，完成后回传 `accepted: true` 和同一 `event_id`。管理员可在「审批与自动化」按事件编号核对执行结果，再显式重试。切换平台后，重试会发往当前配置的平台，先核对旧平台是否已执行。进程若在发送中退出，记录仍显示「发送中」，需要运维核对原执行结果。
+
+### 历史申请模拟接口
 
 ```powershell
 docker compose --profile automation up -d n8n

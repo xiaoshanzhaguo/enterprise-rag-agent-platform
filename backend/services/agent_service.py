@@ -56,7 +56,7 @@ from backend.rag.tools import create_knowledge_search_tool
 # 请求模型和流式事件模型
 from backend.schema.chat_schema import ChatRequest, StreamEvent
 # 生成侧边栏历史会话标题
-from backend.services.session_title import generate_session_title
+from backend.services.session_title import ensure_generated_session_title, is_default_title
 from backend.services.process_extraction import extract_process_fields
 # SSE 格式化工具
 from backend.utils.stream_helper import to_sse
@@ -629,11 +629,11 @@ def run_agent_stream(request: ChatRequest, client) -> StreamingResponse:
             # 优先使用前端传入的展示文本，避免上传文件场景把全文展示进聊天气泡
             display_text = request.user_options.get("display_text", request.input_text)
             # 已有标题的会话不重复生成；新会话才调用模型生成侧边栏主题
-            session_title = get_chat_session_title(request.session_id) or generate_session_title(
-                user_text=display_text,
-                mode=request.mode,
-                client=client
-            )
+            session_title = get_chat_session_title(request.session_id)
+            if is_default_title(session_title):
+                session_title = ensure_generated_session_title(
+                    session_id=request.session_id, user_text=display_text, mode=request.mode, client=client
+                )
             # 确保当前会话存在，并用用户问题作为会话标题
             ensure_chat_session(
                 session_id=request.session_id,

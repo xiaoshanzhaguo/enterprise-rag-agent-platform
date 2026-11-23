@@ -161,8 +161,9 @@ class IndexManagementService:
                     process_status=request.process_status or previous['process_status'],
                 )
         profile = self.profile_factory() if self.mode == "vector" else None
+        storage_session = build_knowledge_base_storage_session_id(kb) if kb else request.session_id
         prepared = repository.prepare_document_index(
-            request.session_id, request.file_name, chunks, retrieval_mode=self.mode,
+            storage_session, request.file_name, chunks, retrieval_mode=self.mode,
             target_profile=profile, knowledge_base_id=kb, logical_document_id=identity, **metadata,
         )
         operation = prepared.operation

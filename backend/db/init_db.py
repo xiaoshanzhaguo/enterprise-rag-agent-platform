@@ -17,11 +17,12 @@
 典型调用流程：启动项目 -> init_database() -> 创建表 -> 创建索引 -> 数据库初始化完成
 """
 
+import sqlite3
 from contextlib import closing
 
 from backend.db.connection import get_connection, resolve_sqlite_path
 # 导入建表 SQL 和建索引 SQL
-from backend.db.schema import CREATE_INDEX_SQL, CREATE_TABLE_SQL, TABLE_COLUMN_MIGRATIONS
+from backend.db.schema import CREATE_INDEX_SQL, CREATE_PROCESS_TICKET_EVENTS_SQL, CREATE_TABLE_SQL, TABLE_COLUMN_MIGRATIONS
 
 
 def _get_existing_columns(connection, table_name: str) -> set[str]:
@@ -68,6 +69,28 @@ def _apply_column_migrations(connection) -> None:
             )
 
 
+def _archive_legacy_process_tickets(connection: sqlite3.Connection) -> None:
+    columns = _get_existing_columns(connection, "process_tickets")
+    # Approval codes cannot establish account ownership. Preserve legacy records
+    # separately so the account-based API never assigns them to the wrong user.
+    if {"applicant_key_hash", "approval_key_hash"} <= columns and "approver_id" not in columns:
+        connection.execute("ALTER TABLE process_tickets RENAME TO process_tickets_legacy_codes")
+
+
+def _migrate_process_ticket_event_types(connection: sqlite3.Connection) -> None:
+    schema = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'process_ticket_events'"
+    ).fetchone()
+    if "'process_ticket.rejected'" in schema["sql"]:
+        return
+    # SQLite needs a table rebuild to extend the event type CHECK constraint.
+    columns = 'event_id, request_id, event_type, payload_json, status, attempts, error_message, created_at, updated_at'
+    connection.execute("ALTER TABLE process_ticket_events RENAME TO process_ticket_events_old")
+    connection.execute(CREATE_PROCESS_TICKET_EVENTS_SQL)
+    connection.execute(f"INSERT INTO process_ticket_events ({columns}) SELECT {columns} FROM process_ticket_events_old ORDER BY rowid")
+    connection.execute("DROP TABLE process_ticket_events_old")
+
+
 def init_database(database_url: str | None = None) -> None:
     """
     创建项目运行所需的数据表和索引。如果表或索引已存在，则不会重复创建。
@@ -84,16 +107,20 @@ def init_database(database_url: str | None = None) -> None:
     # 获取数据库连接
     with closing(get_connection(database_url)) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
+        _archive_legacy_process_tickets(connection)
         # 按依赖顺序建表（含 documents 后的 rag_index_tasks）。
         # 迁移只回填文档身份，不启动索引或触碰向量。
         for statement in CREATE_TABLE_SQL:
             connection.execute(statement)
 
+        _migrate_process_ticket_event_types(connection)
         # 先给旧表补新增列，再创建依赖这些列的索引。
         # 否则旧库里没有 department/process_type 时，idx_documents_department 会启动失败。
         _apply_column_migrations(connection)
         from backend.db.version_repository import migrate_documents
+        from backend.db.departments import migrate_departments
         migrate_documents(connection)
+        migrate_departments(connection)
 
         # 依次执行所有建索引 SQL
         for statement in CREATE_INDEX_SQL:

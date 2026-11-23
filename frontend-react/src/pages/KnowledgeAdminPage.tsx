@@ -11,6 +11,7 @@ import { DocumentIndexStatus } from '../components/DocumentIndexStatus'
 import { DocumentVersionControls } from '../components/DocumentVersionControls'
 import { DocumentDeletionControls } from '../components/DocumentDeletionControls'
 import { SessionActionDialog } from '../components/SessionActionDialog'
+import { DEFAULT_TABLE_PAGE_SIZE, TablePagination } from '../components/TablePagination'
 import { ScopeSelect } from '../components/ScopeSelect'
 import type { KnowledgeBaseCategory, KnowledgeBaseItem, RagStatusDocument } from '../types/knowledgeBase'
 import '../styles/knowledge-admin.css'
@@ -26,6 +27,8 @@ export const KnowledgeAdminPage = () => {
   const [versionTarget, setVersionTarget] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE)
   const [isLoading, setIsLoading] = useState(true)
   const [configError, setConfigError] = useState('')
   const [configAttempt, setConfigAttempt] = useState(0)
@@ -56,6 +59,9 @@ export const KnowledgeAdminPage = () => {
   const visibleError = errorMessage || indexState.error || indexState.queryError
   const selectedCategory = categories.find(item => item.category_id === selectedCategoryId)
   const view = knowledgeAdminView(ragStatus?.documents ?? [], search)
+  const documentTotal = view.filteredGroups.length
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(documentTotal / pageSize)))
+  const visibleGroups = view.filteredGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const hasStatus = ragStatus !== null
   const targetGroup = view.groups.find(group => group.id === versionTarget)
   const detailGroup = view.groups.find(group => group.id === detailId)
@@ -98,6 +104,7 @@ export const KnowledgeAdminPage = () => {
     setVersionTarget(null)
     setDetailId(null)
     setSearch('')
+    setPage(1)
     setSelectedKnowledgeBaseId(value)
   }
 
@@ -259,7 +266,7 @@ export const KnowledgeAdminPage = () => {
           placeholder={isLoading ? '正在加载…' : '暂无可用知识库'}
           options={knowledgeBases.map(item => ({ value: item.knowledge_base_id, label: item.name, description: item.description }))} />
         <label className="kb-search"><Search size={17} aria-hidden="true" />
-          <input aria-label="搜索文档" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索文档或版本文件名" disabled={!hasStatus} />
+          <input aria-label="搜索文档" type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="搜索文档或版本文件名" disabled={!hasStatus} />
         </label>
         <button type="button" className="ghost-button kb-refresh" disabled={!selectedKnowledgeBaseId || indexState.loading || isUploading}
           onClick={() => { setErrorMessage(''); void indexController.refresh() }}>
@@ -280,11 +287,12 @@ export const KnowledgeAdminPage = () => {
         <span className="kb-empty-icon"><FolderOpen size={27} aria-hidden="true" /></span><h3>这个知识库还没有文档</h3>
         <p>点击「上传文档」添加 Markdown 或纯文本资料。</p>
       </div> : !view.filteredGroups.length ? <div className="kb-empty" role="status"><Search size={26} aria-hidden="true" /><h3>没有找到匹配文档</h3>
-        <button type="button" className="text-button" onClick={() => setSearch('')}>清除搜索</button>
-      </div> : <div className="kb-table-scroll"><table className="kb-table">
+        <button type="button" className="text-button" onClick={() => { setSearch(''); setPage(1) }}>清除搜索</button>
+      </div> : <>
+      <div className="admin-table-scroll kb-table-scroll" tabIndex={0} role="region" aria-label="文档列表"><table className="admin-table kb-table">
         <caption className="sr-only">当前知识库的文档</caption>
         <thead><tr><th scope="col">文档</th><th scope="col">分类</th><th scope="col">版本</th><th scope="col">索引状态</th><th scope="col">操作</th></tr></thead>
-        <tbody>{view.filteredGroups.map(group => {
+        <tbody>{visibleGroups.map(group => {
           const primary = group.versions.find(document => document.is_current_version) || group.versions[0]
           const operationId = primary.vector_index?.operation_id || indexState.uncertainDocuments[primary.document_id ?? 0]
           const status = indexPresentation(primary.vector_index, Boolean(operationId && indexState.uncertain.includes(operationId)))
@@ -304,7 +312,11 @@ export const KnowledgeAdminPage = () => {
             }}>查看与管理</button></td>
           </tr>
         })}</tbody>
-      </table></div>}
+      </table></div>
+      <div className="kb-pagination">
+        <TablePagination label="文档分页" total={documentTotal} page={currentPage} pageSize={pageSize}
+          onPageChange={setPage} onPageSizeChange={size => { setPageSize(size); setPage(1) }} />
+      </div></>}
     </section>
 
     {detailGroup ? <SessionActionDialog title="文档详情" busy={indexingDocument !== null}

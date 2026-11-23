@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { reviewStatuses, saveFeedbackReview } from '../api/feedbackApi'
+import type { RefObject } from 'react'
+import { ClipboardCheck } from 'lucide-react'
+import { feedbackRatingLabels, feedbackReasons, reviewStatuses, saveFeedbackReview } from '../api/feedbackApi'
 import type { FeedbackRecord, ReviewStatus } from '../api/feedbackApi'
 import { ApiError, formatApiError } from '../api/httpClient'
+import { ScopeSelect } from './ScopeSelect'
+import { answerBody } from '../api/sessionMessages'
+import { SessionActionDialog } from './SessionActionDialog'
 
-export function FeedbackReviewEditor({ item, onSaved, onEdit }: { item: FeedbackRecord; onSaved: () => void; onEdit: () => void }) {
-  const [editing, setEditing] = useState(false)
+export function FeedbackReviewEditor({ item, onSaved, onClose, returnFocusTo }: {
+  item: FeedbackRecord; onSaved: () => void; onClose: () => void; returnFocusTo: RefObject<HTMLButtonElement | null>
+}) {
   const [status, setStatus] = useState(item.review_status)
   const [note, setNote] = useState(item.review_note)
   const [busy, setBusy] = useState(false)
@@ -14,7 +20,7 @@ export function FeedbackReviewEditor({ item, onSaved, onEdit }: { item: Feedback
   useEffect(() => () => pending.current?.abort(), [])
 
   async function save() {
-    if (pending.current || conflict || (status === 'resolved' && !note.trim())) return
+    if (item.rating !== 'unhelpful' || pending.current || conflict || (status === 'resolved' && !note.trim())) return
     const controller = new AbortController()
     pending.current = controller; setBusy(true); setError('')
     try {
@@ -31,19 +37,34 @@ export function FeedbackReviewEditor({ item, onSaved, onEdit }: { item: Feedback
     } finally { pending.current = null; if (!controller.signal.aborted) setBusy(false) }
   }
 
-  return <div className="feedback-resolution" aria-label={`处理回答 ${item.message_id} 的反馈`}>
-    <div className="feedback-actions"><span className={`review-badge review-${item.review_status}`}>{reviewStatuses[item.review_status]}</span>
-      {!editing && <button className="text-button" type="button" onClick={() => { onEdit(); setEditing(true) }}>处理反馈</button>}</div>
-    {item.review_note && !editing && <p className="feedback-comment">处理说明：{item.review_note}</p>}
-    {editing && <form className="feedback-form" onSubmit={event => { event.preventDefault(); void save() }}>
-      <label className="field"><span>处理状态</span><select disabled={busy || conflict} value={status} onChange={event => setStatus(event.target.value as ReviewStatus)}>
-        {Object.entries(reviewStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+  return <SessionActionDialog title="反馈详情" busy={busy} onClose={onClose} returnFocusTo={returnFocusTo}>
+    <div className="feedback-detail">
+      <div className="feedback-detail-meta">
+        <span className={`review-badge feedback-rating-${item.rating}`}>{feedbackRatingLabels[item.rating]}</span>
+        {item.reason && <span>{feedbackReasons[item.reason]}</span>}
+        <small>回答 #{item.message_id}</small>
+      </div>
+      <dl className="feedback-detail-content">
+        <div><dt>问题</dt><dd>{item.question || '历史问题未记录'}</dd></div>
+        <div><dt>回答</dt><dd>{answerBody(item.answer)}</dd></div>
+        {item.comment && <div><dt>用户建议</dt><dd>{item.comment}</dd></div>}
+        {item.rating === 'helpful' && item.review_note && <div><dt>历史处理说明</dt><dd>{item.review_note}</dd></div>}
+      </dl>
+      {item.rating === 'unhelpful' ? <form className="feedback-form feedback-detail-form" onSubmit={event => { event.preventDefault(); void save() }}>
+      <ScopeSelect label="处理状态" icon={<ClipboardCheck size={17} aria-hidden="true" />} value={status} disabled={busy || conflict}
+        options={Object.entries(reviewStatuses).map(([value, label]) => ({ value, label }))}
+        onChange={value => setStatus(value as ReviewStatus)} />
       <label className="field"><span>处理说明与复核结果（最多 1000 字）</span><textarea value={note} maxLength={1000} rows={3} required={status === 'resolved'} disabled={busy || conflict}
         placeholder="记录补充了哪些资料、调整了什么，以及原问题复测结果。" onChange={event => setNote(event.target.value)} /></label>
-      <p className="page-footnote">标记已解决需填写说明；请先回到原会话复核问题和引用。状态由人工记录。</p>
-      <div className="feedback-actions"><button className="ghost-button" type="submit" disabled={busy || conflict || (status === 'resolved' && !note.trim())}>{busy ? '保存中…' : '保存处理结果'}</button>
-        <button className="text-button" type="button" disabled={busy} onClick={() => { setEditing(false); setStatus(item.review_status); setNote(item.review_note); setError(''); setConflict(false) }}>取消</button></div>
-    </form>}
-    {error && <div className="alert error" role="alert">{error}</div>}
-  </div>
+      <p className="page-footnote">标记已解决时需填写处理说明。</p>
+      {error && <div className="alert error" role="alert">{error}</div>}
+      <div className="session-dialog-actions">
+        <button className="ghost-button" type="button" disabled={busy} onClick={onClose}>取消</button>
+        <button className="primary-button" type="submit" disabled={busy || conflict || (status === 'resolved' && !note.trim())}>{busy ? '保存中…' : '保存处理结果'}</button>
+      </div>
+      </form> : <div className="session-dialog-actions">
+        <button className="ghost-button" type="button" onClick={onClose}>关闭</button>
+      </div>}
+    </div>
+  </SessionActionDialog>
 }

@@ -75,7 +75,7 @@ npm ci
 npm run dev
 ```
 
-打开 Vite 输出的地址，通常为 [工作台](http://localhost:5173)。默认 `/api` 代理至 `http://127.0.0.1:18000`，可在 `frontend-react/.env.local` 设置 `BACKEND_PROXY_TARGET` 后重启 Vite。后端启动时初始化 SQLite；[健康检查](http://127.0.0.1:18000/health) 与 [API 文档](http://127.0.0.1:18000/docs) 可单独访问。
+打开 Vite 输出的地址，默认为 [工作台](http://127.0.0.1:15173)。默认 `/api` 代理至 `http://127.0.0.1:18000`，可在 `frontend-react/.env.local` 设置 `BACKEND_PROXY_TARGET` 后重启 Vite。后端启动时初始化 SQLite；[健康检查](http://127.0.0.1:18000/health) 与 [API 文档](http://127.0.0.1:18000/docs) 可单独访问。
 
 ## Docker 启动（可选历史部署方式）
 
