@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Bell, ChevronDown, ClipboardCheck, ClipboardList, Plus, RefreshCw } from 'lucide-react'
+import { ArrowRight, Bell, ClipboardCheck, ClipboardList, Plus, RefreshCw } from 'lucide-react'
 import { Link, NavLink, useOutletContext } from 'react-router-dom'
 import { formatApiError } from '../api/httpClient'
 import { decideTicket, listTickets, ticketStatusLabels } from '../api/processApi'
 import type { ProcessTicket } from '../api/processApi'
 import { SessionActionDialog } from '../components/SessionActionDialog'
+import { DEFAULT_TABLE_PAGE_SIZE, TablePagination } from '../components/TablePagination'
 import { useWorkspaceAccount } from '../components/WorkspaceAccount'
 import type { WorkspaceOutletContext } from '../layouts/MainLayout'
 import '../styles/process-assistant.css'
@@ -22,14 +23,22 @@ export function ProcessTicketsPage({ view }: { view: 'mine' | 'assigned' }) {
   const [tickets, setTickets] = useState<ProcessTicket[] | null>(null)
   const [revision, setRevision] = useState(0)
   const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE)
+  const [detailId, setDetailId] = useState<string | null>(null)
   const [decision, setDecision] = useState<{ ticket: ProcessTicket; value: 'approved' | 'rejected' } | null>(null)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
-  const trigger = useRef<HTMLButtonElement>(null)
+  const detailTrigger = useRef<HTMLButtonElement>(null)
+  const decisionTrigger = useRef<HTMLButtonElement>(null)
   const submitting = useRef(false)
   const assigned = view === 'assigned'
-  const pending = tickets?.filter(ticket => ticket.status === 'pending') ?? []
-  const finished = tickets?.filter(ticket => ticket.status !== 'pending') ?? []
+  const orderedTickets = [...(tickets ?? [])].sort((left, right) =>
+    Number(right.status === 'pending') - Number(left.status === 'pending') || right.ticket_number.localeCompare(left.ticket_number, undefined, { numeric: true }))
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(orderedTickets.length / pageSize)))
+  const visibleTickets = orderedTickets.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const detail = tickets?.find(ticket => ticket.request_id === detailId)
+  const listLabel = assigned ? '我的审批' : '我的工单'
 
   useEffect(() => {
     let active = true
@@ -50,44 +59,16 @@ export function ProcessTicketsPage({ view }: { view: 'mine' | 'assigned' }) {
     if (!decision || submitting.current || (decision.value === 'rejected' && !note.trim())) return
     submitting.current = true
     setBusy(true)
+    setError('')
     try {
       const updated = await decideTicket(decision.ticket.request_id, decision.value, note.trim())
       setTickets(items => items?.map(item => item.request_id === updated.request_id ? updated : item) ?? null)
       setDecision(null)
     } catch (err) {
       setDecision(null)
+      setDetailId(null)
       setError(formatApiError(err, '审批结果待确认，请刷新列表。'))
     } finally { submitting.current = false; setBusy(false); refreshPendingApprovals() }
-  }
-
-  function ticketRow(ticket: ProcessTicket) {
-    return <details className="ticket-row" key={ticket.request_id}>
-      <summary>
-        <div className="ticket-identity"><strong>{ticket.fields.application_type}</strong><code>{ticket.ticket_number}</code></div>
-        <span className="ticket-party">{assigned ? `${ticket.fields.applicant} · ${ticket.fields.department}` : `审批人 · ${ticket.approver_name}`}</span>
-        <span className="ticket-status" data-status={ticket.status}>{ticketStatusLabels[ticket.status]}</span>
-        <ChevronDown size={16} className="ticket-chevron" aria-hidden="true" />
-      </summary>
-      <div className="ticket-details">
-        <dl className="application-record">
-          <div><dt>申请人 / 部门</dt><dd>{ticket.fields.applicant} · {ticket.fields.department}</dd></div>
-          <div><dt>审批人</dt><dd>{ticket.approver_name}</dd></div>
-          <div><dt>提交时间</dt><dd>{displayTicketTime(ticket.created_at)}</dd></div>
-          {ticket.decided_at && <div><dt>审批时间</dt><dd>{displayTicketTime(ticket.decided_at)}</dd></div>}
-          {ticket.fields.permission_level && <div><dt>权限级别</dt><dd>{ticket.fields.permission_level}</dd></div>}
-          {ticket.fields.additional_info && <div><dt>补充信息</dt><dd>{ticket.fields.additional_info}</dd></div>}
-          {ticket.decision_note && <div><dt>审批意见</dt><dd>{ticket.decision_note}</dd></div>}
-        </dl>
-        {ticket.can_decide && <div className="session-dialog-actions">
-          <button type="button" className="ghost-button" onClick={event => {
-            trigger.current = event.currentTarget; setNote(''); setDecision({ ticket, value: 'rejected' })
-          }}>驳回</button>
-          <button type="button" className="primary-button" onClick={event => {
-            trigger.current = event.currentTarget; setNote(''); setDecision({ ticket, value: 'approved' })
-          }}>通过</button>
-        </div>}
-      </div>
-    </details>
   }
 
   return <section className="page-stack ticket-center">
@@ -99,7 +80,7 @@ export function ProcessTicketsPage({ view }: { view: 'mine' | 'assigned' }) {
       <p role="status">你有 <strong>{pendingApprovals}</strong> 张工单待审批</p>
       {!assigned && <Link to="/tickets/approvals" className="text-button">查看待审批 <ArrowRight size={15} aria-hidden="true" /></Link>}
     </div>}
-    <section className="panel ticket-panel" aria-label={assigned ? '我的审批' : '我的工单'}>
+    <section className="panel ticket-panel" aria-label={listLabel}>
       <div className="ticket-toolbar">
         <nav aria-label="工单中心导航" className="ticket-nav">
           <NavLink to="/tickets" end><ClipboardList size={17} aria-hidden="true" />我的工单</NavLink>
@@ -112,15 +93,67 @@ export function ProcessTicketsPage({ view }: { view: 'mine' | 'assigned' }) {
       {error && <div className="alert error" role="alert">{error}</div>}
       {!tickets && !error && <p className="ticket-empty" role="status">正在加载…</p>}
       {tickets?.length === 0 && <p className="ticket-empty">{assigned ? '暂无分配给你的审批。' : '你还没有提交工单。'}</p>}
-      {pending.length > 0 && <section className="ticket-group" aria-label="待审批">
-        <h3>{assigned ? '待我审批' : '待审批'}</h3>{pending.map(ticketRow)}
-      </section>}
-      {finished.length > 0 && <section className="ticket-group" aria-label="已处理">
-        <h3>已处理</h3>{finished.map(ticketRow)}
-      </section>}
+      {visibleTickets.length > 0 && <>
+        <div className="admin-table-scroll" tabIndex={0} role="region" aria-label={`${listLabel}列表`}>
+          <table className="admin-table ticket-table">
+            <caption className="sr-only">{listLabel}</caption>
+            <thead><tr>
+              <th scope="col">工单编号</th><th scope="col">申请类型</th>
+              <th scope="col">{assigned ? '申请人 / 部门' : '审批人'}</th>
+              <th scope="col">提交时间</th><th scope="col">状态</th><th scope="col">操作</th>
+            </tr></thead>
+            <tbody>{visibleTickets.map(ticket => <tr key={ticket.request_id}>
+              <td><code className="ticket-number">{ticket.ticket_number}</code></td>
+              <th scope="row">{ticket.fields.application_type}</th>
+              <td>{assigned ? <>{ticket.fields.applicant}<small>{ticket.fields.department}</small></> : ticket.approver_name}</td>
+              <td><time dateTime={ticket.created_at.replace(' ', 'T') + 'Z'}>{displayTicketTime(ticket.created_at)}</time></td>
+              <td><span className="ticket-status" data-status={ticket.status}>{ticketStatusLabels[ticket.status]}</span></td>
+              <td><button type="button" className="text-button" onClick={event => {
+                detailTrigger.current = event.currentTarget
+                setDetailId(ticket.request_id)
+              }}>{assigned && ticket.can_decide ? '处理审批' : '查看详情'}</button></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        <TablePagination label={`${listLabel}分页`} total={orderedTickets.length} page={currentPage} pageSize={pageSize}
+          onPageChange={setPage} onPageSizeChange={size => { setPageSize(size); setPage(1) }} />
+      </>}
     </section>
+    {detail && <SessionActionDialog title="工单详情" busy={busy} returnFocusTo={detailTrigger} onClose={() => setDetailId(null)}>
+      <div className="ticket-details">
+        <section aria-labelledby="ticket-application-title">
+          <h4 id="ticket-application-title">申请信息</h4>
+          <dl className="ticket-description">
+            <div><dt>工单编号</dt><dd><code className="ticket-number">{detail.ticket_number}</code></dd></div>
+            <div><dt>申请类型</dt><dd>{detail.fields.application_type}</dd></div>
+            <div><dt>申请人</dt><dd>{detail.fields.applicant}</dd></div>
+            <div><dt>所属部门</dt><dd>{detail.fields.department}</dd></div>
+            <div><dt>提交时间</dt><dd>{displayTicketTime(detail.created_at)}</dd></div>
+            {detail.fields.permission_level && <div><dt>权限级别</dt><dd>{detail.fields.permission_level}</dd></div>}
+            {detail.fields.additional_info && <div><dt>补充信息</dt><dd>{detail.fields.additional_info}</dd></div>}
+          </dl>
+        </section>
+        <section aria-labelledby="ticket-approval-title">
+          <h4 id="ticket-approval-title">审批信息</h4>
+          <dl className="ticket-description">
+            <div><dt>审批状态</dt><dd><span className="ticket-status" data-status={detail.status}>{ticketStatusLabels[detail.status]}</span></dd></div>
+            <div><dt>审批人</dt><dd>{detail.approver_name}</dd></div>
+            {detail.decided_at && <div><dt>审批时间</dt><dd>{displayTicketTime(detail.decided_at)}</dd></div>}
+            {detail.decision_note && <div><dt>审批意见</dt><dd>{detail.decision_note}</dd></div>}
+          </dl>
+        </section>
+        {assigned && detail.can_decide && <div className="session-dialog-actions">
+          <button type="button" className="ghost-button" onClick={event => {
+            decisionTrigger.current = event.currentTarget; setNote(''); setDecision({ ticket: detail, value: 'rejected' })
+          }}>驳回</button>
+          <button type="button" className="primary-button" onClick={event => {
+            decisionTrigger.current = event.currentTarget; setNote(''); setDecision({ ticket: detail, value: 'approved' })
+          }}>通过</button>
+        </div>}
+      </div>
+    </SessionActionDialog>}
     {decision && <SessionActionDialog title={decision.value === 'approved' ? '确认通过工单' : '确认驳回工单'}
-      busy={busy} returnFocusTo={trigger} onClose={() => setDecision(null)}>
+      busy={busy} returnFocusTo={decisionTrigger} onClose={() => setDecision(null)}>
       <p>{decision.ticket.ticket_number} · {decision.ticket.fields.application_type}</p>
       <label className="field"><span>{decision.value === 'rejected' ? '驳回原因（必填）' : '审批意见（选填）'}</span>
         <textarea value={note} rows={3} maxLength={500} disabled={busy} onChange={event => setNote(event.target.value)} /></label>
