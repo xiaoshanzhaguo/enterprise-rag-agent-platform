@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from backend.db.connection import get_connection
 from backend.db.version_repository import find_duplicate, public_storage_sql
 from backend.db.repository import (
+    KnowledgeBaseNotFound,
     _prepare_document_storage_scope,
     _save_document_with_chunks_in_connection,
 )
@@ -186,7 +187,7 @@ def prepare_document_index(
     mode: str = "unknown", source_type: str = "upload", knowledge_base_id: str | None = None,
     knowledge_base_type: str = "general", department: str | None = None,
     process_type: str | None = None, process_status: str = "active",
-    logical_document_id: str | None = None,
+    logical_document_id: str | None = None, require_registered_base: bool = False,
 ) -> PreparedIndex:
     """原子保存/复用文档、块和任务；父级记录可独立提交，不执行向量化。"""
     if not isinstance(session_id, str) or not session_id.strip():
@@ -199,10 +200,14 @@ def prepare_document_index(
     if retrieval_mode == "keyword" and target_profile is not None:
         raise ValueError("关键词模式不接受向量目标。")
     normalized_id, storage_id, document_kb_id = _prepare_document_storage_scope(
-        session_id, mode=mode, knowledge_base_id=knowledge_base_id,
+        session_id, mode=mode, knowledge_base_id=knowledge_base_id, require_registered_base=require_registered_base,
     )
     with closing(get_connection()) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
+        if require_registered_base and normalized_id and not connection.execute(
+            "SELECT 1 FROM knowledge_bases WHERE id = ?", (normalized_id,)
+        ).fetchone():
+            raise KnowledgeBaseNotFound("知识库不存在或已删除。")
         if logical_document_id and normalized_id:
             parent = connection.execute(
                 "SELECT storage_session_id FROM logical_documents WHERE logical_document_id = ? AND knowledge_base_id = ? AND "

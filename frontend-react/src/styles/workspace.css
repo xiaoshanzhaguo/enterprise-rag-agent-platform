@@ -87,6 +87,16 @@ code { font-family: 'Cascadia Code', Consolas, monospace; font-size: var(--text-
 .error-notice .text-button { color: #963e32; }
 .text-button { border: 0; background: transparent; color: var(--accent); font-size: var(--text-sm); padding: 6px 0; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; }
 .text-button:hover { text-decoration: underline; }
+.workspace-tabs { display: flex; gap: clamp(6px, 2vw, 16px); border-bottom: 1px solid var(--line); }
+.workspace-tabs > :is(a, button) {
+  margin-bottom: -1px; padding: 8px 10px 11px; border: 0; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--muted); font: inherit; font-weight: 600; text-decoration: none;
+  white-space: nowrap; cursor: pointer;
+}
+.workspace-tabs > :is(a, button):hover { color: var(--accent-hover); }
+.workspace-tabs > :is([aria-current='page'], [aria-selected='true']) { color: var(--accent-hover); border-bottom-color: var(--accent); }
+.workspace-panel-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-inline-start: auto; }
+.workspace-panel-actions > .primary-button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .section-title h3 { margin: 2px 0 0; font-size: 1.25rem; font-weight: 600; }
 .metric-grid { gap: 16px; }

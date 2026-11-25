@@ -11,7 +11,7 @@ async function moduleUrl(path, rewrite = source => source) {
   return `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
 }
 const versions = await moduleUrl('../src/api/documentVersionState.ts')
-const { knowledgeAdminView, documentFileError, MAX_DOCUMENT_BYTES } = await import(
+const { knowledgeAdminView, documentFileError, searchKnowledgeBases, isPlainTextDocument, MAX_DOCUMENT_BYTES } = await import(
   await moduleUrl('../src/api/knowledgeAdminView.ts', source => source.replace("'./documentVersionState'", JSON.stringify(versions))))
 
 const document = extra => ({ document_id: 1, logical_document_id: 'one', version_number: 1,
@@ -20,7 +20,7 @@ const document = extra => ({ document_id: 1, logical_document_id: 'one', version
 test('文档统计按身份归并，全部版本与当前生效分开计算', () => {
   const documents = [document({ is_current_version: true }), document({ document_id: 2, version_number: 2 }),
     document({ document_id: 3, logical_document_id: 'two', is_current_version: true })]
-  const view = knowledgeAdminView(documents, '')
+  const view = knowledgeAdminView(documents)
   assert.equal(view.groups.length, 2)
   assert.equal(view.versionCount, 3)
   assert.equal(view.currentCount, 2)
@@ -29,34 +29,26 @@ test('文档统计按身份归并，全部版本与当前生效分开计算', ()
 
 test('停用或删除中版本不计为当前生效', () => {
   const view = knowledgeAdminView([document({ is_current_version: true, logical_enabled: 0 }),
-    document({ document_id: 2, logical_document_id: 'two', is_current_version: true, lifecycle_state: 'deleting' })], '')
+    document({ document_id: 2, logical_document_id: 'two', is_current_version: true, lifecycle_state: 'deleting' })])
   assert.equal(view.currentCount, 0)
   assert.equal(view.versionCount, 2)
 })
 
-test('搜索名称或历史文件名，保留整组版本和全局统计', () => {
-  const documents = [document({ is_current_version: true }), document({ document_id: 2, version_number: 2, file_name: 'TRAVEL-v2.MD' }),
-    document({ document_id: 3, logical_document_id: 'two', display_name: '请假制度', file_name: 'leave.md' })]
-  const view = knowledgeAdminView(documents, '  travel-V2  ')
-  assert.equal(view.filteredGroups.length, 1)
-  assert.equal(view.filteredGroups[0].versions.length, 2)
-  assert.equal(view.groups.length, 2)
-  assert.equal(view.versionCount, 3)
-  assert.equal(knowledgeAdminView(documents, '差旅').filteredGroups.length, 1)
+test('搜索知识库名称，忽略大小写和首尾空格', () => {
+  const bases = [{ knowledge_base_id: 'hr', name: 'HR 规章' }, { knowledge_base_id: 'finance', name: '财务资料', description: 'HR' }]
+  assert.deepEqual(searchKnowledgeBases(bases, '  hr '), [bases[0]])
+  assert.deepEqual(searchKnowledgeBases(bases, '财务'), [bases[1]])
+  assert.deepEqual(searchKnowledgeBases(bases, 'missing'), [])
 })
 
-test('无匹配搜索与知识库为空是不同结果', () => {
-  const view = knowledgeAdminView([document({})], 'missing')
-  assert.equal(view.groups.length, 1)
-  assert.equal(view.filteredGroups.length, 0)
-  assert.equal(knowledgeAdminView([], '').groups.length, 0)
-})
-
-test('文件格式按扩展名校验，仅支持当前后端流程可读取的文本类型', () => {
-  assert.equal(documentFileError({ name: 'policy.MD', size: 10 }), '')
-  assert.equal(documentFileError({ name: 'policy.txt', size: 10 }), '')
-  assert.match(documentFileError({ name: 'policy.pdf', size: 10 }), /Markdown/)
-  assert.match(documentFileError({ name: 'policy', size: 10 }), /Markdown/)
+test('允许受支持格式，仅 Markdown 和 TXT 在浏览器读取', () => {
+  for (const extension of ['MD', 'txt', 'DOCX', 'pdf', 'png', 'jpg', 'JPEG', 'webp']) {
+    assert.equal(documentFileError({ name: 'policy.' + extension, size: 10 }), '')
+    assert.equal(isPlainTextDocument('policy.' + extension), ['MD', 'txt'].includes(extension))
+  }
+  for (const name of ['policy.doc', 'policy.gif', 'policy', 'policy.pdf.exe']) {
+    assert.match(documentFileError({ name, size: 10 }), /请选择/)
+  }
 })
 
 test('空文件及超限文件在提交前被拒绝，2MB边界可以上传', () => {

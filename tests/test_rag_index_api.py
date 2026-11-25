@@ -1,7 +1,9 @@
 """C1：FastAPI + 临时 SQLite + Fake Adapter；不启动真实模型或 Chroma。"""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from copy import deepcopy
+from dataclasses import replace
 import sqlite3
 from threading import BoundedSemaphore, Event
 import unittest
@@ -12,11 +14,17 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from backend.api.chat import router as chat_router
 from backend.api.rag_index import router, get_index_management_service
+from backend.config import settings
 from backend.db import index_repository as repository
+from backend.db.connection import get_connection
+from backend.db.init_db import init_database
 from backend.db.repository import ensure_chat_session, save_document_with_chunks
 from backend.services.rag_documents import IndexManagementService
+from backend.services.agent_router import AgentRouteType
+from backend.services.agent_service import _resolve_agent_knowledge_base_type_filter
 from backend.services.rag_indexing import RagIndexingService
 from tests import test_index_repository as fixture
+from tests.test_document_text import image_file, pdf_file, word_file
 from tests import test_rag_indexing_service as executors
 from tests.workspace_session_fixture import authenticate_fixture
 
@@ -98,6 +106,153 @@ class RagIndexApiTests(unittest.TestCase):
         bases = self.client.get("/knowledge_bases").json()["knowledge_bases"]
         self.assertTrue(any(base["knowledge_base_id"] == identity and base["name"] == "项目资料"
                             and base["description"] == "交付文档" for base in bases))
+
+    def test_binary_upload_extraction_and_retrieval_in_selected_knowledge_base(self):
+        self.manager.mode = "keyword"
+        created = self.client.post("/knowledge_bases", json={"name": "测试资料", "user_role": "kb_admin"}).json()
+        base_id = created["knowledge_base_id"]
+        for name, data, query in [
+            ("制度.docx", word_file(), "差旅报销提交行程单和发票"),
+            ("policy.pdf", pdf_file(), "Travel approval requires a receipt."),
+            ("invoice.png", image_file(), "Invoice 2026"),
+        ]:
+            with self.subTest(name=name):
+                parsed = self.client.post("/extract_document_text", params={"file_name": name}, content=data)
+                self.assertEqual(parsed.status_code, 200, parsed.text)
+                document = self.upload(file_name=name, document_text=parsed.json()["document_text"],
+                                       knowledge_base_id=base_id, user_role="kb_admin")
+                self.assertEqual(document.status_code, 200, document.text)
+                self.assertEqual(document.json()["knowledge_base_id"], base_id)
+                with patch("backend.rag.service.settings", replace(settings, rag_retrieval_mode="keyword")):
+                    preview = self.client.post("/rag_preview", json={
+                        "session_id": "upload", "knowledge_base_id": base_id, "query": query,
+                    })
+                self.assertEqual(preview.status_code, 200, preview.text)
+                self.assertTrue(any(chunk["file_name"] == name for chunk in preview.json()["chunks"]), preview.text)
+        self.assertEqual(self.counts()[0], 3)
+        self.assertFalse(self.embedding.calls)
+
+    def test_knowledge_base_edit_delete_and_stale_upload_protection(self):
+        self.manager.mode = "keyword"
+        request = {"name": "知识库", "description": "简介", "user_role": "kb_admin"}
+        base = self.client.post("/knowledge_bases", json=request).json()
+        identity = base["knowledge_base_id"]
+        path = f"/knowledge_bases/{identity}"
+
+        changed = self.client.patch(path, json={"name": "新知识库", "description": ""})
+        self.assertEqual(changed.status_code, 200, changed.text)
+        self.assertEqual(changed.json()["knowledge_base_id"], identity)
+        self.assertEqual(changed.json()["name"], "新知识库")
+        self.assertIsNone(changed.json()["description"])
+        self.assertEqual(self.client.delete("/knowledge_bases/enterprise_default").status_code, 409)
+        self.assertEqual(self.client.delete(path).status_code, 200)
+        self.assertEqual(self.client.patch(path, json={"name": "过期编辑"}).status_code, 404)
+        self.assertEqual(self.upload(knowledge_base_id=identity, user_role="kb_admin").status_code, 404)
+        self.assertNotIn(identity, [base["knowledge_base_id"] for base in self.client.get("/knowledge_bases").json()["knowledge_bases"]])
+        self.assertEqual(self.counts(), (0, 0, 0))
+
+    def test_custom_category_can_be_renamed_without_breaking_retrieval(self):
+        self.manager.mode = "keyword"
+        path = "/knowledge_base_categories"
+        created = self.client.post(path, json={"label": "合同归档"})
+        self.assertEqual(created.status_code, 201, created.text)
+        category = created.json()
+        identity = category["category_id"]
+        self.assertFalse(category["builtin"])
+        self.assertEqual(self.client.post(path, json={"label": "  合同归档  "}).status_code, 409)
+        self.assertEqual(self.client.post(path, json={"label": "hr"}).status_code, 409)
+        payload = {"knowledge_base_id": "enterprise_default", "user_role": "kb_admin"}
+        for name, kind in [("archive.md", identity), ("other.md", "general")]:
+            result = self.upload(file_name=name, document_text="合同归档需要审批", knowledge_base_type=kind, **payload)
+            self.assertEqual(result.status_code, 200, result.text)
+        edited = self.client.patch(f"{path}/{identity}", json={"label": "合同资料", "description": "仅测试"})
+        self.assertEqual(edited.status_code, 200, edited.text)
+        self.assertEqual(edited.json()["knowledge_base_type"], identity)
+        with patch("backend.rag.service.settings", replace(settings, rag_retrieval_mode="keyword")):
+            result = self.client.post("/rag_preview", json={
+                "session_id": "upload", "query": "合同归档需要审批", "knowledge_base_id": "enterprise_default",
+                "knowledge_base_type_filter": identity,
+            })
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual([row["file_name"] for row in result.json()["chunks"]], ["archive.md"])
+        self.assertEqual(self.client.delete(f"{path}/{identity}").status_code, 409)
+
+    def test_category_permissions_protected_default_and_stale_category(self):
+        self.manager.mode = "keyword"
+        path = "/knowledge_base_categories"
+        self.assertEqual(self.client.delete(f"{path}/general").status_code, 409)
+        created = self.client.post(path, json={"label": "临时分类"})
+        self.assertEqual(created.status_code, 201, created.text)
+        identity = created.json()["category_id"]
+        with TestClient(self.client.app) as other:
+            self.assertEqual(other.post(path, json={"label": "无权限"}).status_code, 401)
+            member_id = authenticate_fixture(other, role="member")
+            with closing(get_connection()) as connection, connection:
+                connection.execute("UPDATE workspace_users SET module_permissions_json = ? WHERE id = ?", ('["chat"]', member_id))
+            self.assertEqual(other.get(path).status_code, 200)
+            self.assertEqual(other.delete(f"{path}/{identity}").status_code, 403)
+        self.assertEqual(self.client.delete(f"{path}/{identity}").status_code, 200)
+        self.assertEqual(self.upload(knowledge_base_type=identity).status_code, 400)
+        self.assertEqual(self.counts(), (0, 0, 0))
+
+    def test_builtin_rename_and_removal_survive_database_initialization(self):
+        self.manager.mode = "keyword"
+        path = "/knowledge_base_categories"
+        renamed = self.client.patch(f"{path}/finance", json={"label": "费用制度", "description": "报销与付款"})
+        self.assertEqual(renamed.status_code, 200, renamed.text)
+        self.assertEqual(renamed.json()["category_id"], "finance")
+        self.assertEqual(renamed.json()["department"], "财务")
+        self.assertEqual(self.client.post(path, json={"label": "财务"}).status_code, 201)
+        self.assertEqual(self.client.delete(f"{path}/finance").status_code, 200)
+        init_database(self.url)
+        items = self.client.get(path).json()["categories"]
+        self.assertFalse(any(item["category_id"] == "finance" for item in items))
+        self.assertEqual(self.upload(knowledge_base_type="finance").status_code, 400)
+        applied_filter, note = _resolve_agent_knowledge_base_type_filter(AgentRouteType.FINANCE_PROCESS, "如何报销？", None)
+        self.assertIsNone(applied_filter)
+        self.assertIn("检索全部分类", note)
+        inferred = self.upload(file_name="报销规则.md", document_text="报销需要发票。")
+        self.assertEqual(inferred.status_code, 200, inferred.text)
+        self.assertEqual(inferred.json()["knowledge_base_type"], "general")
+
+    def test_referenced_builtin_category_can_be_renamed_but_not_deleted(self):
+        self.manager.mode = "keyword"
+        uploaded = self.upload(file_name="it.md", document_text="VPN 使用规则", knowledge_base_type="it")
+        self.assertEqual(uploaded.status_code, 200, uploaded.text)
+        path = "/knowledge_base_categories/it"
+        self.assertEqual(self.client.patch(path, json={"label": "信息技术"}).status_code, 200)
+        self.assertEqual(self.client.delete(path).status_code, 409)
+
+    def test_nonempty_knowledge_base_cannot_be_deleted_and_mutations_require_permission(self):
+        self.manager.mode = "keyword"
+        base = self.client.post("/knowledge_bases", json={"name": "有文档", "user_role": "kb_admin"}).json()
+        identity = base["knowledge_base_id"]
+        path = f"/knowledge_bases/{identity}"
+        response = self.upload(knowledge_base_id=identity, user_role="kb_admin")
+        self.assertEqual(response.status_code, 200, response.text)
+        document_id = response.json()["document_id"]
+        with closing(get_connection()) as connection, connection:
+            connection.execute("UPDATE logical_documents SET enabled = 0 WHERE current_document_id = ?", (document_id,))
+        self.assertEqual(self.client.delete(path).status_code, 409)
+        self.assertEqual(self.counts()[0], 1)
+        with TestClient(self.client.app) as other:
+            self.assertEqual(other.delete(path).status_code, 401)
+            member_id = authenticate_fixture(other, role="member")
+            with closing(get_connection()) as connection, connection:
+                connection.execute("UPDATE workspace_users SET module_permissions_json = ? WHERE id = ?", ('["chat"]', member_id))
+            self.assertEqual(other.patch(path, json={"name": "禁止修改"}).status_code, 403)
+            self.assertEqual(other.delete(path).status_code, 403)
+
+    def test_binary_extraction_requires_knowledge_permission_and_limits_request_body(self):
+        with TestClient(self.client.app) as other:
+            self.assertEqual(other.post("/extract_document_text?file_name=policy.pdf", content=b"x").status_code, 401)
+            member_id = authenticate_fixture(other, role="member")
+            with closing(get_connection()) as connection, connection:
+                connection.execute("UPDATE workspace_users SET module_permissions_json = ? WHERE id = ?", ('["chat"]', member_id))
+            self.assertEqual(other.post("/extract_document_text?file_name=policy.pdf", content=b"x").status_code, 403)
+        result = self.client.post("/extract_document_text?file_name=policy.pdf", content=b"x" * (2 * 1024 * 1024 + 1))
+        self.assertEqual(result.status_code, 413)
+        self.assertEqual(self.counts(), (0, 0, 0))
 
     def test_existing_legacy_document_indexes_once_without_changing_chunks_or_scope(self):
         from backend.db.version_repository import document_version

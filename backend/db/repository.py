@@ -32,6 +32,8 @@ from typing import Any
 
 # 导入数据库连接工具，获取SQLite连接
 from backend.db.connection import get_connection
+from backend.db.category_repository import CUSTOM_CATEGORY_PREFIX, category_exists
+from backend.rag.categories import CATEGORY_BY_TYPE
 from backend.rag.knowledge_bases import (
     DEFAULT_KNOWLEDGE_BASE,
     DEFAULT_KNOWLEDGE_BASE_ID,
@@ -294,6 +296,39 @@ def ensure_knowledge_base(
         connection.commit()
 
     return normalized_id
+
+
+class KnowledgeBaseConflict(ValueError):
+    """A knowledge base cannot be removed in its current state."""
+
+
+class KnowledgeBaseNotFound(LookupError):
+    """The requested knowledge base no longer exists."""
+
+
+def update_knowledge_base(knowledge_base_id: str, name: str, description: str | None) -> dict[str, Any]:
+    with closing(get_connection()) as connection, connection:
+        row = connection.execute(
+            """UPDATE knowledge_bases SET name = ?, description = ?, updated_at = ?
+               WHERE id = ? RETURNING id AS knowledge_base_id, name, description, owner_role, created_at, updated_at""",
+            (name, description, _current_timestamp(), knowledge_base_id),
+        ).fetchone()
+        if row is None:
+            raise KnowledgeBaseNotFound("知识库不存在或已删除。")
+        return dict(row)
+
+
+def delete_empty_knowledge_base(knowledge_base_id: str) -> None:
+    if knowledge_base_id == DEFAULT_KNOWLEDGE_BASE_ID:
+        raise KnowledgeBaseConflict("企业默认知识库不能删除。")
+    with closing(get_connection()) as connection, connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if connection.execute("SELECT 1 FROM documents WHERE knowledge_base_id = ?", (knowledge_base_id,)).fetchone():
+            raise KnowledgeBaseConflict("知识库仍有文档。请先在文档管理中删除全部版本。")
+        removed = connection.execute("DELETE FROM knowledge_bases WHERE id = ?", (knowledge_base_id,))
+        if not removed.rowcount:
+            raise KnowledgeBaseNotFound("知识库不存在或已删除。")
+        connection.execute("DELETE FROM logical_documents WHERE knowledge_base_id = ?", (knowledge_base_id,))
 
 
 def list_knowledge_bases() -> list[dict[str, Any]]:
@@ -657,13 +692,16 @@ def _validate_message_citations(connection, metadata, session_id):
 
 def _prepare_document_storage_scope(
     session_id: str, *, mode: str = "unknown", knowledge_base_id: str | None = None,
+    require_registered_base: bool = False,
 ) -> tuple[str | None, str, str]:
     """准备父记录；文档主事务由调用方另行持有。"""
     # 确保当前员工聊天会话存在。这个 session 代表“谁触发了上传动作”。
     ensure_chat_session(session_id=session_id, mode=mode)
     # 只有显式传入 knowledge_base_id 时，才把文档写入企业公共知识库。
     # 没传时保持旧逻辑：文档仍属于当前 session，兼容内容分析等旧入口。
-    normalized_knowledge_base_id = ensure_knowledge_base(knowledge_base_id) if knowledge_base_id else None
+    normalized_knowledge_base_id = normalize_knowledge_base_id(knowledge_base_id) if knowledge_base_id else None
+    if normalized_knowledge_base_id and (not require_registered_base or normalized_knowledge_base_id == DEFAULT_KNOWLEDGE_BASE_ID):
+        ensure_knowledge_base(normalized_knowledge_base_id)
     if normalized_knowledge_base_id:
         # documents 表历史上有 session_id 外键。公共知识库文档统一挂到内部 session，
         # 这样普通用户删除聊天 session 时，不会误删公共知识库文档。
@@ -690,6 +728,9 @@ def _save_document_with_chunks_in_connection(
     logical_document_id: str | None = None, managed: bool = False,
 ) -> tuple[list[dict[str, Any]], bool]:
     """仅使用传入连接保存/复用文档；不打开连接、不提交，返回块和是否复用。"""
+    if (knowledge_base_type in CATEGORY_BY_TYPE or (knowledge_base_type or "").startswith(CUSTOM_CATEGORY_PREFIX)
+            ) and not category_exists(connection, knowledge_base_type):
+        raise ValueError("文档分类不存在或已删除。")
     # 生成当前本地时间，统一用于文档和 chunk 的 created_at
     now = _current_timestamp()
     # 生成文档指纹

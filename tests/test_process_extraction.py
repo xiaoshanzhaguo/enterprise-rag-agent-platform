@@ -62,6 +62,7 @@ class ProcessExtractionTests(unittest.TestCase):
                 "route_question", "_retrieve_agent_rag_chunks", "save_rag_query_with_hits",
                 "update_rag_query_answer", "_build_agent_rag_metadata", "stream_chat_model",
             )}
+            stack.enter_context(patch(module + "active_category_exists", return_value=True))
             mocks["get_chat_session_title"].return_value = "申请"
             mocks["save_chat_message"].return_value = 42
             mocks["_build_agent_rag_metadata"].return_value = {}

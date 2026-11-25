@@ -47,6 +47,7 @@ RAG 相关：
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.rag_index import ERROR_RESPONSES, get_index_management_service, index_http_response
 from backend.api.session_access import WorkspaceUser, authorize_document_scope, require_session_owner, validate_shared_knowledge_base
@@ -54,10 +55,14 @@ from backend.api.workspace_auth import require_module
 from backend.services.rag_documents import IndexManagementService, infer_document_business_fields
 from backend.llm.client import get_client
 from backend.rag.store import clear_document_chunks
+from backend.rag.document_text import MAX_DOCUMENT_BYTES, DocumentExtractionError, extract_document_text
 from backend.rag.categories import (
+    CATEGORY_BY_TYPE,
+    DEFAULT_KNOWLEDGE_BASE_TYPE,
     list_knowledge_base_categories,
     normalize_knowledge_base_type,
 )
+from backend.db.category_repository import CategoryConflict, delete_category, save_category
 from backend.rag.knowledge_bases import (
     normalize_knowledge_base_id,
 )
@@ -67,7 +72,13 @@ from backend.db.repository import rename_chat_session
 from backend.db.repository import ensure_chat_session
 from backend.db.repository import get_chat_session_detail
 from backend.db.repository import list_knowledge_bases
-from backend.db.repository import ensure_knowledge_base
+from backend.db.repository import (
+    KnowledgeBaseConflict,
+    KnowledgeBaseNotFound,
+    delete_empty_knowledge_base,
+    ensure_knowledge_base,
+    update_knowledge_base,
+)
 from backend.rag.knowledge_bases import can_manage_knowledge_base
 from pydantic import BaseModel, Field, ConfigDict
 from uuid import uuid4
@@ -84,6 +95,8 @@ from backend.schema.chat_schema import (
     ChatSessionRenameRequest,
     IndexDocumentRequest,
     IndexDocumentResponse,
+    KnowledgeBaseCategory,
+    KnowledgeBaseItem,
     KnowledgeBaseCategoryListResponse,
     KnowledgeBaseListResponse,
     RagPreviewRequest,
@@ -285,6 +298,48 @@ def knowledge_base_categories():
     }
 
 
+class CategoryDetails(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    label: str = Field(min_length=1, max_length=48)
+    description: str = Field(default="", max_length=200)
+
+
+def save_document_category(details: CategoryDetails, category_id: str | None = None):
+    try:
+        category = save_category(details.label, details.description, category_id)
+        defaults = CATEGORY_BY_TYPE.get(category["category_id"])
+        return dict(category, builtin=bool(defaults), department=defaults["department"] if defaults else None)
+    except CategoryConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/knowledge_base_categories", status_code=201, response_model=KnowledgeBaseCategory,
+             dependencies=[Depends(require_module('knowledge'))])
+def create_category(details: CategoryDetails):
+    return save_document_category(details)
+
+
+@router.patch("/knowledge_base_categories/{category_id}", response_model=KnowledgeBaseCategory,
+              dependencies=[Depends(require_module('knowledge'))])
+def edit_category(category_id: str, details: CategoryDetails):
+    return save_document_category(details, category_id)
+
+
+@router.delete("/knowledge_base_categories/{category_id}", dependencies=[Depends(require_module('knowledge'))])
+def remove_category(category_id: str):
+    if category_id == DEFAULT_KNOWLEDGE_BASE_TYPE:
+        raise HTTPException(409, "默认兜底分类可以编辑，无法删除。")
+    try:
+        delete_category(category_id, keep_record=category_id in CATEGORY_BY_TYPE)
+    except CategoryConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"deleted": True}
+
+
 @router.get("/knowledge_bases", response_model=KnowledgeBaseListResponse, dependencies=[Depends(require_module('chat', 'knowledge'))])
 def knowledge_bases():
     """
@@ -299,10 +354,13 @@ def knowledge_bases():
     }
 
 
-class CreateKnowledgeBase(BaseModel):
+class KnowledgeBaseDetails(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     name: str = Field(min_length=1, max_length=80)
     description: str | None = Field(default=None, max_length=300)
+
+
+class CreateKnowledgeBase(KnowledgeBaseDetails):
     user_role: str | None = None
 
 
@@ -315,11 +373,44 @@ def create_knowledge_base(request: CreateKnowledgeBase):
             "owner_role": "kb_admin"}
 
 
+@router.patch("/knowledge_bases/{knowledge_base_id}", response_model=KnowledgeBaseItem,
+              dependencies=[Depends(require_module('knowledge'))])
+def edit_knowledge_base(knowledge_base_id: str, request: KnowledgeBaseDetails):
+    try:
+        return update_knowledge_base(knowledge_base_id, request.name, request.description or None)
+    except KnowledgeBaseNotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.delete("/knowledge_bases/{knowledge_base_id}", dependencies=[Depends(require_module('knowledge'))])
+def remove_knowledge_base(knowledge_base_id: str):
+    try:
+        delete_empty_knowledge_base(knowledge_base_id)
+    except KnowledgeBaseNotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except KnowledgeBaseConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"deleted": True}
+
+
+@router.post("/extract_document_text", dependencies=[Depends(require_module('knowledge'))])
+async def read_document_text(request: Request, file_name: str = Query(min_length=1, max_length=255)):
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > MAX_DOCUMENT_BYTES:
+            raise HTTPException(413, "文件超过 2 MB，请缩小后重试。")
+        data.extend(chunk)
+    try:
+        return {"document_text": await run_in_threadpool(extract_document_text, file_name, bytes(data))}
+    except DocumentExtractionError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+
+
 @router.post("/index_document", response_model=IndexDocumentResponse, responses={**ERROR_RESPONSES, 202: {"model": IndexDocumentResponse}})
 def index_document(request: IndexDocumentRequest, http_request: Request,
                    service: IndexManagementService = Depends(get_index_management_service)):
     authorize_document_scope(http_request, request.session_id, request.knowledge_base_id)
-    return index_http_response(lambda: service.upload(request), IndexDocumentResponse)
+    return index_http_response(lambda: service.upload(request, require_registered_base=True), IndexDocumentResponse)
 
 
 @router.post("/rag_preview", response_model=RagPreviewResponse)

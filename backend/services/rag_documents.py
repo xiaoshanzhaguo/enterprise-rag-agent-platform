@@ -8,7 +8,8 @@ from backend.config import settings
 from backend.db import index_repository as repository
 from backend.db import version_repository
 from backend.db.repository import get_document_management_snapshot
-from backend.rag.categories import normalize_knowledge_base_type, get_department_for_knowledge_base_type
+from backend.rag.categories import DEFAULT_KNOWLEDGE_BASE_TYPE, normalize_knowledge_base_type, get_department_for_knowledge_base_type
+from backend.db.category_repository import active_category_exists
 from backend.rag.chunker import split_text_into_chunks
 from backend.rag.index_adapters import build_index_target_profile
 from backend.rag.knowledge_bases import (
@@ -126,7 +127,7 @@ class IndexManagementService:
                        retry_applied=action == "retry" and result.execution_started)
         return IndexManagementResult(receipt, result.reason)
 
-    def upload(self, request):
+    def upload(self, request, *, require_registered_base=False):
         if request.knowledge_base_id and not can_manage_knowledge_base(request.user_role):
             raise IndexManagementError("forbidden")
         kb = normalize_knowledge_base_id(request.knowledge_base_id) if request.knowledge_base_id else None
@@ -137,7 +138,10 @@ class IndexManagementService:
         if not chunks:
             raise ValueError("文档切块后为空。")
         inferred = infer_document_business_fields(request.file_name, text)
-        category = normalize_knowledge_base_type(request.knowledge_base_type, allow_none=True) or inferred["knowledge_base_type"]
+        category = normalize_knowledge_base_type(request.knowledge_base_type, allow_none=True)
+        if category is None:
+            inferred_category = inferred["knowledge_base_type"]
+            category = inferred_category if active_category_exists(inferred_category) else DEFAULT_KNOWLEDGE_BASE_TYPE
         metadata = dict(knowledge_base_type=category,
                         department=request.department or get_department_for_knowledge_base_type(category) or inferred["department"],
                         process_type=request.process_type or inferred["process_type"],
@@ -164,7 +168,8 @@ class IndexManagementService:
         storage_session = build_knowledge_base_storage_session_id(kb) if kb else request.session_id
         prepared = repository.prepare_document_index(
             storage_session, request.file_name, chunks, retrieval_mode=self.mode,
-            target_profile=profile, knowledge_base_id=kb, logical_document_id=identity, **metadata,
+            target_profile=profile, knowledge_base_id=kb, logical_document_id=identity,
+            require_registered_base=require_registered_base, **metadata,
         )
         operation = prepared.operation
         vector = self.vector_status(operation)

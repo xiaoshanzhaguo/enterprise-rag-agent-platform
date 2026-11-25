@@ -26,11 +26,11 @@ import react from '@vitejs/plugin-react'
 // export default 表示默认导出。Vite 启动后，会自动读取这个文件里的默认导出配置。
 // 也就是说，当你执行：npm run dev 或者 npm run build 时， Vite 会读取这里的配置。
 export default defineConfig(({ mode }) => {
-  // 从前端 .env.local 或启动环境读取代理地址；未设置时使用本机 18000。
+  // 从前端 .env.local 或启动环境读取代理地址；未设置时使用本机 8000。
   const env = loadEnv(mode, process.cwd(), 'BACKEND_')
   const backendTarget = process.env.BACKEND_PROXY_TARGET?.trim()
     || env.BACKEND_PROXY_TARGET?.trim()
-    || 'http://127.0.0.1:18000'
+    || 'http://127.0.0.1:8000'
 
   return {
     // plugins 表示 Vite 构建过程中要启用哪些插件。
@@ -43,10 +43,9 @@ export default defineConfig(({ mode }) => {
     // 所以这里配置的代理，只是在本地调试时生效。可以记为：server = 本地开发服务器配置。
     server: {
       host: '127.0.0.1',
-      port: 15173,
       // proxy 用于把前端请求转发给后端。
       // 它的作用是，当前端请求某个路径时，不直接由前端处理，而是转发给后端。
-      // 比如前端请求 /api/health，Vite 开发服务器会帮你转发到：http://127.0.0.1:18000/health，这样可以避免浏览器跨域问题。
+      // 比如前端请求 /api/health，Vite 开发服务器会帮你转发到：http://127.0.0.1:8000/health，这样可以避免浏览器跨域问题。
       proxy: {
         // 配置 /api 代理规则。这里定义了一条代理规则，意思是：只要前端请求路径以 /api 开头，就走这条代理规则。比如 /api/health 等，这些都会被 Vite 代理到 FastAPI 后端。
         // 开发环境用 /api 代理 FastAPI，避免浏览器因为跨域拦截本地调试请求。
@@ -67,7 +66,7 @@ export default defineConfig(({ mode }) => {
           // 1. 前端请求：/api/health
           // 2. Vite 代理匹配：/api
           // 3. rewrite 去掉 /api：/health
-          // 4. 转发到 FastAPI：http://127.0.0.1:18000/health
+          // 4. 转发到 FastAPI：http://127.0.0.1:8000/health
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },

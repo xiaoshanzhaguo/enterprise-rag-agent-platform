@@ -43,6 +43,7 @@ from backend.db.repository import (
     filter_active_chunks,
 )
 # 数据库文档状态查询函数，用于保存历史消息中的引用模块状态
+from backend.db.category_repository import active_category_exists
 from backend.rag.store import get_document_status
 # RAG 服务函数，用于检索、组装引用上下文和生成来源标识
 from backend.rag.service import (
@@ -169,15 +170,15 @@ def _resolve_agent_knowledge_base_type_filter(
         knowledge_base_type = ROUTE_TYPE_TO_KNOWLEDGE_BASE_TYPE[route_type]
         label = KNOWLEDGE_BASE_TYPE_LABELS.get(knowledge_base_type, knowledge_base_type)
         route_type_label = ROUTE_TYPE_LABELS.get(route_type, route_type.value)
-        return (
-            knowledge_base_type,
-            f"Agent 路由为{route_type_label}，已自动限定检索分类为：{label}。",
-        )
+        note = f"Agent 路由为{route_type_label}，已自动限定检索分类为：{label}。"
+    elif route_type == AgentRouteType.PROCESS_APPLY:
+        knowledge_base_type, note = _resolve_process_apply_knowledge_base_type_filter(question)
+    else:
+        return None, "当前路由未绑定固定知识库分类，本轮检索全部分类。"
 
-    if route_type == AgentRouteType.PROCESS_APPLY:
-        return _resolve_process_apply_knowledge_base_type_filter(question)
-
-    return None, "当前路由未绑定固定知识库分类，本轮检索全部分类。"
+    if knowledge_base_type and not active_category_exists(knowledge_base_type):
+        return None, "自动分类已移除，本轮检索全部分类。"
+    return knowledge_base_type, note
 
 
 def _format_retrieval_mode_for_display(retrieval_mode: str) -> str:

@@ -27,9 +27,6 @@ export function DocumentVersionControls({ document, knowledgeBaseId, onChanged }
     finally { lock.current = false; setBusy(false); onChanged() }
   }
   return <div className="document-deletion-controls">
-    <span className={`status-badge ${document.is_current_version ? 'status-success' : ''}`}>
-      V{document.version_number} · {presentation.label}
-    </span>
     {document.is_current_version ? <button ref={trigger} type="button" className="ghost-button" disabled={busy}
       onClick={() => setConfirmation(versionConfirmation(document, 'disable'))}>停用文档</button> : <button ref={trigger} type="button" className="ghost-button"
       disabled={!presentation.publishable || busy} onClick={() => setConfirmation(versionConfirmation(document, 'publish'))}>{document.published_at ? '回退至此版本' : '发布此版本'}</button>}

@@ -41,6 +41,7 @@ class AgentIntentBoundaryTests(unittest.TestCase):
                 'update_rag_query_answer', '_build_agent_rag_metadata', 'stream_chat_model',
                 'extract_process_fields',
             )}
+            stack.enter_context(patch(module + 'active_category_exists', return_value=True))
             mocks['get_chat_session_title'].return_value = '财务咨询'
             mocks['save_chat_message'].return_value = 42
             mocks['_build_agent_rag_metadata'].return_value = {}

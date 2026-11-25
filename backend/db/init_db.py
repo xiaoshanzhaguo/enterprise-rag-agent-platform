@@ -117,8 +117,11 @@ def init_database(database_url: str | None = None) -> None:
         # 先给旧表补新增列，再创建依赖这些列的索引。
         # 否则旧库里没有 department/process_type 时，idx_documents_department 会启动失败。
         _apply_column_migrations(connection)
+        from backend.rag.categories import KNOWLEDGE_BASE_CATEGORIES
+        from backend.db.category_repository import seed_builtin_categories
         from backend.db.version_repository import migrate_documents
         from backend.db.departments import migrate_departments
+        seed_builtin_categories(connection, KNOWLEDGE_BASE_CATEGORIES)
         migrate_documents(connection)
         migrate_departments(connection)
 

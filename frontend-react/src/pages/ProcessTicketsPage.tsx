@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Bell, ClipboardCheck, ClipboardList, Plus, RefreshCw } from 'lucide-react'
+import { ArrowRight, Bell, Plus, RefreshCw } from 'lucide-react'
 import { Link, NavLink, useOutletContext } from 'react-router-dom'
 import { formatApiError } from '../api/httpClient'
 import { decideTicket, listTickets, ticketStatusLabels } from '../api/processApi'
@@ -72,20 +72,21 @@ export function ProcessTicketsPage({ view }: { view: 'mine' | 'assigned' }) {
   }
 
   return <section className="page-stack ticket-center">
-    <header className="page-header"><div><h2>工单中心</h2><p>查看申请进度，处理分配给你的审批。</p></div>
-      {account.module_permissions.includes('workflow') && <Link to="/tickets/new" className="primary-button application-link"><Plus size={17} aria-hidden="true" />新建申请</Link>}
-    </header>
+    <header className="page-header"><div><h2>工单中心</h2><p>查看申请进度，处理分配给你的审批。</p></div></header>
     {pendingApprovals > 0 && <div className="ticket-pending-notice">
       <Bell size={19} aria-hidden="true" />
       <p role="status">你有 <strong>{pendingApprovals}</strong> 张工单待审批</p>
       {!assigned && <Link to="/tickets/approvals" className="text-button">查看待审批 <ArrowRight size={15} aria-hidden="true" /></Link>}
     </div>}
+    <nav className="workspace-tabs" aria-label="工单中心视图">
+      <NavLink to="/tickets" end>我的工单</NavLink>
+      {account.module_permissions.includes('tickets') && <NavLink to="/tickets/approvals">我的审批</NavLink>}
+    </nav>
     <section className="panel ticket-panel" aria-label={listLabel}>
-      <div className="ticket-toolbar">
-        <nav aria-label="工单中心导航" className="ticket-nav">
-          <NavLink to="/tickets" end><ClipboardList size={17} aria-hidden="true" />我的工单</NavLink>
-          {account.module_permissions.includes('tickets') && <NavLink to="/tickets/approvals"><ClipboardCheck size={17} aria-hidden="true" />我的审批</NavLink>}
-        </nav>
+      <div className="workspace-panel-actions">
+        {account.module_permissions.includes('workflow') && <Link to="/tickets/new" className="primary-button application-link">
+          <Plus size={17} aria-hidden="true" />新建申请
+        </Link>}
         <button type="button" className="ghost-button ticket-refresh" onClick={reload} disabled={busy || (!tickets && !error)}>
           <RefreshCw size={16} aria-hidden="true" />刷新
         </button>

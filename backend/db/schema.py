@@ -58,6 +58,14 @@ CREATE_TABLE_SQL = [
         updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS document_categories (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        label_key TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT ''
+    )
+    """,
     # 保存文档信息
     """
     CREATE TABLE IF NOT EXISTS documents (
@@ -273,6 +281,9 @@ CREATE_INDEX_SQL = [
 # 如果本地已经有旧版 app.db，它不会自动给旧表补充新增字段。
 # 所以新增字段后，需要在 init_database() 里按这个清单执行轻量 ALTER TABLE 迁移。
 TABLE_COLUMN_MIGRATIONS = {
+    "document_categories": [
+        ("enabled", "INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1))"),
+    ],
     "chat_sessions": [("owner_user_id", "INTEGER REFERENCES workspace_users(id)")],
     "answer_feedback": [
         ("review_status", "TEXT NOT NULL DEFAULT 'pending'"),

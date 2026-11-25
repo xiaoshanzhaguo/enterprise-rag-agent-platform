@@ -8,6 +8,7 @@ from backend.api.session_access import authorize_document_scope
 from backend.api.workspace_auth import require_module
 
 from backend.db.index_repository import IndexOperationConflict
+from backend.db.repository import KnowledgeBaseNotFound
 from backend.db.version_repository import VersionConflict
 from backend.schema.rag_index_schema import IndexActionRequest, IndexErrorResponse, IndexOperationResponse
 from backend.services.rag_documents import IndexManagementError, IndexManagementService
@@ -51,6 +52,8 @@ def index_http_response(call, schema, *, query=False):
         code, detail = {"not_found": (404, "未找到当前范围内的索引任务。"),
                         "forbidden": (403, "当前角色没有知识库管理权限。"),
                         "vector_disabled": (409, "请先启用向量检索模式，再为已有文档建立索引。")}[exc.reason]
+    except KnowledgeBaseNotFound as exc:
+        code, detail = 404, str(exc)
     except (IndexOperationConflict, VersionConflict):
         code, detail = 409, "文档输入或索引目标与已有任务冲突，请查询原任务。"
     except ValueError:

@@ -24,6 +24,7 @@ export interface KnowledgeBaseListResponse {
 
 // 单个知识库分类，例如 HR、财务、IT、产品。
 export interface KnowledgeBaseCategory {
+  builtin?: boolean
   category_id: string // 分类 ID，前端选择后会把它作为当前分类值保存。
   label: string // 分类展示名称，例如“财务”，给用户看的文本。
   knowledge_base_type: string // 后端真正用于过滤 documents.knowledge_base_type 的分类值。

@@ -8,13 +8,14 @@
  */
 
 // 引入统一 GET / POST 请求函数，避免每个接口重复写 fetch 和错误处理。
-import { apiGet, apiPost } from './httpClient'
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostFile } from './httpClient'
 
 // 引入接口返回值类型，让调用方能获得字段提示。
 import type {
   IndexDocumentRequest,
   IndexDocumentResponse,
   KnowledgeBaseCategoryListResponse,
+  KnowledgeBaseCategory,
   KnowledgeBaseListResponse,
   KnowledgeBaseItem,
   RagStatusResponse,
@@ -33,10 +34,37 @@ export function createKnowledgeBase(name: string, description: string) {
     '/knowledge_bases', { name, description, user_role: 'kb_admin' }, AbortSignal.timeout(15_000))
 }
 
+export function updateKnowledgeBase(id: string, name: string, description: string) {
+  return apiPatch<KnowledgeBaseItem>(`/knowledge_bases/${encodeURIComponent(id)}`, { name, description })
+}
+
+export function deleteKnowledgeBase(id: string) {
+  return apiDelete<{ deleted: boolean }>(`/knowledge_bases/${encodeURIComponent(id)}`)
+}
+
 // 获取知识库分类列表，用于渲染 HR / 财务 / IT / 产品等分类选项。
 export function fetchKnowledgeBaseCategories() {
   // 后端返回结构是 { categories: [...] }。
   return apiGet<KnowledgeBaseCategoryListResponse>('/knowledge_base_categories')
+}
+
+export function createDocumentCategory(label: string, description: string) {
+  return apiPost<{ label: string; description: string }, KnowledgeBaseCategory>(
+    '/knowledge_base_categories', { label, description }, AbortSignal.timeout(15_000))
+}
+
+export function updateDocumentCategory(id: string, label: string, description: string) {
+  return apiPatch<KnowledgeBaseCategory>(`/knowledge_base_categories/${encodeURIComponent(id)}`, { label, description })
+}
+
+export function deleteDocumentCategory(id: string) {
+  return apiDelete<{ deleted: boolean }>(`/knowledge_base_categories/${encodeURIComponent(id)}`)
+}
+
+export async function extractKnowledgeDocument(file: File) {
+  const params = new URLSearchParams({ file_name: file.name })
+  const result = await apiPostFile<{ document_text: string }>(`/extract_document_text?${params}`, file, AbortSignal.timeout(60_000))
+  return result.document_text
 }
 
 // 上传并索引企业知识库文档。

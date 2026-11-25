@@ -64,7 +64,7 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 2026-11-03 的 R1 真实验收使用 `EMBEDDING_PROVIDER=openai`、`EMBEDDING_MODEL=qwen3.7-text-embedding-flash`，实际返回 1024 维；服务地址与 Key 使用已有的 `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY`。修改 `.env` 后重启 FastAPI。受管索引要求目标 Collection 已存在，不会自动重建；历史业务向量的模型来源未确认，即使同为 1024 维，也不能据此认定与新模型可混用。详见 [配置与兼容性](docs/deployment.md#r1-向量配置与恢复)。
 
 ```powershell
-.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 18000
+.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 另一个终端：
@@ -75,7 +75,7 @@ npm ci
 npm run dev
 ```
 
-打开 Vite 输出的地址，默认为 [工作台](http://127.0.0.1:15173)。默认 `/api` 代理至 `http://127.0.0.1:18000`，可在 `frontend-react/.env.local` 设置 `BACKEND_PROXY_TARGET` 后重启 Vite。后端启动时初始化 SQLite；[健康检查](http://127.0.0.1:18000/health) 与 [API 文档](http://127.0.0.1:18000/docs) 可单独访问。
+打开 Vite 输出的地址，默认为 [工作台](http://127.0.0.1:5173)。默认 `/api` 代理至 `http://127.0.0.1:8000`，可在 `frontend-react/.env.local` 设置 `BACKEND_PROXY_TARGET` 后重启 Vite。后端启动时初始化 SQLite，[健康检查](http://127.0.0.1:8000/health)与 [API 文档](http://127.0.0.1:8000/docs)可单独访问。
 
 ## Docker 启动（可选历史部署方式）
 

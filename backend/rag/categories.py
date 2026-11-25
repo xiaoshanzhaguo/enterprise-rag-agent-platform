@@ -1,22 +1,22 @@
 """
 知识库分类定义与校验工具。
 
-当前项目还没有单独的 knowledge_base / category 数据表，所以先把
-HR、财务、IT、产品这四类收口到一个后端模块里。这样前端下拉框、
-文档入库、检索过滤使用的是同一套分类值，避免前后端各写一份后出现不一致。
+内置分类供问答路由使用，自定义分类使用独立的持久化 ID。
+前端下拉框、文档入库与检索过滤使用相同的分类值。
 
 模块作用：把知识库分类统一放在后端管理，并提供“列表返回、分类校验、分类归一化、部门名补齐”这些工具函数。
 避免前端写 "财务"，后端写 "finance"，数据库又写 "Finance"，最后查不到数据。
 """
 
 from typing import Any
+from backend.db.category_repository import active_category_exists, list_categories
 
 
 DEFAULT_KNOWLEDGE_BASE_TYPE = "general"
 
 # category_id 也是当前检索过滤使用的 knowledge_base_type。
 # 后续如果升级成真正的分类表，可以先保持这个值不变，再增加数据库主键。
-KNOWLEDGE_BASE_CATEGORIES: list[dict[str, str]] = [
+KNOWLEDGE_BASE_CATEGORIES: list[dict[str, Any]] = [
     {
         "category_id": "hr",
         "label": "HR",
@@ -45,6 +45,13 @@ KNOWLEDGE_BASE_CATEGORIES: list[dict[str, str]] = [
         "department": "产品",
         "description": "产品 FAQ、版本发布、功能说明和客户反馈文档",
     },
+    {
+        "category_id": "general",
+        "label": "通用",
+        "knowledge_base_type": "general",
+        "department": None,
+        "description": "适用于跨部门或尚无专用分类的文档",
+    },
 ]
 
 # 构造按type查询的字典。作用：根据 knowledge_base_type 快速找到对应分类配置。
@@ -52,11 +59,6 @@ CATEGORY_BY_TYPE = {
     category["knowledge_base_type"]: category
     for category in KNOWLEDGE_BASE_CATEGORIES
 }
-# 有效分类集合。作用：生成所有合法的知识库类型。后面校验前端传来的分类值是否合法
-# 如果对一个字典使用 set(...)，得到的是它的所有 key。
-# | 表示集合并集
-# 整行结果：VALID_KNOWLEDGE_BASE_TYPES = {"hr", "finance", "it", "product", "general"}
-VALID_KNOWLEDGE_BASE_TYPES = set(CATEGORY_BY_TYPE) | {DEFAULT_KNOWLEDGE_BASE_TYPE}
 
 
 def list_knowledge_base_categories() -> list[dict[str, Any]]:
@@ -68,7 +70,10 @@ def list_knowledge_base_categories() -> list[dict[str, Any]]:
     # copy() 可以防止调用方误改 KNOWLEDGE_BASE_CATEGORIES 里的全局配置。
     # 为什么用copy()？
     # 因为这样返回的是每个字典的浅拷贝。调用方修改返回结果时，不会改到模块里的原始配置。
-    return [category.copy() for category in KNOWLEDGE_BASE_CATEGORIES]
+    categories = {row["category_id"]: row for row in list_categories()}
+    builtin = [dict(categories.pop(category_id), builtin=True, department=defaults["department"])
+               for category_id, defaults in CATEGORY_BY_TYPE.items() if category_id in categories]
+    return builtin + list(categories.values())
 
 
 def normalize_knowledge_base_type(value: str | None, *, allow_none: bool = False) -> str | None:
@@ -98,10 +103,8 @@ def normalize_knowledge_base_type(value: str | None, *, allow_none: bool = False
         return None if allow_none else DEFAULT_KNOWLEDGE_BASE_TYPE
 
     # 校验分类是否合法
-    if normalized not in VALID_KNOWLEDGE_BASE_TYPES:
-        # 生成错误提示里的合法分类列表。["finance", "general", "hr", "it", "product"] -> "finance, general, hr, it, product"
-        allowed_values = ", ".join(sorted(VALID_KNOWLEDGE_BASE_TYPES))
-        raise ValueError(f"未知知识库分类：{value}。允许的分类为：{allowed_values}")
+    if normalized != DEFAULT_KNOWLEDGE_BASE_TYPE and not active_category_exists(normalized):
+        raise ValueError(f"知识库分类不存在或已删除：{value}。")
 
     # 若前面没有返回，也没有抛错，说明分类值是合法的
     return normalized
@@ -120,4 +123,4 @@ def get_department_for_knowledge_base_type(value: str | None) -> str | None:
     if not normalized or normalized == DEFAULT_KNOWLEDGE_BASE_TYPE:
         return None
 
-    return CATEGORY_BY_TYPE[normalized]["department"]
+    return CATEGORY_BY_TYPE.get(normalized, {}).get("department")

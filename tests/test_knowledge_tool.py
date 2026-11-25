@@ -49,9 +49,10 @@ class KnowledgeToolTests(unittest.TestCase):
                 create_knowledge_search_tool(session_id="s", top_k=value)
 
     @patch("backend.rag.service.settings")
+    @patch("backend.rag.categories.active_category_exists", return_value=True)
     @patch("backend.rag.service.retrieve_keyword_chunks")
     @patch("backend.rag.service.retrieve_similar_chunks")
-    def test_vector_and_keyword_fallback(self, vector, keyword, settings):
+    def test_vector_and_keyword_fallback(self, vector, keyword, category_exists, settings):
         settings.rag_retrieval_mode = "vector"
         settings.rag_keyword_fallback_enabled = True
         vector.return_value = [CHUNK]
@@ -62,6 +63,7 @@ class KnowledgeToolTests(unittest.TestCase):
             session_id="session-a", query="年假", knowledge_base_id="kb-a",
             knowledge_base_type_filter="hr", top_k=2,
         )
+        category_exists.assert_called_with("hr")
         keyword.assert_not_called()
         vector.return_value = []
         keyword.return_value = [dict(CHUNK, retrieval_mode="keyword", rank=1)]

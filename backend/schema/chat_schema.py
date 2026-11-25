@@ -138,6 +138,7 @@ class KnowledgeBaseCategory(BaseModel):
     knowledge_base_type: str  # 当前文档入库和检索过滤使用的分类值
     department: Optional[str] = None  # 分类对应的部门展示名
     description: str = ""  # 分类说明，便于以后前端 tooltip 或说明面板使用
+    builtin: bool = False
 
 
 class KnowledgeBaseCategoryListResponse(BaseModel):

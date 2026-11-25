@@ -114,6 +114,12 @@ export async function apiPost<TRequest, TResponse>(path: string, body: TRequest,
   return parseResponse<TResponse>(response)
 }
 
+export async function apiPostFile<TResponse>(path: string, file: File, signal: AbortSignal): Promise<TResponse> {
+  return parseResponse<TResponse>(await fetch(buildApiUrl(path), {
+    method: 'POST', signal, headers: { Accept: 'application/json', 'Content-Type': 'application/octet-stream' }, body: file,
+  }))
+}
+
 export async function apiPatch<TResponse>(path: string, body: unknown): Promise<TResponse> {
   return parseResponse<TResponse>(await fetch(buildApiUrl(path), {
     method: 'PATCH', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

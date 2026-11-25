@@ -19,7 +19,7 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 后端：
 
 ```powershell
-.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 18000
+.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 前端另开终端：
@@ -30,9 +30,11 @@ npm ci
 npm run dev
 ```
 
-访问 Vite 打印的地址。`frontend-react/.env.local` 可填写 `BACKEND_PROXY_TARGET=http://127.0.0.1:18000`；它只控制开发代理。生产镜像使用固定的同源 `/api`，不将模型 API Key 传给浏览器。
+访问 Vite 打印的地址，默认是 `http://127.0.0.1:5173`。Vite 默认将 `/api` 代理到 `http://127.0.0.1:8000`。如需使用其他后端端口，在 `frontend-react/.env.local` 中设置 `BACKEND_PROXY_TARGET` 并重启 Vite。生产镜像使用固定的同源 `/api`。
 
 健康检查 `GET /health` 只检查数据库与存储可用性，不证明模型凭据有效、模型回答正确或 n8n 工作流已发布。模型调用和流程触发分别按演示链路验证。
+
+知识库管理支持上传 Markdown、TXT、Word（`.docx`）、含文本层的 PDF，以及 PNG、JPEG、WEBP 图片，单文件最大 2 MB。图片文字由本地 OCR 提取。已有虚拟环境可用 `.\.venv\Scripts\python.exe -m pip install -r requirements.txt` 更新依赖。扫描版 PDF 可将需要的页面转成图片上传，旧版 `.doc` 可先另存为 `.docx`。
 
 ### R1 向量配置与恢复
 
@@ -189,7 +191,7 @@ docker compose stop backend web
 | 现象 | 检查与处理 |
 | --- | --- |
 | Docker Linux engine 管道不存在 | 先打开 Docker Desktop，等待 `docker info` 成功，再运行 Compose |
-| Windows 10013 | 检查端口占用和系统保留范围：`netsh interface ipv4 show excludedportrange protocol=tcp`；本项目本地后端默认使用 18000 |
+| Windows 10013 / EACCES | 用 `netsh interface ipv4 show excludedportrange protocol=tcp` 检查系统保留范围。后端若改用其他端口，同步设置 `BACKEND_PROXY_TARGET`。前端若需换端口，可运行 `npm run dev -- --port 15173`。 |
 | React 502 / 未连接 | 本地检查 `BACKEND_PROXY_TARGET`；Docker 检查 `docker compose logs --tail 80 backend web` 与 backend 健康状态 |
 | 页面刷新 `/logs` 404 | 确认使用本仓库 Nginx 的 SPA fallback；Vite 的开发代理不能代替生产代理 |
 | 回答一直等待 | 检查模型配置、上游连通性及代理日志；健康检查成功不代表模型服务可用 |

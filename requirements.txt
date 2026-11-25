@@ -17,6 +17,7 @@ python-dotenv==1.2.2
 
 # File parsing
 pypdf==5.1.0
+rapidocrlite==5.0.0a16
 
 # RAG vector retrieval
 chromadb==1.0.15
